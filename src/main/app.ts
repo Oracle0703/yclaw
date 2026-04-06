@@ -23,6 +23,7 @@ export class App {
   private trayService: TrayService;
   private updateService: UpdateService;
   private tabManager: TabManager;
+  private started = false;
 
   constructor() {
     this.windowManager = new WindowManager();
@@ -37,6 +38,13 @@ export class App {
   }
 
   async start(): Promise<void> {
+    if (this.started) {
+      if (!this.windowManager.getWindow('workbench')) {
+        this.windowManager.openWindow({ module: 'workbench' });
+      }
+      return;
+    }
+
     // 初始化数据库
     this.databaseService.open();
     this.logService.info('main', 'Application starting...');
@@ -50,6 +58,7 @@ export class App {
     // 创建主窗口
     this.windowManager.openWindow({ module: 'workbench' });
 
+    this.started = true;
     this.logService.info('main', 'Application started successfully');
   }
 
@@ -129,6 +138,7 @@ export class App {
 
   shutdown(): void {
     this.logService.info('main', 'Application shutting down...');
+    this.started = false;
     this.ipcController.dispose();
     this.databaseService.close();
     this.logService.close();

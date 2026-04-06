@@ -30,7 +30,8 @@ export function getPluginsPath(): string {
 
 export function getRendererUrl(entry: string): string {
   if (process.env.NODE_ENV === 'development') {
-    return `http://localhost:5173/entries/${entry}/index.html`;
+    const devServerUrl = (process.env.ELECTRON_RENDERER_URL ?? 'http://localhost:5173').replace(/\/$/, '');
+    return `${devServerUrl}/entries/${entry}/index.html`;
   }
-  return `file://${path.join(__dirname, '..', 'renderer', 'entries', entry, 'index.html')}`;
+  return `file://${path.join(__dirname, '..', '..', '..', 'renderer', 'entries', entry, 'index.html')}`;
 }

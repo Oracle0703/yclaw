@@ -1,6 +1,7 @@
 import { autoUpdater } from 'electron-updater';
 import { EventBus } from '../ipc/EventBus';
 import { LogService } from './LogService';
+import { EVENTS } from '@shared/constants';
 
 export interface UpdateInfo {
   version: string;
@@ -28,22 +29,22 @@ export class UpdateService {
 
     autoUpdater.on('update-available', (info) => {
       this.logService.info('main', `Update available: ${info.version}`);
-      this.eventBus.emit('update:available', {
+      this.eventBus.emit(EVENTS.UPDATE_AVAILABLE, {
         version: info.version,
         releaseDate: info.releaseDate,
-        releaseNotes: info.releaseNotes,
+        releaseNotes: this.normalizeReleaseNotes(info.releaseNotes),
       } satisfies UpdateInfo);
       this.checking = false;
     });
 
     autoUpdater.on('update-not-available', () => {
       this.logService.info('main', 'No updates available');
-      this.eventBus.emit('update:notAvailable');
+      this.eventBus.emit(EVENTS.UPDATE_NOT_AVAILABLE);
       this.checking = false;
     });
 
     autoUpdater.on('download-progress', (progress) => {
-      this.eventBus.emit('update:downloadProgress', {
+      this.eventBus.emit(EVENTS.UPDATE_DOWNLOAD_PROGRESS, {
         percent: progress.percent,
         bytesPerSecond: progress.bytesPerSecond,
         transferred: progress.transferred,
@@ -53,14 +54,28 @@ export class UpdateService {
 
     autoUpdater.on('update-downloaded', () => {
       this.logService.info('main', 'Update downloaded, will install on quit');
-      this.eventBus.emit('update:downloaded');
+      this.eventBus.emit(EVENTS.UPDATE_DOWNLOADED);
     });
 
     autoUpdater.on('error', (err) => {
       this.logService.error('main', `Update error: ${err.message}`);
-      this.eventBus.emit('update:error', { message: err.message });
+      this.eventBus.emit(EVENTS.UPDATE_ERROR, { message: err.message });
       this.checking = false;
     });
+  }
+
+  private normalizeReleaseNotes(
+    releaseNotes: string | { note: string }[] | null | undefined,
+  ): string | undefined {
+    if (typeof releaseNotes === 'string') {
+      return releaseNotes;
+    }
+
+    if (Array.isArray(releaseNotes)) {
+      return releaseNotes.map((note) => note.note).filter(Boolean).join('\n\n') || undefined;
+    }
+
+    return undefined;
   }
 
   /**

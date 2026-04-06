@@ -25,6 +25,13 @@ export const EVENTS = {
   // 股票数据
   STOCK_DATA_UPDATE: 'stock:data:update',
   STOCK_REALTIME_TICK: 'stock:realtime:tick',
+
+  // 自动更新
+  UPDATE_AVAILABLE: 'update:available',
+  UPDATE_NOT_AVAILABLE: 'update:notAvailable',
+  UPDATE_DOWNLOAD_PROGRESS: 'update:downloadProgress',
+  UPDATE_DOWNLOADED: 'update:downloaded',
+  UPDATE_ERROR: 'update:error',
 } as const;
 
 export type EventName = (typeof EVENTS)[keyof typeof EVENTS];

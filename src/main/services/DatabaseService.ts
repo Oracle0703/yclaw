@@ -10,19 +10,24 @@ import { getDatabasePath } from '../utils/paths';
  */
 export class DatabaseService {
   private db: Database.Database | null = null;
+  private dbDir: string;
   private dbPath: string;
   private readonly currentVersion = 1;
 
   constructor(dbName = 'yclaw.sqlite') {
-    const dbDir = getDatabasePath();
-    fs.mkdirSync(dbDir, { recursive: true });
-    this.dbPath = path.join(dbDir, dbName);
+    this.dbDir = getDatabasePath();
+    this.dbPath = path.join(this.dbDir, dbName);
   }
 
   /**
    * 打开数据库连接
    */
   open(): void {
+    if (this.db) {
+      return;
+    }
+
+    fs.mkdirSync(this.dbDir, { recursive: true });
     this.db = new Database(this.dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');

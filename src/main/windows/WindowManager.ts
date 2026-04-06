@@ -30,6 +30,14 @@ export class WindowManager {
     this.eventBus = EventBus.getInstance();
   }
 
+  private getPreloadPath(): string {
+    return process.env.ELECTRON_PRELOAD_PATH ?? path.join(__dirname, 'preload.js');
+  }
+
+  private isDevelopment(): boolean {
+    return process.env.NODE_ENV === 'development';
+  }
+
   /**
    * 创建或聚焦模块窗口
    */
@@ -63,7 +71,7 @@ export class WindowManager {
       minHeight: 400,
       title: `YClaw - ${module}`,
       webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
+        preload: this.getPreloadPath(),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false,
@@ -73,6 +81,11 @@ export class WindowManager {
     // 加载入口 URL
     const url = getRendererUrl(module);
     win.loadURL(url);
+
+    if (this.isDevelopment()) {
+      win.webContents.openDevTools({ mode: 'detach' });
+      this.attachDevDebugListeners(win, module);
+    }
 
     // 保存窗口状态
     win.on('close', () => {
@@ -138,7 +151,7 @@ export class WindowManager {
    * 向所有窗口广播消息
    */
   broadcast(channel: string, ...args: unknown[]): void {
-    for (const [_, win] of this.windows) {
+    for (const win of this.windows.values()) {
       if (!win.isDestroyed()) {
         win.webContents.send(channel, ...args);
       }
@@ -149,10 +162,37 @@ export class WindowManager {
    * 关闭所有窗口
    */
   closeAll(): void {
-    for (const [_, win] of this.windows) {
+    for (const win of this.windows.values()) {
       if (!win.isDestroyed()) {
         win.close();
       }
     }
+  }
+
+  private attachDevDebugListeners(win: BrowserWindow, module: string): void {
+    win.webContents.on(
+      'did-fail-load',
+      (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        console.error('[window] did-fail-load', {
+          module,
+          errorCode,
+          errorDescription,
+          validatedURL,
+          isMainFrame,
+        });
+      },
+    );
+
+    win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      console.log('[renderer]', { module, level, message, line, sourceId });
+    });
+
+    win.webContents.on('did-finish-load', () => {
+      console.log('[window] did-finish-load', { module, url: win.webContents.getURL() });
+    });
+
+    win.webContents.on('render-process-gone', (_event, details) => {
+      console.error('[window] render-process-gone', { module, details });
+    });
   }
 }

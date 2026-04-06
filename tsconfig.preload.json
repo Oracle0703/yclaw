@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "outDir": "dist/dev",
+    "rootDir": "src",
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": [
+    "src/main/windows/preload.ts",
+    "src/shared/types"
+  ]
+}
