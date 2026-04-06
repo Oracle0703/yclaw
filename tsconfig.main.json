@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "outDir": "dist/main",
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": [
+    "src/main",
+    "src/shared",
+    "src/engines"
+  ]
+}

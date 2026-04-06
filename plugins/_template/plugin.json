@@ -1,0 +1,13 @@
+{
+  "name": "yclaw-plugin-template",
+  "version": "1.0.0",
+  "displayName": "Plugin Template",
+  "description": "YClaw 插件开发模板",
+  "main": "dist/index.js",
+  "ui": "dist/ui/Panel.html",
+  "permissions": [],
+  "permissionLevel": 1,
+  "engines": {
+    "yclaw": ">=1.0.0"
+  }
+}

@@ -1,0 +1,30 @@
+/**
+ * 全局事件名常量
+ */
+export const EVENTS = {
+  // 模块事件
+  MODULE_OPENED: 'module:opened',
+  MODULE_CLOSED: 'module:closed',
+
+  // 配置变更
+  CONFIG_CHANGED: 'config:changed',
+
+  // 插件生命周期
+  PLUGIN_ACTIVATED: 'plugin:activated',
+  PLUGIN_DEACTIVATED: 'plugin:deactivated',
+  PLUGIN_INSTALLED: 'plugin:installed',
+  PLUGIN_UNINSTALLED: 'plugin:uninstalled',
+
+  // 自动化任务
+  TASK_STARTED: 'task:started',
+  TASK_STEP_COMPLETED: 'task:step:completed',
+  TASK_COMPLETED: 'task:completed',
+  TASK_FAILED: 'task:failed',
+  TASK_PAUSED: 'task:paused',
+
+  // 股票数据
+  STOCK_DATA_UPDATE: 'stock:data:update',
+  STOCK_REALTIME_TICK: 'stock:realtime:tick',
+} as const;
+
+export type EventName = (typeof EVENTS)[keyof typeof EVENTS];

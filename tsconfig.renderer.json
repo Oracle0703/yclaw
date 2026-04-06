@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist/renderer",
+    "rootDir": "src",
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": [
+    "src/renderer",
+    "src/shared"
+  ]
+}
