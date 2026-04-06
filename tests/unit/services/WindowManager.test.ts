@@ -12,6 +12,9 @@ vi.mock('electron', () => {
       _listeners: new Map<string, Function[]>(),
       isDestroyed: () => win._destroyed,
       isMaximized: () => false,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      show: vi.fn(),
       focus: vi.fn(),
       close: vi.fn(() => {
         const closeListeners = win._listeners.get('close') ?? [];

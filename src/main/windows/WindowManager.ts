@@ -38,25 +38,43 @@ export class WindowManager {
     return process.env.NODE_ENV === 'development';
   }
 
+  private shouldOpenDevTools(): boolean {
+    return this.isDevelopment() && process.env.ELECTRON_OPEN_DEVTOOLS === 'true';
+  }
+
   /**
    * 创建或聚焦模块窗口
    */
   openWindow(config: WindowConfig): BrowserWindow {
-    const { module, options } = config;
-
-    // 检查是否已存在
-    const existing = this.windows.get(module);
+    const existing = this.windows.get(config.module);
     if (existing && !existing.isDestroyed()) {
+      if (existing.isMinimized()) {
+        existing.restore();
+      }
+      existing.show();
       existing.focus();
       return existing;
     }
 
-    // 窗口数量限制
+    return this.ensureWindow(config, false);
+  }
+
+  preloadWindow(config: WindowConfig): BrowserWindow {
+    const existing = this.windows.get(config.module);
+    if (existing && !existing.isDestroyed()) {
+      return existing;
+    }
+
+    return this.ensureWindow(config, true);
+  }
+
+  private ensureWindow(config: WindowConfig, hidden: boolean): BrowserWindow {
+    const { module, options } = config;
+
     if (this.windows.size >= this.maxWindows) {
       throw new Error(`Maximum window limit (${this.maxWindows}) reached`);
     }
 
-    // 恢复上次窗口状态
     const savedState = this.windowStates.get(module);
     const defaultState: WindowState = {
       width: options?.width ?? savedState?.width ?? 1200,
@@ -65,8 +83,21 @@ export class WindowManager {
       y: options?.y ?? savedState?.y,
     };
 
+    const win = this.createWindow(module, defaultState, hidden);
+    this.windows.set(module, win);
+    this.eventBus.emit(EVENTS.MODULE_OPENED, { module });
+
+    return win;
+  }
+
+  private createWindow(
+    module: string,
+    defaultState: WindowState,
+    hidden: boolean,
+  ): BrowserWindow {
     const win = new BrowserWindow({
       ...defaultState,
+      show: !hidden,
       minWidth: 600,
       minHeight: 400,
       title: `YClaw - ${module}`,
@@ -82,7 +113,7 @@ export class WindowManager {
     const url = getRendererUrl(module);
     win.loadURL(url);
 
-    if (this.isDevelopment()) {
+    if (this.shouldOpenDevTools() && !hidden) {
       win.webContents.openDevTools({ mode: 'detach' });
       this.attachDevDebugListeners(win, module);
     }
@@ -103,9 +134,6 @@ export class WindowManager {
       this.windows.delete(module);
       this.eventBus.emit(EVENTS.MODULE_CLOSED, { module });
     });
-
-    this.windows.set(module, win);
-    this.eventBus.emit(EVENTS.MODULE_OPENED, { module });
 
     return win;
   }
@@ -132,9 +160,13 @@ export class WindowManager {
    * 获取所有打开的模块列表
    */
   getOpenModules(): string[] {
-    return Array.from(this.windows.entries())
-      .filter(([_, win]) => !win.isDestroyed())
-      .map(([module]) => module);
+    const result: string[] = [];
+    for (const [module, win] of this.windows) {
+      if (!win.isDestroyed()) {
+        result.push(module);
+      }
+    }
+    return result;
   }
 
   /**

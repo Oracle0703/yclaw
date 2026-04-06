@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { KLineChart } from './components/KLineChart';
-import { useIpc, useIpcEvent } from '../../shared/hooks';
+import { useEffect, useState } from 'react';
+import { Checkbox, Col, Input, Row, Segmented, Space, Tag, Typography } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
+import { ProCard, StatisticCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { OHLCVData, IndicatorType, IndicatorResult } from '@shared/types';
-import '../../shared/styles/globals.css';
+import { AdminPageLayout } from '../../shared/components/AdminPageLayout';
+import { useIpc, useIpcEvent } from '../../shared/hooks';
+import { KLineChart } from './components/KLineChart';
 
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '1D', '1W'] as const;
 const INDICATORS: { type: IndicatorType; label: string }[] = [
@@ -21,73 +24,142 @@ export default function App() {
   const [indicators, setIndicators] = useState<IndicatorResult[]>([]);
   const [activeIndicators, setActiveIndicators] = useState<IndicatorType[]>(['MA']);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const result = await invoke<OHLCVData[]>(IPC_CHANNELS.STOCK_DATA, { symbol, timeframe });
-      if (result) setData(result);
-    } catch { /* ignore */ }
-  }, [invoke, symbol, timeframe]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  useIpcEvent('stock:data:update', (payload: unknown) => {
-    const p = payload as { data: OHLCVData[] };
-    if (p.data) setData(p.data);
-  });
-
-  const toggleIndicator = async (type: IndicatorType) => {
-    const next = activeIndicators.includes(type)
-      ? activeIndicators.filter((t) => t !== type)
-      : [...activeIndicators, type];
-    setActiveIndicators(next);
-
+  const calculateIndicators = async (series: OHLCVData[], nextIndicators: IndicatorType[]) => {
     const results: IndicatorResult[] = [];
-    for (const t of next) {
+    for (const type of nextIndicators) {
       try {
-        const res = await invoke<IndicatorResult>(IPC_CHANNELS.STOCK_INDICATOR_CALC, { type: t, data });
-        if (res) results.push(res);
-      } catch { /* ignore */ }
+        const result = await invoke<IndicatorResult>(IPC_CHANNELS.STOCK_INDICATOR_CALC, {
+          type,
+          data: series,
+        });
+        if (result) {
+          results.push(result);
+        }
+      } catch {
+        // ignore indicator calculation errors for the demo dashboard
+      }
     }
     setIndicators(results);
   };
 
+  const fetchData = async () => {
+    try {
+      const result = await invoke<OHLCVData[]>(IPC_CHANNELS.STOCK_DATA, { symbol, timeframe });
+      if (result) {
+        setData(result);
+        await calculateIndicators(result, activeIndicators);
+      }
+    } catch {
+      // ignore fetch errors for the demo dashboard
+    }
+  };
+
+  useEffect(() => {
+    void fetchData();
+  }, [symbol, timeframe]);
+
+  useIpcEvent('stock:data:update', (payload: unknown) => {
+    const p = payload as { data: OHLCVData[] };
+    if (p.data) {
+      setData(p.data);
+      void calculateIndicators(p.data, activeIndicators);
+    }
+  });
+
+  const changeIndicators = async (nextValues: IndicatorType[]) => {
+    setActiveIndicators(nextValues);
+    await calculateIndicators(data, nextValues);
+  };
+
+  const latest = data[data.length - 1];
+  const previous = data[data.length - 2];
+  const priceChange = latest && previous ? latest.close - previous.close : 0;
+  const changeRate = latest && previous ? (priceChange / previous.close) * 100 : 0;
+
   return (
-    <div className="app stock-app">
-      <header className="stock-header">
-        <h1>📈 股票分析</h1>
-        <div className="stock-controls">
-          <input
-            className="symbol-input"
+    <AdminPageLayout
+      currentPath="/stock"
+      title="股票分析"
+      subTitle="聚合行情、指标和策略观察位"
+      content="以投研中台的方式组织数据筛选、指标开关和图表工作区，适合作为后续量化策略面板的基础壳层。"
+      extra={
+        <Space>
+          <Tag color="processing">Market Desk</Tag>
+          <Input
+            prefix={<SearchOutlined />}
             value={symbol}
             onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-            onKeyDown={(e) => e.key === 'Enter' && fetchData()}
+            onPressEnter={() => void fetchData()}
             placeholder="股票代码"
+            style={{ width: 180 }}
           />
-          <div className="timeframe-group">
-            {TIMEFRAMES.map((tf) => (
-              <button key={tf} className={timeframe === tf ? 'active' : ''} onClick={() => setTimeframe(tf)}>
-                {tf}
-              </button>
-            ))}
-          </div>
-        </div>
-      </header>
+        </Space>
+      }
+    >
+      <Space direction="vertical" size={20} style={{ width: '100%' }}>
+        <StatisticCard.Group direction="row">
+          <StatisticCard
+            className="yclaw-panel-card"
+            statistic={{
+              title: '最新收盘价',
+              value: latest?.close ?? '--',
+              precision: typeof latest?.close === 'number' ? 2 : undefined,
+              suffix: 'USD',
+            }}
+          />
+          <StatisticCard
+            className="yclaw-panel-card"
+            statistic={{
+              title: '涨跌额',
+              value: priceChange,
+              precision: 2,
+              valueStyle: { color: priceChange >= 0 ? '#16a34a' : '#dc2626' },
+            }}
+          />
+          <StatisticCard
+            className="yclaw-panel-card"
+            statistic={{
+              title: '涨跌幅',
+              value: changeRate,
+              precision: 2,
+              suffix: '%',
+              valueStyle: { color: changeRate >= 0 ? '#16a34a' : '#dc2626' },
+            }}
+          />
+        </StatisticCard.Group>
 
-      <div className="indicator-bar">
-        {INDICATORS.map(({ type, label }) => (
-          <button
-            key={type}
-            className={activeIndicators.includes(type) ? 'active' : ''}
-            onClick={() => toggleIndicator(type)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+        <ProCard className="yclaw-panel-card" title="行情工作区">
+          <Space direction="vertical" size={20} style={{ width: '100%' }}>
+            <Row gutter={[16, 16]}>
+              <Col xs={24} lg={12}>
+                <Typography.Text type="secondary">时间粒度</Typography.Text>
+                <div style={{ marginTop: 8 }}>
+                  <Segmented
+                    block
+                    options={TIMEFRAMES.map((item) => ({ label: item, value: item }))}
+                    value={timeframe}
+                    onChange={(value) => setTimeframe(String(value))}
+                  />
+                </div>
+              </Col>
+              <Col xs={24} lg={12}>
+                <Typography.Text type="secondary">技术指标</Typography.Text>
+                <div style={{ marginTop: 8 }}>
+                  <Checkbox.Group
+                    options={INDICATORS.map((item) => ({ label: item.label, value: item.type }))}
+                    value={activeIndicators}
+                    onChange={(values) => {
+                      void changeIndicators(values as IndicatorType[]);
+                    }}
+                  />
+                </div>
+              </Col>
+            </Row>
 
-      <div className="chart-container">
-        <KLineChart data={data} indicators={indicators} width={960} height={480} />
-      </div>
-    </div>
+            <KLineChart data={data} indicators={indicators} width={1100} height={520} />
+          </Space>
+        </ProCard>
+      </Space>
+    </AdminPageLayout>
   );
 }

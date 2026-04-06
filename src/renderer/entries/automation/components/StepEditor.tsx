@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { Button, Col, Form, Input, InputNumber, Row, Select, Space, Typography } from 'antd';
+import { ProCard } from '@ant-design/pro-components';
 import type { TaskStep, ActionType } from '@shared/types';
 
 const ACTION_TYPES: { value: ActionType; label: string }[] = [
@@ -42,68 +43,109 @@ export function StepEditor({ steps, onChange }: StepEditorProps) {
   };
 
   return (
-    <div className="step-editor">
+    <Space direction="vertical" size={16} style={{ width: '100%' }}>
       {steps.map((step, i) => (
-        <div key={step.id} className="step-card">
-          <div className="step-header">
-            <span className="step-index">#{i + 1}</span>
-            <input
-              className="step-name-input"
-              value={step.name}
-              onChange={(e) => updateStep(i, { name: e.target.value })}
-            />
-            <div className="step-actions">
-              <button onClick={() => moveStep(i, -1)} disabled={i === 0}>↑</button>
-              <button onClick={() => moveStep(i, 1)} disabled={i === steps.length - 1}>↓</button>
-              <button onClick={() => removeStep(i)}>✕</button>
-            </div>
-          </div>
-          <div className="step-body">
-            <label>
-              动作类型
-              <select
-                value={step.action.type}
-                onChange={(e) =>
-                  updateStep(i, {
-                    action: { ...step.action, type: e.target.value as ActionType },
-                  })
-                }
-              >
-                {ACTION_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              选择器
-              <input
-                placeholder="CSS 选择器，如 #submit-btn"
-                value={step.action.selector}
-                onChange={(e) =>
-                  updateStep(i, {
-                    action: { ...step.action, selector: e.target.value },
-                  })
-                }
-              />
-            </label>
+        <ProCard
+          key={step.id}
+          className="yclaw-panel-card"
+          title={
+            <Space>
+              <Typography.Text strong>#{i + 1}</Typography.Text>
+              <Typography.Text>{step.name}</Typography.Text>
+            </Space>
+          }
+          extra={
+            <Space>
+              <Button onClick={() => moveStep(i, -1)} disabled={i === 0}>
+                上移
+              </Button>
+              <Button onClick={() => moveStep(i, 1)} disabled={i === steps.length - 1}>
+                下移
+              </Button>
+              <Button danger onClick={() => removeStep(i)}>
+                删除
+              </Button>
+            </Space>
+          }
+        >
+          <Form layout="vertical">
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item label="步骤名称">
+                  <Input
+                    value={step.name}
+                    onChange={(e) => updateStep(i, { name: e.target.value })}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item label="动作类型">
+                  <Select
+                    value={step.action.type}
+                    options={ACTION_TYPES}
+                    onChange={(value) =>
+                      updateStep(i, {
+                        action: { ...step.action, type: value as ActionType },
+                      })
+                    }
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col xs={24} md={18}>
+                <Form.Item label="选择器">
+                  <Input
+                    placeholder="CSS 选择器，如 #submit-btn"
+                    value={step.action.selector}
+                    onChange={(e) =>
+                      updateStep(i, {
+                        action: { ...step.action, selector: e.target.value },
+                      })
+                    }
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={6}>
+                <Form.Item label="超时(ms)">
+                  <InputNumber
+                    min={0}
+                    style={{ width: '100%' }}
+                    value={step.action.timeout}
+                    onChange={(value) =>
+                      updateStep(i, {
+                        action: { ...step.action, timeout: value ?? undefined },
+                      })
+                    }
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
             {step.action.type === 'input' && (
-              <label>
-                输入值
-                <input
+              <Form.Item label="输入值">
+                <Input
                   placeholder="输入内容"
                   value={(step.action.params?.value as string) ?? ''}
                   onChange={(e) =>
                     updateStep(i, {
-                      action: { ...step.action, params: { ...step.action.params, value: e.target.value } },
+                      action: {
+                        ...step.action,
+                        params: { ...step.action.params, value: e.target.value },
+                      },
                     })
                   }
                 />
-              </label>
+              </Form.Item>
             )}
-          </div>
-        </div>
+          </Form>
+        </ProCard>
       ))}
-      <button className="add-step-btn" onClick={addStep}>+ 添加步骤</button>
-    </div>
+
+      <Button type="primary" onClick={addStep}>
+        添加步骤
+      </Button>
+    </Space>
   );
 }

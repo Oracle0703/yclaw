@@ -1,10 +1,12 @@
-import React, { useState, useCallback } from 'react';
-import { TaskList } from './components/TaskList';
-import { StepEditor } from './components/StepEditor';
-import { ExecutionPanel } from './components/ExecutionPanel';
+import { useState } from 'react';
+import { Button, Space, Tabs, Tag } from 'antd';
+import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { AdminPageLayout } from '../../shared/components/AdminPageLayout';
 import { useIpcEvent } from '../../shared/hooks';
 import type { TaskStep } from '@shared/types';
-import '../../shared/styles/globals.css';
+import { ExecutionPanel } from './components/ExecutionPanel';
+import { StepEditor } from './components/StepEditor';
+import { TaskList } from './components/TaskList';
 
 type View = 'list' | 'editor' | 'execution';
 
@@ -17,10 +19,10 @@ export default function App() {
   const [execLogs, setExecLogs] = useState<string[]>([]);
   const [hasBreakpoint, setHasBreakpoint] = useState(false);
 
-  const handleSelectTask = useCallback((id: string) => {
+  const handleSelectTask = (id: string) => {
     setSelectedTaskId(id === 'new' ? null : id);
     setView('editor');
-  }, []);
+  };
 
   useIpcEvent('task:stepCompleted', (_data: unknown) => {
     const data = _data as { stepIndex: number };
@@ -36,33 +38,53 @@ export default function App() {
   });
 
   return (
-    <div className="app automation-app">
-      <nav className="automation-nav">
-        <button className={view === 'list' ? 'active' : ''} onClick={() => setView('list')}>
-          任务列表
-        </button>
-        <button className={view === 'editor' ? 'active' : ''} onClick={() => setView('editor')}>
-          编辑器
-        </button>
-        <button className={view === 'execution' ? 'active' : ''} onClick={() => setView('execution')}>
-          执行面板
-        </button>
-      </nav>
-
-      <main className="automation-content">
-        {view === 'list' && <TaskList onSelect={handleSelectTask} />}
-        {view === 'editor' && <StepEditor steps={steps} onChange={setSteps} />}
-        {view === 'execution' && (
-          <ExecutionPanel
-            taskId={selectedTaskId}
-            status={execStatus}
-            currentStep={execStep}
-            totalSteps={steps.length}
-            logs={execLogs}
-            hasBreakpoint={hasBreakpoint}
-          />
-        )}
-      </main>
-    </div>
+    <AdminPageLayout
+      currentPath="/automation"
+      title="自动化采集"
+      subTitle="统一编排任务流、步骤配置和执行状态"
+      content="将 RPA 任务资产、编辑器和执行日志集中在一个中台页面内，便于团队协作和巡检。"
+      extra={
+        <Space>
+          <Tag color="purple">RPA Console</Tag>
+          <Button icon={<PlusOutlined />} onClick={() => setView('editor')}>
+            新建任务
+          </Button>
+          <Button type="primary" icon={<ThunderboltOutlined />} onClick={() => setView('execution')}>
+            打开执行面板
+          </Button>
+        </Space>
+      }
+    >
+      <Tabs
+        activeKey={view}
+        onChange={(key) => setView(key as View)}
+        items={[
+          {
+            key: 'list',
+            label: '任务列表',
+            children: <TaskList onSelect={handleSelectTask} />,
+          },
+          {
+            key: 'editor',
+            label: '步骤编辑器',
+            children: <StepEditor steps={steps} onChange={setSteps} />,
+          },
+          {
+            key: 'execution',
+            label: '执行面板',
+            children: (
+              <ExecutionPanel
+                taskId={selectedTaskId}
+                status={execStatus}
+                currentStep={execStep}
+                totalSteps={steps.length}
+                logs={execLogs}
+                hasBreakpoint={hasBreakpoint}
+              />
+            ),
+          },
+        ]}
+      />
+    </AdminPageLayout>
   );
 }

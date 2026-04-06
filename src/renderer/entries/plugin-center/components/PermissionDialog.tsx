@@ -1,4 +1,4 @@
-import React from 'react';
+import { Alert, List, Modal, Tag, Typography } from 'antd';
 
 interface PermissionDialogProps {
   pluginName: string;
@@ -26,30 +26,32 @@ export function PermissionDialog({
   onCancel,
 }: PermissionDialogProps) {
   return (
-    <div className="permission-dialog-overlay">
-      <div className="permission-dialog">
-        <h3>权限确认</h3>
-        <p>
-          插件 <strong>{pluginName}</strong> 请求以下权限（等级 L{permissionLevel}）：
-        </p>
-        <ul className="permission-list">
-          {permissions.map((perm) => (
-            <li key={perm}>
-              <span className="perm-icon">{permissionLevel >= 3 ? '⚠️' : '🔑'}</span>
-              {PERMISSION_LABELS[perm] ?? perm}
-            </li>
-          ))}
-        </ul>
-        {permissionLevel >= 3 && (
-          <div className="permission-warning">
-            ⚠ 该插件请求高级权限，可能访问文件系统或控制自动化引擎。请确认信任来源。
-          </div>
-        )}
-        <div className="dialog-actions">
-          <button onClick={onCancel}>取消</button>
-          <button className="primary" onClick={onConfirm}>允许</button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      open
+      title="权限确认"
+      okText="允许"
+      cancelText="取消"
+      onOk={onConfirm}
+      onCancel={onCancel}
+    >
+      <Typography.Paragraph>
+        插件 <Typography.Text strong>{pluginName}</Typography.Text> 请求以下权限
+        <Tag color={permissionLevel >= 3 ? 'error' : 'processing'}>L{permissionLevel}</Tag>
+      </Typography.Paragraph>
+
+      <List
+        bordered
+        dataSource={permissions}
+        renderItem={(perm) => <List.Item>{PERMISSION_LABELS[perm] ?? perm}</List.Item>}
+      />
+
+      {permissionLevel >= 3 && (
+        <Alert
+          style={{ marginTop: 16 }}
+          type="warning"
+          message="该插件请求高级权限，可能访问文件系统或控制自动化引擎。请确认信任来源。"
+        />
+      )}
+    </Modal>
   );
 }

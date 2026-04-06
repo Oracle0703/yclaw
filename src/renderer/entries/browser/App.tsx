@@ -1,8 +1,11 @@
-import React, { useState, useCallback } from 'react';
-import { TabBar } from './components/TabBar';
-import { AddressBar } from './components/AddressBar';
+import { useState } from 'react';
+import { Button, Descriptions, Empty, Space, Tag, Typography } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { ProCard, StatisticCard } from '@ant-design/pro-components';
+import { AdminPageLayout } from '../../shared/components/AdminPageLayout';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
-import '../../shared/styles/globals.css';
+import { AddressBar } from './components/AddressBar';
+import { TabBar } from './components/TabBar';
 
 interface Tab {
   id: number;
@@ -18,7 +21,7 @@ export default function App() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
-  const createTab = useCallback(async () => {
+  const createTab = async () => {
     try {
       const res = await invoke<{ id: number }>('browser:createTab', { url: 'https://www.google.com' });
       if (res) {
@@ -26,10 +29,12 @@ export default function App() {
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(res.id);
       }
-    } catch { /* ignore */ }
-  }, [invoke]);
+    } catch {
+      // ignore browser errors in the renderer demo
+    }
+  };
 
-  const closeTab = useCallback(async (id: number) => {
+  const closeTab = async (id: number) => {
     await invoke('browser:closeTab', { id });
     setTabs((prev) => prev.filter((t) => t.id !== id));
     setActiveTabId((prev) => {
@@ -39,13 +44,13 @@ export default function App() {
       }
       return prev;
     });
-  }, [invoke, tabs]);
+  };
 
-  const navigate = useCallback(async (url: string) => {
+  const navigate = async (url: string) => {
     if (activeTabId != null) {
       await invoke('browser:navigate', { tabId: activeTabId, url });
     }
-  }, [invoke, activeTabId]);
+  };
 
   useIpcEvent('tab:title', (data: unknown) => {
     const { id, title } = data as { id: number; title: string };
@@ -63,31 +68,89 @@ export default function App() {
   });
 
   return (
-    <div className="app browser-app">
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onSwitch={setActiveTabId}
-        onClose={closeTab}
-        onNew={createTab}
-      />
-      <AddressBar
-        url={activeTab?.url ?? ''}
-        canGoBack={false}
-        canGoForward={false}
-        onNavigate={navigate}
-        onBack={() => invoke('browser:goBack', { tabId: activeTabId })}
-        onForward={() => invoke('browser:goForward', { tabId: activeTabId })}
-        onReload={() => invoke('browser:reload', { tabId: activeTabId })}
-      />
-      <div className="browser-viewport">
-        {tabs.length === 0 && (
-          <div className="empty-state">
-            <p>点击 + 打开新标签页</p>
-            <button onClick={createTab}>新建标签页</button>
+    <AdminPageLayout
+      currentPath="/browser"
+      title="内嵌浏览器"
+      subTitle="管理会话、标签页和受控导航"
+      content="浏览器模块先以中台工作台形式组织标签、地址栏和当前会话元信息，后续可继续接入真实 WebContentsView 容器。"
+      extra={
+        <Space>
+          <Tag color="processing">Session Desk</Tag>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => void createTab()}>
+            新建标签页
+          </Button>
+        </Space>
+      }
+    >
+      <Space direction="vertical" size={20} style={{ width: '100%' }}>
+        <StatisticCard.Group direction="row">
+          <StatisticCard
+            className="yclaw-panel-card"
+            statistic={{ title: '打开标签数', value: tabs.length, suffix: '个' }}
+          />
+          <StatisticCard
+            className="yclaw-panel-card"
+            statistic={{ title: '当前活动标签', value: activeTab?.title ?? '未选择' }}
+          />
+          <StatisticCard
+            className="yclaw-panel-card"
+            statistic={{ title: '活动地址', value: activeTab?.url ?? 'about:blank' }}
+          />
+        </StatisticCard.Group>
+
+        <ProCard className="yclaw-panel-card" title="会话控制台">
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <TabBar
+              tabs={tabs}
+              activeTabId={activeTabId}
+              onSwitch={setActiveTabId}
+              onClose={(id) => {
+                void closeTab(id);
+              }}
+              onNew={() => {
+                void createTab();
+              }}
+            />
+            <AddressBar
+              url={activeTab?.url ?? ''}
+              canGoBack={false}
+              canGoForward={false}
+              onNavigate={(url) => {
+                void navigate(url);
+              }}
+              onBack={() => void invoke('browser:goBack', { tabId: activeTabId })}
+              onForward={() => void invoke('browser:goForward', { tabId: activeTabId })}
+              onReload={() => void invoke('browser:reload', { tabId: activeTabId })}
+            />
+          </Space>
+        </ProCard>
+
+        <ProCard className="yclaw-panel-card" title="当前视图">
+          <div className="browser-viewport">
+            {activeTab ? (
+              <Descriptions bordered column={1}>
+                <Descriptions.Item label="标题">{activeTab.title || '新标签页'}</Descriptions.Item>
+                <Descriptions.Item label="URL">{activeTab.url}</Descriptions.Item>
+                <Descriptions.Item label="状态">
+                  <Tag color={activeTab.loading ? 'processing' : 'success'}>
+                    {activeTab.loading ? '加载中' : '已就绪'}
+                  </Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="说明">
+                  <Typography.Text type="secondary">
+                    当前仓库先完成浏览器中台外壳和标签控制区，后续可以继续把真实的 WebContentsView 容器挂入这个区域。
+                  </Typography.Text>
+                </Descriptions.Item>
+              </Descriptions>
+            ) : (
+              <Empty
+                description="点击上方新建标签页，开始创建受控浏览会话"
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
+            )}
           </div>
-        )}
-      </div>
-    </div>
+        </ProCard>
+      </Space>
+    </AdminPageLayout>
   );
 }

@@ -63,7 +63,7 @@ describe('PermissionDialog', () => {
         onCancel={onCancel}
       />,
     );
-    fireEvent.click(screen.getByText('允许'));
+    fireEvent.click(screen.getByRole('button', { name: /允\s*许/ }));
     expect(onConfirm).toHaveBeenCalled();
   });
 
@@ -77,7 +77,7 @@ describe('PermissionDialog', () => {
         onCancel={onCancel}
       />,
     );
-    fireEvent.click(screen.getByText('取消'));
+    fireEvent.click(screen.getByRole('button', { name: /取\s*消/ }));
     expect(onCancel).toHaveBeenCalled();
   });
 });

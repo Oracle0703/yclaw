@@ -24,6 +24,8 @@ export class App {
   private updateService: UpdateService;
   private tabManager: TabManager;
   private started = false;
+  private warmupTimer: NodeJS.Timeout | null = null;
+  private static readonly WARMUP_DELAY_MS = 900;
 
   constructor() {
     this.windowManager = new WindowManager();
@@ -57,9 +59,28 @@ export class App {
 
     // 创建主窗口
     this.windowManager.openWindow({ module: 'workbench' });
+    this.scheduleWindowWarmup();
 
     this.started = true;
     this.logService.info('main', 'Application started successfully');
+  }
+
+  private scheduleWindowWarmup(): void {
+    if (this.warmupTimer) {
+      clearTimeout(this.warmupTimer);
+    }
+
+    this.warmupTimer = setTimeout(() => {
+      try {
+        this.windowManager.preloadWindow({ module: 'stock' });
+        this.logService.info('main', 'Preloaded stock window for faster module switching');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logService.warn('main', `Failed to preload stock window: ${message}`);
+      } finally {
+        this.warmupTimer = null;
+      }
+    }, App.WARMUP_DELAY_MS);
   }
 
   private registerIpcHandlers(): void {
@@ -139,6 +160,10 @@ export class App {
   shutdown(): void {
     this.logService.info('main', 'Application shutting down...');
     this.started = false;
+    if (this.warmupTimer) {
+      clearTimeout(this.warmupTimer);
+      this.warmupTimer = null;
+    }
     this.ipcController.dispose();
     this.databaseService.close();
     this.logService.close();

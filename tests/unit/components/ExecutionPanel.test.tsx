@@ -31,22 +31,22 @@ describe('ExecutionPanel', () => {
 
   it('should render start button', () => {
     render(<ExecutionPanel {...defaultProps} />);
-    expect(screen.getByText(/启动/)).toBeDefined();
+    expect(screen.getByRole('button', { name: /启\s*动/ })).toBeDefined();
   });
 
   it('should render pause button', () => {
     render(<ExecutionPanel {...defaultProps} status="running" />);
-    expect(screen.getByText(/暂停/)).toBeDefined();
+    expect(screen.getByRole('button', { name: /暂\s*停/ })).toBeDefined();
   });
 
   it('should render resume button', () => {
     render(<ExecutionPanel {...defaultProps} status="paused" />);
-    expect(screen.getByText(/继续/)).toBeDefined();
+    expect(screen.getByRole('button', { name: /继\s*续/ })).toBeDefined();
   });
 
   it('should render stop button', () => {
     render(<ExecutionPanel {...defaultProps} status="running" />);
-    expect(screen.getByText(/停止/)).toBeDefined();
+    expect(screen.getByRole('button', { name: /停\s*止/ })).toBeDefined();
   });
 
   it('should display progress', () => {
@@ -68,13 +68,13 @@ describe('ExecutionPanel', () => {
 
   it('should disable start when running', () => {
     render(<ExecutionPanel {...defaultProps} status="running" />);
-    const startBtn = screen.getByText(/启动/);
-    expect((startBtn as HTMLButtonElement).disabled).toBe(true);
+    const startBtn = screen.getByRole('button', { name: /启\s*动/ });
+    expect(startBtn).toHaveProperty('disabled', true);
   });
 
   it('should call invoke on start click', () => {
     render(<ExecutionPanel {...defaultProps} />);
-    fireEvent.click(screen.getByText(/启动/));
+    fireEvent.click(screen.getByRole('button', { name: /启\s*动/ }));
     expect(window.electronAPI.invoke).toHaveBeenCalled();
   });
 });

@@ -65,7 +65,7 @@ export class UpdateService {
   }
 
   private normalizeReleaseNotes(
-    releaseNotes: string | { note: string }[] | null | undefined,
+    releaseNotes: string | Array<{ note: string | null }> | null | undefined,
   ): string | undefined {
     if (typeof releaseNotes === 'string') {
       return releaseNotes;

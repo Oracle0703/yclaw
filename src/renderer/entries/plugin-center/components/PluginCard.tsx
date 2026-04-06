@@ -1,4 +1,4 @@
-import React from 'react';
+import { Button, Card, Descriptions, Space, Switch, Tag, Typography } from 'antd';
 import type { PluginRegistryEntry } from '@shared/types';
 
 interface PluginCardProps {
@@ -13,30 +13,35 @@ export function PluginCard({ plugin, onToggle, onUninstall, onViewDetails }: Plu
   const isActive = status === 'active';
 
   return (
-    <div className={`plugin-card plugin-${status}`}>
-      <div className="plugin-card-header">
-        <h3 className="plugin-name">{manifest.displayName}</h3>
-        <span className="plugin-version">v{manifest.version}</span>
-        <span className={`plugin-level level-${manifest.permissionLevel}`}>
-          L{manifest.permissionLevel}
-        </span>
-      </div>
-      <p className="plugin-desc">{manifest.description}</p>
-      {manifest.author && <span className="plugin-author">by {manifest.author}</span>}
-      <div className="plugin-card-actions">
-        <label className="toggle-switch">
-          <input
-            type="checkbox"
-            checked={isActive}
-            onChange={() => onToggle(manifest.name, !isActive)}
-          />
-          <span>{isActive ? '已启用' : '已禁用'}</span>
-        </label>
-        <button onClick={() => onViewDetails(manifest.name)}>详情</button>
-        <button className="danger" onClick={() => onUninstall(manifest.name)}>
+    <Card
+      className="yclaw-panel-card"
+      title={
+        <Space>
+          <Typography.Text strong>{manifest.displayName}</Typography.Text>
+          <Tag>v{manifest.version}</Tag>
+          <Tag color={manifest.permissionLevel >= 2 ? 'warning' : 'blue'}>
+            L{manifest.permissionLevel}
+          </Tag>
+        </Space>
+      }
+      extra={
+        <Space>
+          <Typography.Text type="secondary">{isActive ? '已启用' : '已禁用'}</Typography.Text>
+          <Switch checked={isActive} onChange={() => onToggle(manifest.name, !isActive)} />
+        </Space>
+      }
+    >
+      <Typography.Paragraph type="secondary">{manifest.description}</Typography.Paragraph>
+      <Descriptions column={1} size="small">
+        <Descriptions.Item label="作者">{manifest.author ?? '未提供'}</Descriptions.Item>
+        <Descriptions.Item label="权限">{manifest.permissions.join(', ') || '无'}</Descriptions.Item>
+      </Descriptions>
+      <Space style={{ marginTop: 16 }}>
+        <Button onClick={() => onViewDetails(manifest.name)}>详情</Button>
+        <Button danger onClick={() => onUninstall(manifest.name)}>
           卸载
-        </button>
-      </div>
-    </div>
+        </Button>
+      </Space>
+    </Card>
   );
 }

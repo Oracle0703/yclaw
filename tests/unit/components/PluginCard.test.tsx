@@ -51,8 +51,8 @@ describe('PluginCard', () => {
         onViewDetails={onViewDetails}
       />,
     );
-    const toggle = screen.getByRole('checkbox') as HTMLInputElement;
-    expect(toggle.checked).toBe(true);
+    const toggle = screen.getByRole('switch') as HTMLButtonElement;
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
   });
 
   it('should call onToggle when toggle clicked', () => {
@@ -64,7 +64,7 @@ describe('PluginCard', () => {
         onViewDetails={onViewDetails}
       />,
     );
-    const toggle = screen.getByRole('checkbox');
+    const toggle = screen.getByRole('switch');
     fireEvent.click(toggle);
     expect(onToggle).toHaveBeenCalledWith('test-plugin', false);
   });
@@ -78,7 +78,7 @@ describe('PluginCard', () => {
         onViewDetails={onViewDetails}
       />,
     );
-    fireEvent.click(screen.getByText('卸载'));
+    fireEvent.click(screen.getByRole('button', { name: /卸\s*载/ }));
     expect(onUninstall).toHaveBeenCalledWith('test-plugin');
   });
 
@@ -91,7 +91,7 @@ describe('PluginCard', () => {
         onViewDetails={onViewDetails}
       />,
     );
-    fireEvent.click(screen.getByText('详情'));
+    fireEvent.click(screen.getByRole('button', { name: /详\s*情/ }));
     expect(onViewDetails).toHaveBeenCalledWith('test-plugin');
   });
 
@@ -108,7 +108,7 @@ describe('PluginCard', () => {
         onViewDetails={onViewDetails}
       />,
     );
-    const toggle = screen.getByRole('checkbox') as HTMLInputElement;
-    expect(toggle.checked).toBe(false);
+    const toggle = screen.getByRole('switch') as HTMLButtonElement;
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
   });
 });

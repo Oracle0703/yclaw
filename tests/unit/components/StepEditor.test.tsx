@@ -53,7 +53,7 @@ describe('StepEditor', () => {
 
   it('should call onChange when removing a step', () => {
     render(<StepEditor steps={steps} onChange={onChange} />);
-    const deleteButtons = screen.getAllByText(/删除|✕|×/);
+    const deleteButtons = screen.getAllByRole('button', { name: /删\s*除/ });
     fireEvent.click(deleteButtons[0]);
     expect(onChange).toHaveBeenCalled();
     const newSteps = onChange.mock.calls[0][0] as TaskStep[];
