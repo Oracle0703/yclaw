@@ -24,7 +24,7 @@ export class App {
   private updateService: UpdateService;
   private tabManager: TabManager;
   private started = false;
-  private warmupTimer: NodeJS.Timeout | null = null;
+  private warmupTimers: NodeJS.Timeout[] = [];
   private static readonly WARMUP_DELAY_MS = 900;
 
   constructor() {
@@ -66,21 +66,28 @@ export class App {
   }
 
   private scheduleWindowWarmup(): void {
-    if (this.warmupTimer) {
-      clearTimeout(this.warmupTimer);
+    for (const timer of this.warmupTimers) {
+      clearTimeout(timer);
     }
+    this.warmupTimers = [];
 
-    this.warmupTimer = setTimeout(() => {
-      try {
-        this.windowManager.preloadWindow({ module: 'stock' });
-        this.logService.info('main', 'Preloaded stock window for faster module switching');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        this.logService.warn('main', `Failed to preload stock window: ${message}`);
-      } finally {
-        this.warmupTimer = null;
-      }
-    }, App.WARMUP_DELAY_MS);
+    const modulesToWarm = ['stock', 'automation', 'plugin-center', 'browser'] as const;
+
+    modulesToWarm.forEach((module, index) => {
+      const timer = setTimeout(() => {
+        try {
+          this.windowManager.preloadWindow({ module });
+          this.logService.info('main', `Preloaded ${module} window for faster module switching`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.logService.warn('main', `Failed to preload ${module} window: ${message}`);
+        } finally {
+          this.warmupTimers = this.warmupTimers.filter((item) => item !== timer);
+        }
+      }, App.WARMUP_DELAY_MS + index * 550);
+
+      this.warmupTimers.push(timer);
+    });
   }
 
   private registerIpcHandlers(): void {
@@ -160,10 +167,10 @@ export class App {
   shutdown(): void {
     this.logService.info('main', 'Application shutting down...');
     this.started = false;
-    if (this.warmupTimer) {
-      clearTimeout(this.warmupTimer);
-      this.warmupTimer = null;
+    for (const timer of this.warmupTimers) {
+      clearTimeout(timer);
     }
+    this.warmupTimers = [];
     this.ipcController.dispose();
     this.databaseService.close();
     this.logService.close();

@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
-import { Checkbox, Col, Input, Row, Segmented, Space, Tag, Typography } from 'antd';
+import { Suspense, lazy, useEffect, useState } from 'react';
+import { Checkbox, Col, Input, Row, Segmented, Skeleton, Space, Tag, Typography } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { ProCard, StatisticCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { OHLCVData, IndicatorType, IndicatorResult } from '@shared/types';
 import { AdminPageLayout } from '../../shared/components/AdminPageLayout';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
-import { KLineChart } from './components/KLineChart';
+
+const KLineChart = lazy(async () => {
+  const module = await import('./components/KLineChart');
+  return { default: module.KLineChart };
+});
 
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '1D', '1W'] as const;
 const INDICATORS: { type: IndicatorType; label: string }[] = [
@@ -155,8 +159,15 @@ export default function App() {
                 </div>
               </Col>
             </Row>
-
-            <KLineChart data={data} indicators={indicators} width={1100} height={520} />
+            <Suspense
+              fallback={
+                <div className="kline-chart">
+                  <Skeleton active paragraph={{ rows: 10 }} title={false} />
+                </div>
+              }
+            >
+              <KLineChart data={data} indicators={indicators} width={1100} height={520} />
+            </Suspense>
           </Space>
         </ProCard>
       </Space>
