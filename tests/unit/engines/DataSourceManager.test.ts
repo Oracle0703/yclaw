@@ -48,7 +48,7 @@ class MockWebSocket {
   }
 }
 
-(globalThis as any).WebSocket = MockWebSocket;
+(globalThis as typeof globalThis & { WebSocket: typeof MockWebSocket }).WebSocket = MockWebSocket;
 
 import { DataSourceManager } from '@engines/analytics/DataSourceManager';
 import type { DataSourceConfig } from '@shared/types';

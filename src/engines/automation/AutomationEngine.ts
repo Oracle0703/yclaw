@@ -1,6 +1,5 @@
 import type { WebContents } from 'electron';
-import type { ActionType, StepResult } from '@shared/types';
-import type { ActionContext, ActionDefinition, ActionResult } from './types';
+import type { ActionDefinition, ActionResult } from './types';
 
 /**
  * 自动化引擎核心 — 通过 webContents 操控页面

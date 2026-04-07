@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SelectorGenerator } from '@engines/automation/SelectorGenerator';
 
-function createMockWebContents() {
+interface MockWebContents {
+  executeJavaScript: ReturnType<typeof vi.fn>;
+}
+
+function createMockWebContents(): MockWebContents {
   return {
     executeJavaScript: vi.fn(),
-  } as any;
+  };
 }
 
 describe('SelectorGenerator', () => {

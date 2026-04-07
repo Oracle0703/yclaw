@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Button, Col, Descriptions, Modal, Row, Space, Tag } from 'antd';
+import { useCallback, useEffect, useState } from 'react';
+import { Button, Col, Descriptions, Modal, Row, Space, Tag, Typography } from 'antd';
 import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
-import { ProCard, StatisticCard } from '@ant-design/pro-components';
+import { ProCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { PluginRegistryEntry } from '@shared/types';
-import { AdminPageLayout } from '../../shared/components/AdminPageLayout';
+import { PageShell } from '../../shared/components/PageShell';
 import { useIpc } from '../../shared/hooks';
 import { PermissionDialog } from './components/PermissionDialog';
 import { PluginCard } from './components/PluginCard';
@@ -19,16 +19,16 @@ export default function App() {
     level: number;
   } | null>(null);
 
-  const fetchPlugins = async () => {
+  const fetchPlugins = useCallback(async () => {
     try {
       const list = await invoke<PluginRegistryEntry[]>(IPC_CHANNELS.PLUGIN_LIST);
       setPlugins(list ?? []);
     } catch { /* ignore */ }
-  };
+  }, [invoke]);
 
   useEffect(() => {
     void fetchPlugins();
-  }, []);
+  }, [fetchPlugins]);
 
   const handleToggle = async (name: string, active: boolean) => {
     const channel = active ? IPC_CHANNELS.PLUGIN_ENABLE : IPC_CHANNELS.PLUGIN_DISABLE;
@@ -70,16 +70,20 @@ export default function App() {
 
   const activePlugins = plugins.filter((plugin) => plugin.status === 'active').length;
   const highRiskPlugins = plugins.filter((plugin) => plugin.manifest.permissionLevel >= 2).length;
+  const pluginKpis = [
+    { title: '已安装插件', value: `${plugins.length}` },
+    { title: '启用中', value: `${activePlugins}` },
+    { title: '高权限插件', value: `${highRiskPlugins}` },
+  ] as const;
 
   return (
-    <AdminPageLayout
-      currentPath="/plugin-center"
+    <PageShell
       title="插件中心"
       subTitle="管理插件接入、权限分级和启停状态"
       content="采用中台式插件运营页，聚合插件统计、权限审批和插件详情，便于统一审核和灰度发布。"
       extra={
-        <Space>
-          <Tag color="processing">Plugin Ops</Tag>
+        <Space wrap className="yclaw-page-actions">
+          <Tag color="processing">Plugins</Tag>
           <Button icon={<DownloadOutlined />}>同步市场</Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => void handleInstallLocal()}>
             从本地安装
@@ -88,26 +92,26 @@ export default function App() {
       }
     >
       <Space direction="vertical" size={20} style={{ width: '100%' }}>
-        <StatisticCard.Group direction="row">
-          <StatisticCard
-            className="yclaw-panel-card"
-            statistic={{ title: '已安装插件', value: plugins.length, suffix: '个' }}
-          />
-          <StatisticCard
-            className="yclaw-panel-card"
-            statistic={{ title: '启用中', value: activePlugins, suffix: '个' }}
-          />
-          <StatisticCard
-            className="yclaw-panel-card"
-            statistic={{ title: '高权限插件', value: highRiskPlugins, suffix: '个' }}
-          />
-        </StatisticCard.Group>
+        <Row gutter={[16, 16]}>
+          {pluginKpis.map((item) => (
+            <Col xs={24} md={8} key={item.title}>
+              <ProCard className="yclaw-panel-card yclaw-kpi-card" bordered={false}>
+                <div className="yclaw-kpi-card-head">
+                  <Typography.Text type="secondary">{item.title}</Typography.Text>
+                </div>
+                <Typography.Title level={3} className="yclaw-kpi-card-value">
+                  {item.value}
+                </Typography.Title>
+              </ProCard>
+            </Col>
+          ))}
+        </Row>
 
         <ProCard className="yclaw-panel-card" title="插件编排视图">
           <Row gutter={[16, 16]}>
             {plugins.length === 0 ? (
               <Col span={24}>
-                <ProCard>暂无已安装插件</ProCard>
+                <ProCard className="yclaw-empty-state-card">暂无已安装插件</ProCard>
               </Col>
             ) : (
               plugins.map((plugin) => (
@@ -158,6 +162,6 @@ export default function App() {
           onCancel={() => setDialog(null)}
         />
       )}
-    </AdminPageLayout>
+    </PageShell>
   );
 }

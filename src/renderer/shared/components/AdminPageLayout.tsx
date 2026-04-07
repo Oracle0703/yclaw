@@ -1,117 +1,86 @@
-import type { PropsWithChildren, ReactNode } from 'react';
+import { useState } from 'react';
+import type { PropsWithChildren } from 'react';
 import {
   AppstoreOutlined,
   BarsOutlined,
   DeploymentUnitOutlined,
   FundOutlined,
   GlobalOutlined,
+  HomeOutlined,
   NotificationOutlined,
   SafetyCertificateOutlined,
   RobotOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import { Badge, Space, Tag, Typography } from 'antd';
-import { PageContainer, ProLayout } from '@ant-design/pro-components';
+import { ProLayout } from '@ant-design/pro-components';
 import type { MenuDataItem } from '@ant-design/pro-components';
-import { useIpc } from '../hooks';
-import { IPC_CHANNELS } from '@shared/constants/channels';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const MODULE_MENU: MenuDataItem[] = [
   {
-    path: '/workbench',
-    name: '工作台',
-    icon: <AppstoreOutlined />,
-    children: [
-      { path: '/workbench/home', name: '总览' },
-      { path: '/workbench/settings', name: '设置中心', icon: <SettingOutlined /> },
-    ],
+    path: '/',
+    name: '总览',
+    icon: <HomeOutlined />,
   },
   {
     path: '/stock',
-    name: '股票分析',
+    name: '行情分析',
     icon: <FundOutlined />,
   },
   {
     path: '/automation',
-    name: '自动化采集',
+    name: '自动化',
     icon: <RobotOutlined />,
   },
   {
     path: '/browser',
-    name: '内嵌浏览器',
+    name: '浏览器',
     icon: <GlobalOutlined />,
   },
   {
     path: '/plugin-center',
-    name: '插件中心',
+    name: '插件',
     icon: <DeploymentUnitOutlined />,
+  },
+  {
+    path: '/settings',
+    name: '设置',
+    icon: <SettingOutlined />,
   },
 ];
 
-const WINDOW_MODULE_MAP: Record<string, string> = {
-  '/workbench': 'workbench',
-  '/workbench/home': 'workbench',
-  '/workbench/settings': 'workbench',
-  '/stock': 'stock',
-  '/automation': 'automation',
-  '/browser': 'browser',
-  '/plugin-center': 'plugin-center',
-};
+export function AdminPageLayout({ children }: PropsWithChildren) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
 
-interface AdminPageLayoutProps extends PropsWithChildren {
-  currentPath: string;
-  title: string;
-  subTitle?: string;
-  extra?: ReactNode;
-  content?: ReactNode;
-  onNavigate?: (path: string) => void;
-}
-
-export function AdminPageLayout({
-  currentPath,
-  title,
-  subTitle,
-  extra,
-  content,
-  onNavigate,
-  children,
-}: AdminPageLayoutProps) {
-  const { invoke } = useIpc();
-
-  const handleMenuJump = async (path?: string) => {
+  const handleMenuJump = (path?: string) => {
     if (!path) {
       return;
     }
-
-    if (path.startsWith('/workbench') && onNavigate) {
-      onNavigate(path);
-      return;
-    }
-
-    const moduleName = WINDOW_MODULE_MAP[path];
-    if (!moduleName) {
-      return;
-    }
-
-    await invoke(IPC_CHANNELS.WINDOW_OPEN, { module: moduleName });
+    navigate(path);
   };
 
   return (
     <div className="yclaw-admin-shell">
       <ProLayout
-        title="YClaw Console"
+        title="YClaw Ops"
         logo={<div className="yclaw-brand-logo">Y</div>}
         layout="side"
         navTheme="realDark"
         fixSiderbar
         fixedHeader
-        siderWidth={248}
+        collapsed={collapsed}
+        onCollapse={setCollapsed}
+        siderWidth={232}
         contentWidth="Fluid"
-        location={{ pathname: currentPath }}
+        location={{ pathname: location.pathname }}
         route={{ routes: MODULE_MENU }}
         bgLayoutImgList={[]}
         menu={{
           locale: false,
+          collapsedShowTitle: false,
         }}
         token={{
           header: {
@@ -132,23 +101,16 @@ export function AdminPageLayout({
             paddingBlockPageContainerContent: 0,
           },
         }}
-        avatarProps={{
-          title: '运营中台',
-          size: 'small',
-        }}
         actionsRender={() => [
           <Tag key="security" color="cyan">
-            <SafetyCertificateOutlined /> 安全策略
+            <SafetyCertificateOutlined /> 安全
           </Tag>,
           <Tag key="pipeline" color="geekblue">
-            <BarsOutlined /> 多模块协同
+            <BarsOutlined /> 协同
           </Tag>,
           <Badge key="notice" dot>
             <NotificationOutlined className="yclaw-header-action" />
           </Badge>,
-          <Tag key="runtime" color="blue">
-            Electron
-          </Tag>,
         ]}
         menuItemRender={(item, dom) => {
           if (!item.path) {
@@ -160,7 +122,7 @@ export function AdminPageLayout({
               href="#"
               onClick={(event) => {
                 event.preventDefault();
-                void handleMenuJump(item.path);
+                handleMenuJump(item.path);
               }}
             >
               {dom}
@@ -173,31 +135,30 @@ export function AdminPageLayout({
             <div>
               <Typography.Text strong>{pageTitle}</Typography.Text>
               <Typography.Text type="secondary" className="yclaw-brand-subtitle">
-                桌面智能中台
+                桌面运营台
               </Typography.Text>
             </div>
           </Space>
         )}
-        menuFooterRender={() => (
-          <div className="yclaw-menu-footer">
-            <div className="yclaw-menu-footer-title">Ops Cockpit</div>
-            <div className="yclaw-menu-footer-text">统一调度工作流、数据与插件能力</div>
-            <div className="yclaw-menu-footer-meta">
-              <span>Runbooks 12</span>
-              <span>Plugins 15</span>
+        menuFooterRender={(props) =>
+          props?.collapsed ? (
+            <div className="yclaw-menu-footer-collapsed" aria-label="Ops Cockpit" title="Ops Cockpit">
+              <AppstoreOutlined />
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="yclaw-menu-footer">
+              <div className="yclaw-menu-footer-eyebrow">Ops Cockpit</div>
+              <div className="yclaw-menu-footer-title">统一调度台</div>
+              <div className="yclaw-menu-footer-text">流程、数据、插件统一编排</div>
+              <div className="yclaw-menu-footer-meta">
+                <span>5 Modules</span>
+                <span>12 Runbooks</span>
+              </div>
+            </div>
+          )
+        }
       >
-        <PageContainer
-          title={title}
-          subTitle={subTitle}
-          extra={extra}
-          content={content}
-          className="yclaw-page-container"
-        >
-          {children}
-        </PageContainer>
+        {children}
       </ProLayout>
     </div>
   );

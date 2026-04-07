@@ -29,7 +29,7 @@ describe('IndicatorLibrary', () => {
 
     it('should throw for unsupported indicator type', () => {
       const data = generateData([10]);
-      expect(() => lib.calculate('UNKNOWN' as any, data)).toThrow('Unsupported indicator type');
+      expect(() => lib.calculate('UNKNOWN' as unknown as 'MA', data)).toThrow('Unsupported indicator type');
     });
   });
 

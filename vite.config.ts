@@ -39,6 +39,7 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, 'dist/renderer'),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1600,
     rollupOptions: {
       input: {
         workbench: resolve(__dirname, 'src/renderer/entries/workbench/index.html'),
