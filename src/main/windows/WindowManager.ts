@@ -23,6 +23,7 @@ interface WindowConfig {
 export class WindowManager {
   private windows = new Map<string, BrowserWindow>();
   private windowStates = new Map<string, WindowState>();
+  private readyWindows = new Set<string>();
   private eventBus: EventBus;
   private readonly maxWindows = 10;
 
@@ -51,8 +52,17 @@ export class WindowManager {
       if (existing.isMinimized()) {
         existing.restore();
       }
-      existing.show();
-      existing.focus();
+      if (this.readyWindows.has(config.module)) {
+        existing.show();
+        existing.focus();
+      } else {
+        existing.once('ready-to-show', () => {
+          if (!existing.isDestroyed()) {
+            existing.show();
+            existing.focus();
+          }
+        });
+      }
       return existing;
     }
 
@@ -97,7 +107,8 @@ export class WindowManager {
   ): BrowserWindow {
     const win = new BrowserWindow({
       ...defaultState,
-      show: !hidden,
+      show: false,
+      backgroundColor: '#0b1220',
       minWidth: 600,
       minHeight: 400,
       title: `YClaw - ${module}`,
@@ -112,6 +123,14 @@ export class WindowManager {
     // 加载入口 URL
     const url = getRendererUrl(module);
     win.loadURL(url);
+
+    // 等待首次渲染完成后再显示，消除白屏闪烁
+    win.once('ready-to-show', () => {
+      this.readyWindows.add(module);
+      if (!hidden) {
+        win.show();
+      }
+    });
 
     if (this.shouldOpenDevTools() && !hidden) {
       win.webContents.openDevTools({ mode: 'detach' });
@@ -132,6 +151,7 @@ export class WindowManager {
 
     win.on('closed', () => {
       this.windows.delete(module);
+      this.readyWindows.delete(module);
       this.eventBus.emit(EVENTS.MODULE_CLOSED, { module });
     });
 

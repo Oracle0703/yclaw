@@ -23,10 +23,28 @@ vi.mock('electron', () => {
         closedListeners.forEach((fn: Function) => fn());
       }),
       getBounds: () => ({ x: 100, y: 100, width: opts.width ?? 1200, height: opts.height ?? 800 }),
-      loadURL: vi.fn(),
+      loadURL: vi.fn(() => {
+        // Simulate ready-to-show firing after page load
+        queueMicrotask(() => {
+          const handlers = win._listeners.get('ready-to-show') ?? [];
+          handlers.forEach((fn: Function) => fn());
+          win._listeners.set('ready-to-show', []);
+        });
+      }),
       on: vi.fn((event: string, listener: Function) => {
         const list = win._listeners.get(event) ?? [];
         list.push(listener);
+        win._listeners.set(event, list);
+      }),
+      once: vi.fn((event: string, listener: Function) => {
+        const wrapper = (...args: unknown[]) => {
+          const list = win._listeners.get(event) ?? [];
+          const idx = list.indexOf(wrapper);
+          if (idx >= 0) list.splice(idx, 1);
+          listener(...args);
+        };
+        const list = win._listeners.get(event) ?? [];
+        list.push(wrapper);
         win._listeners.set(event, list);
       }),
       webContents: webContentsMock,
@@ -66,14 +84,18 @@ describe('WindowManager', () => {
     manager = new WindowManager();
   });
 
-  it('should create a new window for a module', () => {
+  it('should create a new window for a module', async () => {
     const win = manager.openWindow({ module: 'stock' });
     expect(win).toBeDefined();
     expect(win.loadURL).toHaveBeenCalledWith('http://localhost:5173/stock/');
+    // Wait for ready-to-show microtask
+    await Promise.resolve();
+    expect(win.show).toHaveBeenCalled();
   });
 
-  it('should focus existing window instead of creating duplicate', () => {
+  it('should focus existing window instead of creating duplicate', async () => {
     const win1 = manager.openWindow({ module: 'stock' });
+    await Promise.resolve(); // ready-to-show fires
     const win2 = manager.openWindow({ module: 'stock' });
     expect(win1).toBe(win2);
     expect(win1.focus).toHaveBeenCalled();
