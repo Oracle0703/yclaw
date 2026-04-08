@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { buildSpawnSpec } from './spawn-utils';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,9 +18,12 @@ function spawnProcess(
   args: string[],
   extraEnv: NodeJS.ProcessEnv = {},
 ): ChildProcess {
-  return spawn(command, args, {
+  const spawnSpec = buildSpawnSpec(command, args, isWindows);
+
+  return spawn(spawnSpec.command, spawnSpec.args, {
     cwd: rootDir,
     stdio: 'pipe',
+    shell: spawnSpec.shell,
     env: {
       ...process.env,
       ...extraEnv,

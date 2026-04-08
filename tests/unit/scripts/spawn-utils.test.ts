@@ -9,13 +9,9 @@ describe('buildSpawnSpec', () => {
       true,
     );
 
-    expect(spec.command).toBe('cmd.exe');
-    expect(spec.args).toEqual([
-      '/d',
-      '/s',
-      '/c',
-      '"E:\\allsite\\yclaw\\node_modules\\.bin\\vite.cmd" "--host" "127.0.0.1"',
-    ]);
+    expect(spec.command).toBe('E:\\allsite\\yclaw\\node_modules\\.bin\\vite.cmd');
+    expect(spec.args).toEqual(['--host', '127.0.0.1']);
+    expect(spec.shell).toBe(true);
   });
 
   it('在非 Windows 下保持原始命令和参数不变', () => {
@@ -23,5 +19,6 @@ describe('buildSpawnSpec', () => {
 
     expect(spec.command).toBe('/workspace/node_modules/.bin/vite');
     expect(spec.args).toEqual(['--host', '127.0.0.1']);
+    expect(spec.shell).toBeUndefined();
   });
 });
