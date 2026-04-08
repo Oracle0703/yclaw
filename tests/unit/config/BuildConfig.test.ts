@@ -52,11 +52,12 @@ describe('SPEC-022: Build Configuration', () => {
       expect(scripts['dist:linux']).toContain('--linux');
     });
 
-    it('should have postinstall script for native modules', () => {
+    it('should not have postinstall script (avoid CI hanging)', () => {
       const content = readFileSync(resolve(rootDir, 'package.json'), 'utf-8');
       pkg = JSON.parse(content);
       const scripts = pkg.scripts as Record<string, string>;
-      expect(scripts.postinstall).toContain('electron-builder');
+      // Postinstall removed to avoid npm hanging in CI
+      expect(scripts.postinstall).toBeUndefined();
     });
 
     it('should have electron-builder in devDependencies', () => {
