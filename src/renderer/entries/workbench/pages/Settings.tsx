@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { App as AntdApp, Button, Col, Row, Space, Tag, Typography } from 'antd';
 import {
   ProCard,
@@ -12,6 +12,7 @@ import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { AppConfig, GeneralConfig } from '@shared/types';
 import { useIpc } from '../../../shared/hooks';
 import { useThemeMode } from '../../../shared/components/AppProviders';
+import { PageShell } from '../../../shared/components/PageShell';
 
 const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
   theme: 'system',
@@ -32,12 +33,7 @@ const startupLabelMap: Record<GeneralConfig['startupBehavior'], string> = {
   minimizeToTray: '最小化到托盘',
 };
 
-interface SettingsProps {
-  active: boolean;
-  preload?: boolean;
-}
-
-export default function Settings({ active, preload = false }: SettingsProps) {
+export default function Settings() {
   const { invoke } = useIpc();
   const { message } = AntdApp.useApp();
   const { setThemePreference } = useThemeMode();
@@ -46,16 +42,16 @@ export default function Settings({ active, preload = false }: SettingsProps) {
   const [loading, setLoading] = useState(true);
   const [currentValues, setCurrentValues] = useState<GeneralConfig>(DEFAULT_GENERAL_CONFIG);
 
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     const config = await invoke<AppConfig>(IPC_CHANNELS.CONFIG_GET_ALL);
     const general = config.general;
     formRef.current?.setFieldsValue(general);
     setCurrentValues(general);
     void setThemePreference(general.theme);
-  };
+  }, [invoke, setThemePreference]);
 
   useEffect(() => {
-    if ((!active && !preload) || hasLoadedRef.current) {
+    if (hasLoadedRef.current) {
       return;
     }
 
@@ -69,7 +65,7 @@ export default function Settings({ active, preload = false }: SettingsProps) {
         setLoading(false);
       }
     })();
-  }, [active, invoke, message]);
+  }, [loadConfig, message]);
 
   const handleReset = async () => {
     try {
@@ -85,6 +81,11 @@ export default function Settings({ active, preload = false }: SettingsProps) {
   };
 
   return (
+    <PageShell
+      title="设置中心"
+      subTitle="维护工作台的基础配置、启动策略和模块偏好"
+      content="配置将通过 IPC 持久化到主进程侧，用于同步桌面工作台的启动模式、语言和运行偏好。"
+    >
     <Row gutter={[20, 20]}>
       <Col xs={24} xl={16}>
         <ProCard className="yclaw-panel-card" title="通用配置">
@@ -109,7 +110,7 @@ export default function Settings({ active, preload = false }: SettingsProps) {
               title="界面偏好"
               type="inner"
               className="yclaw-settings-section"
-              extra={<Tag color="processing">Workbench UI</Tag>}
+              extra={<Tag color="processing">界面</Tag>}
             >
               <ProFormSelect
                 colProps={{ xs: 24, md: 12 }}
@@ -138,7 +139,7 @@ export default function Settings({ active, preload = false }: SettingsProps) {
               title="启动策略"
               type="inner"
               className="yclaw-settings-section"
-              extra={<Tag color="cyan">Desktop Runtime</Tag>}
+              extra={<Tag color="cyan">启动</Tag>}
             >
               <ProFormSelect
                 colProps={{ xs: 24 }}
@@ -225,5 +226,6 @@ export default function Settings({ active, preload = false }: SettingsProps) {
         </ProCard>
       </Col>
     </Row>
+    </PageShell>
   );
 }

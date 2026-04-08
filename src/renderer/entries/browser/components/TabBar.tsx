@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React from 'react';
 
 interface Tab {
   id: number;
@@ -28,7 +28,10 @@ export function TabBar({
           className={`tab ${tab.id === activeTabId ? 'active' : ''}`}
           onClick={() => onSwitch(tab.id)}
         >
-          <span className="tab-title">{tab.loading ? '⏳' : ''} {tab.title || '新标签页'}</span>
+          <span className="tab-title">
+            {tab.loading ? '⏳ ' : ''}
+            {tab.title || '新标签页'}
+          </span>
           <button
             className="tab-close"
             onClick={(e) => {
@@ -40,7 +43,9 @@ export function TabBar({
           </button>
         </div>
       ))}
-      <button className="tab-new" onClick={onNew}>+</button>
+      <button className="tab-new" onClick={onNew}>
+        +
+      </button>
     </div>
   );
 }

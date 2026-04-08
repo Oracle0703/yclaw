@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { PermissionChecker } from '@main/plugin-loader/PermissionChecker';
 import type { PluginManifest } from '@shared/types';
 import { PermissionLevel } from '@shared/constants';

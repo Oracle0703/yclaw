@@ -30,7 +30,8 @@ const mockContext = {
 };
 
 // Mock HTMLCanvasElement.getContext
-HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(mockContext) as any;
+HTMLCanvasElement.prototype.getContext =
+  vi.fn().mockReturnValue(mockContext) as unknown as HTMLCanvasElement['getContext'];
 
 const sampleData: OHLCVData[] = [
   { time: 1000, open: 10, high: 15, low: 8, close: 12, volume: 100 },

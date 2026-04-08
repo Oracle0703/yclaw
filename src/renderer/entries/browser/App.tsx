@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Button, Descriptions, Empty, Space, Tag, Typography } from 'antd';
+import { Button, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { ProCard, StatisticCard } from '@ant-design/pro-components';
-import { AdminPageLayout } from '../../shared/components/AdminPageLayout';
+import { ProCard } from '@ant-design/pro-components';
+import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
 import { AddressBar } from './components/AddressBar';
 import { TabBar } from './components/TabBar';
@@ -20,6 +20,11 @@ export default function App() {
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  const browserKpis = [
+    { title: '打开标签数', value: `${tabs.length}` },
+    { title: '当前活动标签', value: activeTab?.title ?? '未选择' },
+    { title: '活动地址', value: activeTab?.url ?? 'about:blank' },
+  ] as const;
 
   const createTab = async () => {
     try {
@@ -68,14 +73,13 @@ export default function App() {
   });
 
   return (
-    <AdminPageLayout
-      currentPath="/browser"
+    <PageShell
       title="内嵌浏览器"
       subTitle="管理会话、标签页和受控导航"
       content="浏览器模块先以中台工作台形式组织标签、地址栏和当前会话元信息，后续可继续接入真实 WebContentsView 容器。"
       extra={
-        <Space>
-          <Tag color="processing">Session Desk</Tag>
+        <Space wrap className="yclaw-page-actions">
+          <Tag color="processing">Browser</Tag>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => void createTab()}>
             新建标签页
           </Button>
@@ -83,20 +87,20 @@ export default function App() {
       }
     >
       <Space direction="vertical" size={20} style={{ width: '100%' }}>
-        <StatisticCard.Group direction="row">
-          <StatisticCard
-            className="yclaw-panel-card"
-            statistic={{ title: '打开标签数', value: tabs.length, suffix: '个' }}
-          />
-          <StatisticCard
-            className="yclaw-panel-card"
-            statistic={{ title: '当前活动标签', value: activeTab?.title ?? '未选择' }}
-          />
-          <StatisticCard
-            className="yclaw-panel-card"
-            statistic={{ title: '活动地址', value: activeTab?.url ?? 'about:blank' }}
-          />
-        </StatisticCard.Group>
+        <Row gutter={[16, 16]}>
+          {browserKpis.map((item) => (
+            <Col xs={24} md={8} key={item.title}>
+              <ProCard className="yclaw-panel-card yclaw-kpi-card" bordered={false}>
+                <div className="yclaw-kpi-card-head">
+                  <Typography.Text type="secondary">{item.title}</Typography.Text>
+                </div>
+                <Typography.Title level={3} className="yclaw-kpi-card-value yclaw-kpi-card-value-compact">
+                  {item.value}
+                </Typography.Title>
+              </ProCard>
+            </Col>
+          ))}
+        </Row>
 
         <ProCard className="yclaw-panel-card" title="会话控制台">
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -126,7 +130,7 @@ export default function App() {
         </ProCard>
 
         <ProCard className="yclaw-panel-card" title="当前视图">
-          <div className="browser-viewport">
+          <div className="browser-viewport yclaw-browser-frame">
             {activeTab ? (
               <Descriptions bordered column={1}>
                 <Descriptions.Item label="标题">{activeTab.title || '新标签页'}</Descriptions.Item>
@@ -151,6 +155,6 @@ export default function App() {
           </div>
         </ProCard>
       </Space>
-    </AdminPageLayout>
+    </PageShell>
   );
 }

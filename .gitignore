@@ -11,3 +11,4 @@ release/
 Thumbs.db
 coverage/
 *.log
+package-lock.json

@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app } from 'electron';
 import { WindowManager } from './windows/WindowManager';
 import { IpcController } from './ipc/IpcController';
 import { EventBus } from './ipc/EventBus';
@@ -24,8 +24,6 @@ export class App {
   private updateService: UpdateService;
   private tabManager: TabManager;
   private started = false;
-  private warmupTimers: NodeJS.Timeout[] = [];
-  private static readonly WARMUP_DELAY_MS = 900;
 
   constructor() {
     this.windowManager = new WindowManager();
@@ -59,35 +57,9 @@ export class App {
 
     // 创建主窗口
     this.windowManager.openWindow({ module: 'workbench' });
-    this.scheduleWindowWarmup();
 
     this.started = true;
     this.logService.info('main', 'Application started successfully');
-  }
-
-  private scheduleWindowWarmup(): void {
-    for (const timer of this.warmupTimers) {
-      clearTimeout(timer);
-    }
-    this.warmupTimers = [];
-
-    const modulesToWarm = ['stock', 'automation', 'plugin-center', 'browser'] as const;
-
-    modulesToWarm.forEach((module, index) => {
-      const timer = setTimeout(() => {
-        try {
-          this.windowManager.preloadWindow({ module });
-          this.logService.info('main', `Preloaded ${module} window for faster module switching`);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          this.logService.warn('main', `Failed to preload ${module} window: ${message}`);
-        } finally {
-          this.warmupTimers = this.warmupTimers.filter((item) => item !== timer);
-        }
-      }, App.WARMUP_DELAY_MS + index * 550);
-
-      this.warmupTimers.push(timer);
-    });
   }
 
   private registerIpcHandlers(): void {
@@ -167,10 +139,6 @@ export class App {
   shutdown(): void {
     this.logService.info('main', 'Application shutting down...');
     this.started = false;
-    for (const timer of this.warmupTimers) {
-      clearTimeout(timer);
-    }
-    this.warmupTimers = [];
     this.ipcController.dispose();
     this.databaseService.close();
     this.logService.close();

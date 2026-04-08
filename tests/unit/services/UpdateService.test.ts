@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { LogService } from '@main/services/LogService';
 
 // Must use vi.hoisted for variables referenced in vi.mock factories
 const { mockAutoUpdater, mockEmit } = vi.hoisted(() => ({
@@ -45,7 +46,7 @@ describe('UpdateService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new UpdateService(mockLogService as any);
+    service = new UpdateService(mockLogService as unknown as LogService);
   });
 
   describe('constructor', () => {

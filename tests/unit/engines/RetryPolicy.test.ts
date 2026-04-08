@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { withRetry, createBreakpoint, type RetryOptions } from '@engines/automation/RetryPolicy';
+import { withRetry, createBreakpoint } from '@engines/automation/RetryPolicy';
 
 describe('withRetry', () => {
   it('should return result on first success', async () => {

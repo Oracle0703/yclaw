@@ -18,13 +18,18 @@ import { FlowRunner } from '@engines/automation/FlowRunner';
 import type { TaskFlow, TaskStep } from '@shared/types';
 import { EVENTS } from '@shared/constants';
 
-function createMockWebContents() {
+interface MockWebContents {
+  executeJavaScript: ReturnType<typeof vi.fn>;
+  capturePage: ReturnType<typeof vi.fn>;
+}
+
+function createMockWebContents(): MockWebContents {
   return {
     executeJavaScript: vi.fn().mockResolvedValue(undefined),
     capturePage: vi.fn().mockResolvedValue({
       toDataURL: () => 'data:image/png;base64,mock',
     }),
-  } as any;
+  };
 }
 
 function createFlow(steps: Partial<TaskStep>[] = []): TaskFlow {

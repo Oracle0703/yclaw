@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { session } from 'electron';
+
+let nextTabId = 1;
 
 // Mock Electron modules
 vi.mock('electron', () => ({
   WebContentsView: vi.fn().mockImplementation(() => ({
     webContents: {
-      id: Math.floor(Math.random() * 10000),
+      id: nextTabId++,
       on: vi.fn(),
       loadURL: vi.fn(),
       close: vi.fn(),
@@ -40,13 +43,13 @@ vi.mock('@main/ipc/EventBus', () => {
 });
 
 import { TabManager } from '@main/browser/TabManager';
-import { EventBus } from '@main/ipc/EventBus';
 
 describe('TabManager', () => {
   let tabManager: TabManager;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    nextTabId = 1;
     tabManager = new TabManager({ maxTabs: 5 });
   });
 
@@ -116,7 +119,7 @@ describe('TabManager', () => {
   describe('switchTab', () => {
     it('should switch active tab', () => {
       const view1 = tabManager.createTab();
-      const view2 = tabManager.createTab();
+      tabManager.createTab();
       tabManager.switchTab(view1.webContents.id);
       expect(tabManager.getActiveTabId()).toBe(view1.webContents.id);
     });
@@ -135,7 +138,7 @@ describe('TabManager', () => {
 
     it('should navigate specific tab by ID', () => {
       const view1 = tabManager.createTab();
-      const view2 = tabManager.createTab();
+      tabManager.createTab();
       tabManager.navigate('https://specific.com', view1.webContents.id);
       expect(view1.webContents.loadURL).toHaveBeenCalledWith('https://specific.com');
     });
@@ -203,9 +206,9 @@ describe('TabManager', () => {
 
   describe('createIsolatedTab', () => {
     it('should create tab with unique session', () => {
-      const { session } = require('electron') as typeof import('electron');
       const view = tabManager.createIsolatedTab('https://isolated.com');
       // session.fromPartition is called during isolated tab creation
+      expect(session.fromPartition).toHaveBeenCalled();
       expect(view.webContents.loadURL).toHaveBeenCalledWith('https://isolated.com');
       expect(tabManager.getTabCount()).toBe(1);
     });

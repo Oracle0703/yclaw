@@ -1,10 +1,10 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Checkbox, Col, Input, Row, Segmented, Skeleton, Space, Tag, Typography } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import { ProCard, StatisticCard } from '@ant-design/pro-components';
+import { ProCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { OHLCVData, IndicatorType, IndicatorResult } from '@shared/types';
-import { AdminPageLayout } from '../../shared/components/AdminPageLayout';
+import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
 
 const KLineChart = lazy(async () => {
@@ -20,6 +20,12 @@ const INDICATORS: { type: IndicatorType; label: string }[] = [
   { type: 'BOLL', label: 'BOLL(20)' },
 ];
 
+interface StockKpi {
+  title: string;
+  value: string;
+  tone?: string;
+}
+
 export default function App() {
   const { invoke } = useIpc();
   const [symbol, setSymbol] = useState('AAPL');
@@ -27,8 +33,9 @@ export default function App() {
   const [data, setData] = useState<OHLCVData[]>([]);
   const [indicators, setIndicators] = useState<IndicatorResult[]>([]);
   const [activeIndicators, setActiveIndicators] = useState<IndicatorType[]>(['MA']);
+  const activeIndicatorsRef = useRef<IndicatorType[]>(activeIndicators);
 
-  const calculateIndicators = async (series: OHLCVData[], nextIndicators: IndicatorType[]) => {
+  const calculateIndicators = useCallback(async (series: OHLCVData[], nextIndicators: IndicatorType[]) => {
     const results: IndicatorResult[] = [];
     for (const type of nextIndicators) {
       try {
@@ -44,23 +51,27 @@ export default function App() {
       }
     }
     setIndicators(results);
-  };
+  }, [invoke]);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    activeIndicatorsRef.current = activeIndicators;
+  }, [activeIndicators]);
+
+  const fetchData = useCallback(async () => {
     try {
       const result = await invoke<OHLCVData[]>(IPC_CHANNELS.STOCK_DATA, { symbol, timeframe });
       if (result) {
         setData(result);
-        await calculateIndicators(result, activeIndicators);
+        await calculateIndicators(result, activeIndicatorsRef.current);
       }
     } catch {
       // ignore fetch errors for the demo dashboard
     }
-  };
+  }, [calculateIndicators, invoke, symbol, timeframe]);
 
   useEffect(() => {
     void fetchData();
-  }, [symbol, timeframe]);
+  }, [fetchData]);
 
   useIpcEvent('stock:data:update', (payload: unknown) => {
     const p = payload as { data: OHLCVData[] };
@@ -79,16 +90,34 @@ export default function App() {
   const previous = data[data.length - 2];
   const priceChange = latest && previous ? latest.close - previous.close : 0;
   const changeRate = latest && previous ? (priceChange / previous.close) * 100 : 0;
+  const stockKpis: StockKpi[] = [
+    {
+      title: '最新收盘价',
+      value:
+        typeof latest?.close === 'number'
+          ? `${latest.close.toFixed(2)} USD`
+          : '--',
+    },
+    {
+      title: '涨跌额',
+      value: priceChange.toFixed(2),
+      tone: priceChange >= 0 ? '#16a34a' : '#dc2626',
+    },
+    {
+      title: '涨跌幅',
+      value: `${changeRate.toFixed(2)}%`,
+      tone: changeRate >= 0 ? '#16a34a' : '#dc2626',
+    },
+  ] as const;
 
   return (
-    <AdminPageLayout
-      currentPath="/stock"
+    <PageShell
       title="股票分析"
       subTitle="聚合行情、指标和策略观察位"
       content="以投研中台的方式组织数据筛选、指标开关和图表工作区，适合作为后续量化策略面板的基础壳层。"
       extra={
-        <Space>
-          <Tag color="processing">Market Desk</Tag>
+        <Space wrap className="yclaw-page-actions">
+          <Tag color="processing">Market</Tag>
           <Input
             prefix={<SearchOutlined />}
             value={symbol}
@@ -101,36 +130,24 @@ export default function App() {
       }
     >
       <Space direction="vertical" size={20} style={{ width: '100%' }}>
-        <StatisticCard.Group direction="row">
-          <StatisticCard
-            className="yclaw-panel-card"
-            statistic={{
-              title: '最新收盘价',
-              value: latest?.close ?? '--',
-              precision: typeof latest?.close === 'number' ? 2 : undefined,
-              suffix: 'USD',
-            }}
-          />
-          <StatisticCard
-            className="yclaw-panel-card"
-            statistic={{
-              title: '涨跌额',
-              value: priceChange,
-              precision: 2,
-              valueStyle: { color: priceChange >= 0 ? '#16a34a' : '#dc2626' },
-            }}
-          />
-          <StatisticCard
-            className="yclaw-panel-card"
-            statistic={{
-              title: '涨跌幅',
-              value: changeRate,
-              precision: 2,
-              suffix: '%',
-              valueStyle: { color: changeRate >= 0 ? '#16a34a' : '#dc2626' },
-            }}
-          />
-        </StatisticCard.Group>
+        <Row gutter={[16, 16]}>
+          {stockKpis.map((item) => (
+            <Col xs={24} md={8} key={item.title}>
+              <ProCard className="yclaw-panel-card yclaw-kpi-card" bordered={false}>
+                <div className="yclaw-kpi-card-head">
+                  <Typography.Text type="secondary">{item.title}</Typography.Text>
+                </div>
+                <Typography.Title
+                  level={3}
+                  className="yclaw-kpi-card-value"
+                  style={item.tone ? { color: item.tone } : undefined}
+                >
+                  {item.value}
+                </Typography.Title>
+              </ProCard>
+            </Col>
+          ))}
+        </Row>
 
         <ProCard className="yclaw-panel-card" title="行情工作区">
           <Space direction="vertical" size={20} style={{ width: '100%' }}>
@@ -171,6 +188,6 @@ export default function App() {
           </Space>
         </ProCard>
       </Space>
-    </AdminPageLayout>
+    </PageShell>
   );
 }

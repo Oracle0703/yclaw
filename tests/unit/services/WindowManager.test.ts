@@ -2,14 +2,37 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock electron
 vi.mock('electron', () => {
+  type Listener = (...args: unknown[]) => void;
+  type ListenerMap = Map<string, Listener[]>;
+  interface MockWindowOptions {
+    width?: number;
+    height?: number;
+  }
+  interface MockWindow {
+    _options: MockWindowOptions;
+    _destroyed: boolean;
+    _listeners: ListenerMap;
+    isDestroyed: () => boolean;
+    isMaximized: () => boolean;
+    isMinimized: () => boolean;
+    restore: ReturnType<typeof vi.fn>;
+    show: ReturnType<typeof vi.fn>;
+    focus: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+    getBounds: () => { x: number; y: number; width: number; height: number };
+    loadURL: ReturnType<typeof vi.fn>;
+    on: ReturnType<typeof vi.fn>;
+    once: ReturnType<typeof vi.fn>;
+    webContents: typeof webContentsMock;
+  }
   const webContentsMock = {
     send: vi.fn(),
   };
-  const createBrowserWindow = (opts: any) => {
-    const win: any = {
+  const createBrowserWindow = (opts: MockWindowOptions): MockWindow => {
+    const win: MockWindow = {
       _options: opts,
       _destroyed: false,
-      _listeners: new Map<string, Function[]>(),
+      _listeners: new Map<string, Listener[]>(),
       isDestroyed: () => win._destroyed,
       isMaximized: () => false,
       isMinimized: () => false,
@@ -18,15 +41,33 @@ vi.mock('electron', () => {
       focus: vi.fn(),
       close: vi.fn(() => {
         const closeListeners = win._listeners.get('close') ?? [];
-        closeListeners.forEach((fn: Function) => fn());
+        closeListeners.forEach((fn) => fn());
         const closedListeners = win._listeners.get('closed') ?? [];
-        closedListeners.forEach((fn: Function) => fn());
+        closedListeners.forEach((fn) => fn());
       }),
       getBounds: () => ({ x: 100, y: 100, width: opts.width ?? 1200, height: opts.height ?? 800 }),
-      loadURL: vi.fn(),
-      on: vi.fn((event: string, listener: Function) => {
+      loadURL: vi.fn(() => {
+        // Simulate ready-to-show firing after page load
+        queueMicrotask(() => {
+          const handlers = [...(win._listeners.get('ready-to-show') ?? [])];
+          handlers.forEach((fn) => fn());
+          win._listeners.set('ready-to-show', []);
+        });
+      }),
+      on: vi.fn((event: string, listener: Listener) => {
         const list = win._listeners.get(event) ?? [];
         list.push(listener);
+        win._listeners.set(event, list);
+      }),
+      once: vi.fn((event: string, listener: Listener) => {
+        const wrapper = (...args: unknown[]) => {
+          const list = win._listeners.get(event) ?? [];
+          const idx = list.indexOf(wrapper);
+          if (idx >= 0) list.splice(idx, 1);
+          listener(...args);
+        };
+        const list = win._listeners.get(event) ?? [];
+        list.push(wrapper);
         win._listeners.set(event, list);
       }),
       webContents: webContentsMock,
@@ -66,14 +107,18 @@ describe('WindowManager', () => {
     manager = new WindowManager();
   });
 
-  it('should create a new window for a module', () => {
+  it('should create a new window for a module', async () => {
     const win = manager.openWindow({ module: 'stock' });
     expect(win).toBeDefined();
     expect(win.loadURL).toHaveBeenCalledWith('http://localhost:5173/stock/');
+    // Wait for ready-to-show microtask
+    await Promise.resolve();
+    expect(win.show).toHaveBeenCalled();
   });
 
-  it('should focus existing window instead of creating duplicate', () => {
+  it('should focus existing window instead of creating duplicate', async () => {
     const win1 = manager.openWindow({ module: 'stock' });
+    await Promise.resolve(); // ready-to-show fires
     const win2 = manager.openWindow({ module: 'stock' });
     expect(win1).toBe(win2);
     expect(win1.focus).toHaveBeenCalled();

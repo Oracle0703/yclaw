@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { IPC_CHANNELS } from '@shared/constants/channels';
@@ -19,16 +19,16 @@ export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     setLoading(true);
     const res = await invoke<TaskSummary[]>(IPC_CHANNELS.TASK_LIST);
     setTasks(res ?? []);
     setLoading(false);
-  };
+  }, [invoke]);
 
   useEffect(() => {
     void fetchTasks();
-  }, []);
+  }, [fetchTasks]);
 
   useIpcEvent('task:statusChanged', () => {
     void fetchTasks();

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button, Space, Tabs, Tag } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { AdminPageLayout } from '../../shared/components/AdminPageLayout';
+import { PageShell } from '../../shared/components/PageShell';
 import { useIpcEvent } from '../../shared/hooks';
 import type { TaskStep } from '@shared/types';
 import { ExecutionPanel } from './components/ExecutionPanel';
@@ -38,14 +38,13 @@ export default function App() {
   });
 
   return (
-    <AdminPageLayout
-      currentPath="/automation"
+    <PageShell
       title="自动化采集"
       subTitle="统一编排任务流、步骤配置和执行状态"
       content="将 RPA 任务资产、编辑器和执行日志集中在一个中台页面内，便于团队协作和巡检。"
       extra={
-        <Space>
-          <Tag color="purple">RPA Console</Tag>
+        <Space wrap className="yclaw-page-actions">
+          <Tag color="processing">Automation</Tag>
           <Button icon={<PlusOutlined />} onClick={() => setView('editor')}>
             新建任务
           </Button>
@@ -56,6 +55,7 @@ export default function App() {
       }
     >
       <Tabs
+        className="yclaw-module-tabs"
         activeKey={view}
         onChange={(key) => setView(key as View)}
         items={[
@@ -85,6 +85,6 @@ export default function App() {
           },
         ]}
       />
-    </AdminPageLayout>
+    </PageShell>
   );
 }

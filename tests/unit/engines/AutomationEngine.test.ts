@@ -2,13 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AutomationEngine } from '@engines/automation/AutomationEngine';
 import type { ActionDefinition } from '@engines/automation/types';
 
-function createMockWebContents() {
+interface MockWebContents {
+  executeJavaScript: ReturnType<typeof vi.fn>;
+  capturePage: ReturnType<typeof vi.fn>;
+}
+
+function createMockWebContents(): MockWebContents {
   return {
     executeJavaScript: vi.fn().mockResolvedValue(undefined),
     capturePage: vi.fn().mockResolvedValue({
       toDataURL: () => 'data:image/png;base64,mockImageData',
     }),
-  } as any;
+  };
 }
 
 describe('AutomationEngine', () => {
@@ -143,7 +148,7 @@ describe('AutomationEngine', () => {
 
   describe('unknown action type', () => {
     it('should return error for unknown type', async () => {
-      const action = { type: 'unknown' as any, selector: '#x' } as ActionDefinition;
+      const action = { type: 'unknown', selector: '#x' } as unknown as ActionDefinition;
       const result = await engine.execute(wc, action);
       expect(result.success).toBe(false);
       expect(result.error).toContain('Unknown action type');

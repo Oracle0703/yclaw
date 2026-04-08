@@ -169,7 +169,8 @@ describe('taskFlowSchema', () => {
   });
 
   it('should reject flow without required id', () => {
-    const { id, ...noId } = validFlow;
+    const noId = { ...validFlow };
+    delete (noId as { id?: string }).id;
     expect(taskFlowSchema.safeParse(noId).success).toBe(false);
   });
 

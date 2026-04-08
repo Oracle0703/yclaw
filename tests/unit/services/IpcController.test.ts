@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock electron ipcMain
-const handlers = new Map<string, Function>();
+type MockHandler = (...args: unknown[]) => unknown | Promise<unknown>;
+const handlers = new Map<string, MockHandler>();
 vi.mock('electron', () => ({
   ipcMain: {
-    handle: vi.fn((channel: string, handler: Function) => {
+    handle: vi.fn((channel: string, handler: MockHandler) => {
       handlers.set(channel, handler);
     }),
     removeHandler: vi.fn((channel: string) => {
@@ -69,7 +70,7 @@ describe('IpcController', () => {
     const registeredHandler = handlers.get('test:rate')!;
 
     // Call rapidly — first 100 should succeed, the 101st should be rate limited
-    const responses: any[] = [];
+    const responses: Array<{ error?: { code?: string } }> = [];
     for (let i = 0; i < 102; i++) {
       responses.push(await registeredHandler({}));
     }
