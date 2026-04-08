@@ -32,7 +32,9 @@ jobs:
           sudo apt-get install -y build-essential python3
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps --no-audit
+        run: |
+          rm -f package-lock.json
+          npm install --legacy-peer-deps --no-audit
         timeout-minutes: 10
 
       - name: Lint
