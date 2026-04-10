@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { WindowManager } from './windows/WindowManager';
 import { IpcController } from './ipc/IpcController';
 import { EventBus } from './ipc/EventBus';
@@ -71,7 +71,24 @@ export class App {
     });
 
     this.ipcController.handle(IPC_CHANNELS.WINDOW_CLOSE, (module: unknown) => {
-      this.windowManager.closeWindow(module as string);
+      if (module) {
+        this.windowManager.closeWindow(module as string);
+      } else {
+        const win = BrowserWindow.getFocusedWindow();
+        if (win) win.close();
+      }
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.WINDOW_MINIMIZE, () => {
+      const win = BrowserWindow.getFocusedWindow();
+      if (win) win.minimize();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.WINDOW_MAXIMIZE, () => {
+      const win = BrowserWindow.getFocusedWindow();
+      if (win) {
+        win.isMaximized() ? win.unmaximize() : win.maximize();
+      }
     });
 
     this.ipcController.handle(IPC_CHANNELS.WINDOW_LIST, () => {

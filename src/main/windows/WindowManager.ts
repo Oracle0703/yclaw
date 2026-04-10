@@ -107,6 +107,7 @@ export class WindowManager {
       backgroundColor: '#0b1220',
       minWidth: 600,
       minHeight: 400,
+      frame: false, 
       title: `YClaw - ${module}`,
       webPreferences: {
         preload: this.getPreloadPath(),

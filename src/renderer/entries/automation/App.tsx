@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Button, Space, Tabs, Tag } from 'antd';
+import { Button, Space, Tag } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ProCard } from '@ant-design/pro-components';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpcEvent } from '../../shared/hooks';
 import type { TaskStep } from '@shared/types';
@@ -8,20 +9,17 @@ import { ExecutionPanel } from './components/ExecutionPanel';
 import { StepEditor } from './components/StepEditor';
 import { TaskList } from './components/TaskList';
 
-type View = 'list' | 'editor' | 'execution';
-
 export default function App() {
-  const [view, setView] = useState<View>('list');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [steps, setSteps] = useState<TaskStep[]>([]);
   const [execStatus, setExecStatus] = useState('idle');
   const [execStep, setExecStep] = useState(0);
   const [execLogs, setExecLogs] = useState<string[]>([]);
   const [hasBreakpoint, setHasBreakpoint] = useState(false);
+  const [showExecution, setShowExecution] = useState(false);
 
   const handleSelectTask = (id: string) => {
     setSelectedTaskId(id === 'new' ? null : id);
-    setView('editor');
   };
 
   useIpcEvent('task:stepCompleted', (_data: unknown) => {
@@ -45,34 +43,39 @@ export default function App() {
       extra={
         <Space wrap className="yclaw-page-actions">
           <Tag color="processing">Automation</Tag>
-          <Button icon={<PlusOutlined />} onClick={() => setView('editor')}>
+          <Button
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setSelectedTaskId(null);
+              setSteps([]);
+            }}
+          >
             新建任务
           </Button>
-          <Button type="primary" icon={<ThunderboltOutlined />} onClick={() => setView('execution')}>
-            打开执行面板
+          <Button
+            type="primary"
+            icon={<ThunderboltOutlined />}
+            onClick={() => setShowExecution((v) => !v)}
+          >
+            {showExecution ? '隐藏执行面板' : '打开执行面板'}
           </Button>
         </Space>
       }
     >
-      <Tabs
-        className="yclaw-module-tabs"
-        activeKey={view}
-        onChange={(key) => setView(key as View)}
-        items={[
-          {
-            key: 'list',
-            label: '任务列表',
-            children: <TaskList onSelect={handleSelectTask} />,
-          },
-          {
-            key: 'editor',
-            label: '步骤编辑器',
-            children: <StepEditor steps={steps} onChange={setSteps} />,
-          },
-          {
-            key: 'execution',
-            label: '执行面板',
-            children: (
+      <div className="yclaw-automation-split">
+        {/* 左栏：任务列表 */}
+        <div className="yclaw-automation-sidebar">
+          <TaskList onSelect={handleSelectTask} />
+        </div>
+
+        {/* 右栏：编辑器 + 执行面板 */}
+        <div className="yclaw-automation-main">
+          <ProCard className="yclaw-panel-card" title="步骤编辑器" style={{ flex: 1 }}>
+            <StepEditor steps={steps} onChange={setSteps} />
+          </ProCard>
+
+          {showExecution && (
+            <ProCard className="yclaw-panel-card" title="执行面板" style={{ flex: 'none' }}>
               <ExecutionPanel
                 taskId={selectedTaskId}
                 status={execStatus}
@@ -81,10 +84,10 @@ export default function App() {
                 logs={execLogs}
                 hasBreakpoint={hasBreakpoint}
               />
-            ),
-          },
-        ]}
-      />
+            </ProCard>
+          )}
+        </div>
+      </div>
     </PageShell>
   );
 }
