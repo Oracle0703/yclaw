@@ -134,6 +134,38 @@ export class App {
     this.ipcController.handle(IPC_CHANNELS.APP_CHECK_UPDATE, async () => {
       await this.updateService.checkForUpdates();
     });
+
+    // 浏览器标签页
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_CREATE_TAB, (params: unknown) => {
+      const { url } = (params as { url?: string }) ?? {};
+      const view = this.tabManager.createTab(url);
+      return { id: view.webContents.id };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_CLOSE_TAB, (params: unknown) => {
+      const { id } = params as { id: number };
+      this.tabManager.closeTab(id);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_NAVIGATE, (params: unknown) => {
+      const { tabId, url } = params as { tabId: number; url: string };
+      this.tabManager.navigate(url, tabId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_GO_BACK, (params: unknown) => {
+      const { tabId } = params as { tabId?: number };
+      this.tabManager.goBack(tabId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_GO_FORWARD, (params: unknown) => {
+      const { tabId } = params as { tabId?: number };
+      this.tabManager.goForward(tabId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_RELOAD, (params: unknown) => {
+      const { tabId } = params as { tabId?: number };
+      this.tabManager.reload(tabId);
+    });
   }
 
   shutdown(): void {

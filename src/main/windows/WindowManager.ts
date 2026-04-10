@@ -40,7 +40,7 @@ export class WindowManager {
   }
 
   private shouldOpenDevTools(): boolean {
-    return this.isDevelopment() && process.env.ELECTRON_OPEN_DEVTOOLS === 'true';
+    return this.isDevelopment();
   }
 
   /**
@@ -100,11 +100,7 @@ export class WindowManager {
     return win;
   }
 
-  private createWindow(
-    module: string,
-    defaultState: WindowState,
-    hidden: boolean,
-  ): BrowserWindow {
+  private createWindow(module: string, defaultState: WindowState, hidden: boolean): BrowserWindow {
     const win = new BrowserWindow({
       ...defaultState,
       show: false,
@@ -136,7 +132,6 @@ export class WindowManager {
       win.webContents.openDevTools({ mode: 'detach' });
       this.attachDevDebugListeners(win, module);
     }
-
     // 保存窗口状态
     win.on('close', () => {
       const bounds = win.getBounds();

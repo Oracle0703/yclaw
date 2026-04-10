@@ -53,6 +53,14 @@ export const IPC_CHANNELS = {
   // 应用
   APP_INFO: 'app:info',
   APP_CHECK_UPDATE: 'app:checkUpdate',
+
+  // 浏览器标签页
+  BROWSER_CREATE_TAB: 'browser:createTab',
+  BROWSER_CLOSE_TAB: 'browser:closeTab',
+  BROWSER_NAVIGATE: 'browser:navigate',
+  BROWSER_GO_BACK: 'browser:goBack',
+  BROWSER_GO_FORWARD: 'browser:goForward',
+  BROWSER_RELOAD: 'browser:reload',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

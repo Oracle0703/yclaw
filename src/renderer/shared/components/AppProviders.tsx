@@ -14,6 +14,7 @@ import zhCN from 'antd/locale/zh_CN';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { AppConfig, GeneralConfig } from '@shared/types';
 import { useIpc } from '../hooks';
+import { LoadingProvider } from './GlobalLoading';
 import 'antd/dist/reset.css';
 
 interface AppProvidersProps {
@@ -134,9 +135,7 @@ export function AppProviders({ children }: AppProvidersProps) {
   const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(getSystemTheme);
   const resolvedTheme = themePreference === 'system' ? systemTheme : themePreference;
 
-  const setThemePreference = useCallback<
-    ThemeContextValue['setThemePreference']
-  >(
+  const setThemePreference = useCallback<ThemeContextValue['setThemePreference']>(
     async (theme, options) => {
       const nextTheme = normalizeThemePreference(theme);
       const shouldPersist = options?.persist ?? false;
@@ -212,7 +211,8 @@ export function AppProviders({ children }: AppProvidersProps) {
   }, []);
 
   useEffect(() => {
-    const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(THEME_CHANNEL_NAME) : null;
+    const channel =
+      typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(THEME_CHANNEL_NAME) : null;
     channelRef.current = channel;
 
     if (channel) {
@@ -258,12 +258,9 @@ export function AppProviders({ children }: AppProvidersProps) {
 
   return (
     <ThemeContext.Provider value={themeContextValue}>
-      <ConfigProvider
-        locale={zhCN}
-        theme={buildThemeConfig(resolvedTheme)}
-      >
+      <ConfigProvider locale={zhCN} theme={buildThemeConfig(resolvedTheme)}>
         <AntdApp>
-          {children}
+          <LoadingProvider>{children}</LoadingProvider>
           <Tooltip title={`切换为${resolvedTheme === 'dark' ? '亮色' : '暗色'}主题`}>
             <FloatButton
               icon={resolvedTheme === 'dark' ? <SunOutlined /> : <MoonOutlined />}

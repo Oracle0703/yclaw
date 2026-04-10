@@ -4,6 +4,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
+import { useLoading } from '../../shared/components/GlobalLoading';
 import { AddressBar } from './components/AddressBar';
 import { TabBar } from './components/TabBar';
 
@@ -16,6 +17,7 @@ interface Tab {
 
 export default function App() {
   const { invoke } = useIpc();
+  const { withLoading } = useLoading();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
 
@@ -27,16 +29,16 @@ export default function App() {
   ] as const;
 
   const createTab = async () => {
-    try {
-      const res = await invoke<{ id: number }>('browser:createTab', { url: 'https://www.google.com' });
+    await withLoading(async () => {
+      const res = await invoke<{ id: number }>('browser:createTab', {
+        url: 'https://www.google.com',
+      });
       if (res) {
         const newTab: Tab = { id: res.id, title: '新标签页', url: 'about:blank', loading: true };
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(res.id);
       }
-    } catch {
-      // ignore browser errors in the renderer demo
-    }
+    }, '正在创建标签页...');
   };
 
   const closeTab = async (id: number) => {
@@ -94,7 +96,10 @@ export default function App() {
                 <div className="yclaw-kpi-card-head">
                   <Typography.Text type="secondary">{item.title}</Typography.Text>
                 </div>
-                <Typography.Title level={3} className="yclaw-kpi-card-value yclaw-kpi-card-value-compact">
+                <Typography.Title
+                  level={3}
+                  className="yclaw-kpi-card-value yclaw-kpi-card-value-compact"
+                >
                   {item.value}
                 </Typography.Title>
               </ProCard>
@@ -142,7 +147,8 @@ export default function App() {
                 </Descriptions.Item>
                 <Descriptions.Item label="说明">
                   <Typography.Text type="secondary">
-                    当前仓库先完成浏览器中台外壳和标签控制区，后续可以继续把真实的 WebContentsView 容器挂入这个区域。
+                    当前仓库先完成浏览器中台外壳和标签控制区，后续可以继续把真实的 WebContentsView
+                    容器挂入这个区域。
                   </Typography.Text>
                 </Descriptions.Item>
               </Descriptions>
