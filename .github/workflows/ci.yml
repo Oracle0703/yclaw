@@ -27,7 +27,11 @@ jobs:
           registry-url: https://registry.npmjs.org/
 
       - name: Install dependencies
-        run: npm install --no-audit
+        shell: bash
+        run: |
+          # Work around npm optional dependency lockfile corruption for Rollup native packages.
+          rm -rf node_modules package-lock.json
+          npm install --no-audit
 
       - name: Lint
         run: npm run lint
