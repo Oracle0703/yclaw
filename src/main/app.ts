@@ -87,7 +87,11 @@ export class App {
     this.ipcController.handle(IPC_CHANNELS.WINDOW_MAXIMIZE, () => {
       const win = BrowserWindow.getFocusedWindow();
       if (win) {
-        win.isMaximized() ? win.unmaximize() : win.maximize();
+        if (win.isMaximized()) {
+          win.unmaximize();
+        } else {
+          win.maximize();
+        }
       }
     });
 
