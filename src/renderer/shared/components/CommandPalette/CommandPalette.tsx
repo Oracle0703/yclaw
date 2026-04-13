@@ -11,11 +11,7 @@ import {
 } from '@ant-design/icons';
 import { Input, List, Modal, Space, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import {
-  CommandRegistry,
-  getCommandRegistry,
-  type Command,
-} from './CommandRegistry';
+import { CommandRegistry, getCommandRegistry, type Command } from './CommandRegistry';
 
 const RECENT_KEY = 'yclaw-command-palette-recent';
 const MAX_RECENT = 10;
@@ -268,10 +264,7 @@ export default function CommandPalette() {
                       {item.icon && ICON_MAP[item.icon]}
                       <div>
                         <Typography.Text>{item.name}</Typography.Text>
-                        <Tag
-                          style={{ marginLeft: 8 }}
-                          color="default"
-                        >
+                        <Tag style={{ marginLeft: 8 }} color="default">
                           {CATEGORY_LABEL[item.category] ?? item.category}
                         </Tag>
                       </div>

@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  CloseOutlined,
-  RobotOutlined,
-  SendOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
+import { CloseOutlined, RobotOutlined, SendOutlined, UserOutlined } from '@ant-design/icons';
 import { Avatar, Badge, Button, Input, Space, Spin, Typography } from 'antd';
 import type { ChatMessage } from '@shared/types';
 import { useAIChatStore } from './store';
@@ -35,16 +30,8 @@ function renderMarkdown(text: string): React.ReactNode {
       );
     }
     // Bold
-    const withBold = part.replace(
-      /\*\*(.+?)\*\*/g,
-      '<strong>$1</strong>',
-    );
-    return (
-      <span
-        key={i}
-        dangerouslySetInnerHTML={{ __html: withBold }}
-      />
-    );
+    const withBold = part.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    return <span key={i} dangerouslySetInnerHTML={{ __html: withBold }} />;
   });
 }
 
@@ -73,9 +60,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           maxWidth: '80%',
           padding: '8px 12px',
           borderRadius: 8,
-          backgroundColor: isUser
-            ? 'rgba(22, 119, 255, 0.15)'
-            : 'rgba(114, 46, 209, 0.1)',
+          backgroundColor: isUser ? 'rgba(22, 119, 255, 0.15)' : 'rgba(114, 46, 209, 0.1)',
           lineHeight: 1.6,
           fontSize: 13,
         }}
@@ -87,16 +72,8 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 }
 
 export default function AIChatPanel() {
-  const {
-    messages,
-    isOpen,
-    isLoading,
-    toggle,
-    close,
-    addMessage,
-    setConversationId,
-    setLoading,
-  } = useAIChatStore();
+  const { messages, isOpen, isLoading, toggle, close, addMessage, setConversationId, setLoading } =
+    useAIChatStore();
 
   const [inputValue, setInputValue] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -232,12 +209,7 @@ export default function AIChatPanel() {
           <RobotOutlined style={{ color: '#722ed1' }} />
           <Typography.Text strong>AI 运营助手</Typography.Text>
         </Space>
-        <Button
-          type="text"
-          size="small"
-          icon={<CloseOutlined />}
-          onClick={close}
-        />
+        <Button type="text" size="small" icon={<CloseOutlined />} onClick={close} />
       </div>
 
       {/* Messages */}

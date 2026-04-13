@@ -132,9 +132,7 @@ export class AIService {
   }
 
   listConversations(): Conversation[] {
-    return Array.from(this.conversations.values()).sort(
-      (a, b) => b.updatedAt - a.updatedAt,
-    );
+    return Array.from(this.conversations.values()).sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
   deleteConversation(id: string): boolean {

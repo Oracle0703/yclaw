@@ -2,18 +2,13 @@ import { useState } from 'react';
 import { Button, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
+import { IPC_CHANNELS } from '@shared/constants/channels';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
-import { useLoading } from '../../shared/components/GlobalLoading';
+import { useLoading } from '../../shared/hooks/useLoading';
 import { AddressBar } from './components/AddressBar';
 import { TabBar } from './components/TabBar';
-
-interface Tab {
-  id: number;
-  title: string;
-  url: string;
-  loading: boolean;
-}
+import type { Tab } from '@shared/types/browser';
 
 export default function App() {
   const { invoke } = useIpc();
@@ -30,7 +25,7 @@ export default function App() {
 
   const createTab = async () => {
     await withLoading(async () => {
-      const res = await invoke<{ id: number }>('browser:createTab', {
+      const res = await invoke<{ id: number }>(IPC_CHANNELS.BROWSER_CREATE_TAB, {
         url: 'https://www.google.com',
       });
       if (res) {
@@ -42,20 +37,23 @@ export default function App() {
   };
 
   const closeTab = async (id: number) => {
-    await invoke('browser:closeTab', { id });
-    setTabs((prev) => prev.filter((t) => t.id !== id));
-    setActiveTabId((prev) => {
-      if (prev === id) {
-        const remaining = tabs.filter((t) => t.id !== id);
-        return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
-      }
-      return prev;
+    await invoke(IPC_CHANNELS.BROWSER_CLOSE_TAB, { id });
+    setTabs((prev) => {
+      const remaining = prev.filter((t) => t.id !== id);
+      setActiveTabId((currentId) =>
+        currentId === id
+          ? remaining.length > 0
+            ? remaining[remaining.length - 1].id
+            : null
+          : currentId,
+      );
+      return remaining;
     });
   };
 
   const navigate = async (url: string) => {
     if (activeTabId != null) {
-      await invoke('browser:navigate', { tabId: activeTabId, url });
+      await invoke(IPC_CHANNELS.BROWSER_NAVIGATE, { tabId: activeTabId, url });
     }
   };
 
@@ -127,9 +125,9 @@ export default function App() {
               onNavigate={(url) => {
                 void navigate(url);
               }}
-              onBack={() => void invoke('browser:goBack', { tabId: activeTabId })}
-              onForward={() => void invoke('browser:goForward', { tabId: activeTabId })}
-              onReload={() => void invoke('browser:reload', { tabId: activeTabId })}
+              onBack={() => void invoke(IPC_CHANNELS.BROWSER_GO_BACK, { tabId: activeTabId })}
+              onForward={() => void invoke(IPC_CHANNELS.BROWSER_GO_FORWARD, { tabId: activeTabId })}
+              onReload={() => void invoke(IPC_CHANNELS.BROWSER_RELOAD, { tabId: activeTabId })}
             />
           </Space>
         </ProCard>

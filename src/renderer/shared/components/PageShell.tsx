@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Button, Result, Skeleton, Spin, Typography } from 'antd';
+import { Button, Result, Skeleton, Typography } from 'antd';
 import { PageContainer } from '@ant-design/pro-components';
 
 interface PageShellProps extends PropsWithChildren {

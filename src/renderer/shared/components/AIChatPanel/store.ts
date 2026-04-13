@@ -25,8 +25,7 @@ export const useAIChatStore = create<AIChatState>((set) => ({
   open: () => set({ isOpen: true }),
   close: () => set({ isOpen: false }),
 
-  addMessage: (message) =>
-    set((state) => ({ messages: [...state.messages, message] })),
+  addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
 
   setConversationId: (id) => set({ conversationId: id }),
   setLoading: (loading) => set({ isLoading: loading }),

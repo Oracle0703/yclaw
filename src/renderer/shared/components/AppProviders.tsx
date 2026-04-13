@@ -15,7 +15,6 @@ import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { AppConfig, GeneralConfig } from '@shared/types';
 import { useIpc } from '../hooks';
 import { LoadingProvider } from './GlobalLoading';
-import 'antd/dist/reset.css';
 
 interface AppProvidersProps {
   children: ReactNode;

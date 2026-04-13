@@ -20,7 +20,10 @@ export class ContextManager {
     return {
       currentModule: this.currentModule,
       systemMetrics: {
-        cpu: cpus.length > 0 ? Math.round(cpus[0].times.user / (cpus[0].times.user + cpus[0].times.idle) * 100) : 0,
+        cpu:
+          cpus.length > 0
+            ? Math.round((cpus[0].times.user / (cpus[0].times.user + cpus[0].times.idle)) * 100)
+            : 0,
         memory: Math.round(((totalMemory - freeMemory) / totalMemory) * 100),
         disk: 0, // Placeholder; real implementation would use disk usage APIs
         uptime: Math.round(os.uptime()),

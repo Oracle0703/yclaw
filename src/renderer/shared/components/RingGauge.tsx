@@ -88,9 +88,7 @@ export default function RingGauge({
         </text>
       </svg>
       {label && (
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
-          {label}
-        </span>
+        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>{label}</span>
       )}
     </div>
   );

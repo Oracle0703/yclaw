@@ -3,16 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock os module before importing ContextManager
 vi.mock('os', () => ({
   default: {
-    cpus: () => [
-      { times: { user: 4000, nice: 0, sys: 1000, idle: 5000, irq: 0 } },
-    ],
+    cpus: () => [{ times: { user: 4000, nice: 0, sys: 1000, idle: 5000, irq: 0 } }],
     totalmem: () => 8 * 1024 * 1024 * 1024, // 8GB
-    freemem: () => 3 * 1024 * 1024 * 1024,  // 3GB free
+    freemem: () => 3 * 1024 * 1024 * 1024, // 3GB free
     uptime: () => 7200, // 2 hours
   },
-  cpus: () => [
-    { times: { user: 4000, nice: 0, sys: 1000, idle: 5000, irq: 0 } },
-  ],
+  cpus: () => [{ times: { user: 4000, nice: 0, sys: 1000, idle: 5000, irq: 0 } }],
   totalmem: () => 8 * 1024 * 1024 * 1024,
   freemem: () => 3 * 1024 * 1024 * 1024,
   uptime: () => 7200,

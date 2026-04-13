@@ -65,13 +65,7 @@ export default function Sparkline({
       role="img"
       aria-label={`趋势图: ${data.join(', ')}`}
     >
-      {fill && (
-        <path
-          d={fillPath}
-          fill={effectiveColor}
-          fillOpacity={0.1}
-        />
-      )}
+      {fill && <path d={fillPath} fill={effectiveColor} fillOpacity={0.1} />}
       <polyline
         points={polylinePoints}
         fill="none"
