@@ -26,3 +26,13 @@ export type {
   ModuleConfig,
   PluginConfig,
 } from './config';
+export type {
+  ChatMessage,
+  Conversation,
+  AIConfig,
+  AIToolDef,
+  ToolResult,
+  AIServiceContext,
+  AIChatRequest,
+  AIChatResponse,
+} from './ai';

@@ -61,6 +61,14 @@ export const IPC_CHANNELS = {
   BROWSER_GO_BACK: 'browser:goBack',
   BROWSER_GO_FORWARD: 'browser:goForward',
   BROWSER_RELOAD: 'browser:reload',
+
+  // AI 助手
+  AI_CHAT: 'ai:chat',
+  AI_CONFIG_GET: 'ai:config:get',
+  AI_CONFIG_SET: 'ai:config:set',
+  AI_TOOLS_LIST: 'ai:tools:list',
+  AI_CONVERSATION_LIST: 'ai:conversation:list',
+  AI_CONVERSATION_DELETE: 'ai:conversation:delete',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

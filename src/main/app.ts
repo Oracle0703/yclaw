@@ -71,8 +71,8 @@ export class App {
     });
 
     this.ipcController.handle(IPC_CHANNELS.WINDOW_CLOSE, (module: unknown) => {
-      if (module) {
-        this.windowManager.closeWindow(module as string);
+      if (typeof module === 'string' && module.length > 0) {
+        this.windowManager.closeWindow(module);
       } else {
         const win = BrowserWindow.getFocusedWindow();
         if (win) win.close();
