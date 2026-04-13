@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { WindowManager } from './windows/WindowManager';
 import { IpcController } from './ipc/IpcController';
 import { EventBus } from './ipc/EventBus';
@@ -71,7 +71,28 @@ export class App {
     });
 
     this.ipcController.handle(IPC_CHANNELS.WINDOW_CLOSE, (module: unknown) => {
-      this.windowManager.closeWindow(module as string);
+      if (typeof module === 'string' && module.length > 0) {
+        this.windowManager.closeWindow(module);
+      } else {
+        const win = BrowserWindow.getFocusedWindow();
+        if (win) win.close();
+      }
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.WINDOW_MINIMIZE, () => {
+      const win = BrowserWindow.getFocusedWindow();
+      if (win) win.minimize();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.WINDOW_MAXIMIZE, () => {
+      const win = BrowserWindow.getFocusedWindow();
+      if (win) {
+        if (win.isMaximized()) {
+          win.unmaximize();
+        } else {
+          win.maximize();
+        }
+      }
     });
 
     this.ipcController.handle(IPC_CHANNELS.WINDOW_LIST, () => {
@@ -133,6 +154,38 @@ export class App {
     // 检查更新
     this.ipcController.handle(IPC_CHANNELS.APP_CHECK_UPDATE, async () => {
       await this.updateService.checkForUpdates();
+    });
+
+    // 浏览器标签页
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_CREATE_TAB, (params: unknown) => {
+      const { url } = (params as { url?: string }) ?? {};
+      const view = this.tabManager.createTab(url);
+      return { id: view.webContents.id };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_CLOSE_TAB, (params: unknown) => {
+      const { id } = params as { id: number };
+      this.tabManager.closeTab(id);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_NAVIGATE, (params: unknown) => {
+      const { tabId, url } = params as { tabId: number; url: string };
+      this.tabManager.navigate(url, tabId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_GO_BACK, (params: unknown) => {
+      const { tabId } = params as { tabId?: number };
+      this.tabManager.goBack(tabId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_GO_FORWARD, (params: unknown) => {
+      const { tabId } = params as { tabId?: number };
+      this.tabManager.goForward(tabId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_RELOAD, (params: unknown) => {
+      const { tabId } = params as { tabId?: number };
+      this.tabManager.reload(tabId);
     });
   }
 

@@ -2,20 +2,17 @@ import { useState } from 'react';
 import { Button, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
+import { IPC_CHANNELS } from '@shared/constants/channels';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
+import { useLoading } from '../../shared/hooks/useLoading';
 import { AddressBar } from './components/AddressBar';
 import { TabBar } from './components/TabBar';
-
-interface Tab {
-  id: number;
-  title: string;
-  url: string;
-  loading: boolean;
-}
+import type { Tab } from '@shared/types/browser';
 
 export default function App() {
   const { invoke } = useIpc();
+  const { withLoading } = useLoading();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
 
@@ -27,33 +24,36 @@ export default function App() {
   ] as const;
 
   const createTab = async () => {
-    try {
-      const res = await invoke<{ id: number }>('browser:createTab', { url: 'https://www.google.com' });
+    await withLoading(async () => {
+      const res = await invoke<{ id: number }>(IPC_CHANNELS.BROWSER_CREATE_TAB, {
+        url: 'https://www.google.com',
+      });
       if (res) {
         const newTab: Tab = { id: res.id, title: '新标签页', url: 'about:blank', loading: true };
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(res.id);
       }
-    } catch {
-      // ignore browser errors in the renderer demo
-    }
+    }, '正在创建标签页...');
   };
 
   const closeTab = async (id: number) => {
-    await invoke('browser:closeTab', { id });
-    setTabs((prev) => prev.filter((t) => t.id !== id));
-    setActiveTabId((prev) => {
-      if (prev === id) {
-        const remaining = tabs.filter((t) => t.id !== id);
-        return remaining.length > 0 ? remaining[remaining.length - 1].id : null;
-      }
-      return prev;
+    await invoke(IPC_CHANNELS.BROWSER_CLOSE_TAB, { id });
+    setTabs((prev) => {
+      const remaining = prev.filter((t) => t.id !== id);
+      setActiveTabId((currentId) =>
+        currentId === id
+          ? remaining.length > 0
+            ? remaining[remaining.length - 1].id
+            : null
+          : currentId,
+      );
+      return remaining;
     });
   };
 
   const navigate = async (url: string) => {
     if (activeTabId != null) {
-      await invoke('browser:navigate', { tabId: activeTabId, url });
+      await invoke(IPC_CHANNELS.BROWSER_NAVIGATE, { tabId: activeTabId, url });
     }
   };
 
@@ -94,7 +94,10 @@ export default function App() {
                 <div className="yclaw-kpi-card-head">
                   <Typography.Text type="secondary">{item.title}</Typography.Text>
                 </div>
-                <Typography.Title level={3} className="yclaw-kpi-card-value yclaw-kpi-card-value-compact">
+                <Typography.Title
+                  level={3}
+                  className="yclaw-kpi-card-value yclaw-kpi-card-value-compact"
+                >
                   {item.value}
                 </Typography.Title>
               </ProCard>
@@ -122,9 +125,9 @@ export default function App() {
               onNavigate={(url) => {
                 void navigate(url);
               }}
-              onBack={() => void invoke('browser:goBack', { tabId: activeTabId })}
-              onForward={() => void invoke('browser:goForward', { tabId: activeTabId })}
-              onReload={() => void invoke('browser:reload', { tabId: activeTabId })}
+              onBack={() => void invoke(IPC_CHANNELS.BROWSER_GO_BACK, { tabId: activeTabId })}
+              onForward={() => void invoke(IPC_CHANNELS.BROWSER_GO_FORWARD, { tabId: activeTabId })}
+              onReload={() => void invoke(IPC_CHANNELS.BROWSER_RELOAD, { tabId: activeTabId })}
             />
           </Space>
         </ProCard>
@@ -142,7 +145,8 @@ export default function App() {
                 </Descriptions.Item>
                 <Descriptions.Item label="说明">
                   <Typography.Text type="secondary">
-                    当前仓库先完成浏览器中台外壳和标签控制区，后续可以继续把真实的 WebContentsView 容器挂入这个区域。
+                    当前仓库先完成浏览器中台外壳和标签控制区，后续可以继续把真实的 WebContentsView
+                    容器挂入这个区域。
                   </Typography.Text>
                 </Descriptions.Item>
               </Descriptions>

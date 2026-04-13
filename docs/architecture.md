@@ -11,69 +11,94 @@ graph TB
     subgraph ElectronShell["Electron App Shell"]
         WM[WindowManager]
         PL[PluginLoader]
-        IPC[IPC Controller]
+        IPC[IPC Controller<br/>限流 100/s]
         EB[EventBus 事件总线]
+        TM[TabManager<br/>WebContentsView]
     end
 
     subgraph Services["系统服务层"]
-        DB[(SQLite<br/>better-sqlite3)]
-        FS[StorageService<br/>文件存储]
-        CFG[ConfigService<br/>配置管理]
-        LOG[LogService<br/>日志服务]
+        DB[(SQLite<br/>better-sqlite3 WAL)]
+        CFG[ConfigService<br/>JSON 持久化]
+        LOG[LogService<br/>按日轮转 7天]
         UPD[UpdateService<br/>自动更新]
         TRAY[TrayService<br/>系统托盘]
     end
 
-    subgraph RendererEntries["渲染进程 — 多入口模块 (Vite MPA)"]
+    subgraph AILayer["AI 服务层"]
+        AIS[AIService<br/>LLM 调度]
+        CTX[ContextManager<br/>上下文收集]
+        TR[ToolRegistry<br/>工具注册]
+        LLM[LLMProvider<br/>OpenAI / Ollama]
+    end
+
+    subgraph RendererEntries["渲染进程 — 6 入口 (Vite MPA)"]
         WB[主工作台<br/>Workbench]
         STK[股票分析<br/>Stock]
         AUTO_UI[自动化采集<br/>Automation]
         BRW[内嵌浏览器<br/>Browser]
         PC[插件中心<br/>Plugin Center]
+        PH_UI[插件宿主<br/>Plugin Host]
+    end
+
+    subgraph SharedUI["渲染进程共享组件"]
+        CMD[CommandPalette<br/>Ctrl+K]
+        CHAT[AIChatPanel<br/>Ctrl+J + Zustand]
+        PS[PageShell / TitleBar]
+        VIS[Sparkline / RingGauge<br/>TaskTimeline]
     end
 
     subgraph Engines["核心引擎层"]
-        AE[AutomationEngine<br/>自动化引擎]
-        ANE[AnalyticsEngine<br/>数据分析引擎]
-        PB[PythonBridge<br/>Python 桥接]
+        AE[AutomationEngine<br/>5 种操作]
+        FR[FlowRunner<br/>断点续跑]
+        DSM[DataSourceManager<br/>REST/WebSocket]
+        IL[IndicatorLibrary<br/>MA/MACD/RSI/BOLL]
     end
 
     subgraph PluginSystem["插件系统"]
-        PH[Plugin Host<br/>V1.0 共享宿主]
-        PA[Plugin API Bridge<br/>API 桥接]
-        PM[PermissionChecker<br/>权限校验]
+        PA[PluginBridge<br/>API 桥接]
+        PM[PermissionChecker<br/>三级权限]
     end
 
     subgraph External["外部系统"]
-        DS[行情数据源<br/>REST/WebSocket]
+        DS[行情数据源]
         WCV[WebContentsView<br/>受控页面]
-        PY[本地 Python<br/>运行时]
+        LLMAPI[LLM API<br/>OpenAI / Ollama]
     end
 
     %% 主进程内部连接
     ElectronShell --> Services
     ElectronShell --> Engines
     ElectronShell --> PluginSystem
+    ElectronShell --> AILayer
 
     %% 渲染进程通过 IPC 连接主进程
     RendererEntries <-->|"contextBridge IPC"| IPC
     IPC -->|"EventBus fan-out"| RendererEntries
+    SharedUI --> RendererEntries
+
+    %% AI 连接
+    AIS --> CTX
+    AIS --> TR
+    AIS --> LLM
+    LLM --> LLMAPI
+    CHAT <-->|"ai:chat IPC"| AIS
 
     %% 引擎连接外部
     AE --> WCV
-    ANE --> DS
-    ANE --> PB
-    PB --> PY
+    FR --> AE
+    DSM --> DS
+    IL --> DSM
+    TM --> WCV
 
     %% 插件系统
-    PH <-->|"受限 IPC"| PA
+    PH_UI <-->|"受限 IPC"| PA
     PA --> PM
     PM --> IPC
 
     %% 服务连接
     AE --> LOG
     AE --> DB
-    ANE --> DB
+    DSM --> DB
     PL --> PM
 ```
 
@@ -89,9 +114,11 @@ graph LR
         M2[IPC Controller]
         M3[PluginLoader]
         M4[EventBus]
-        M5[Services<br/>DB/Config/Log/Update]
-        M6[AutomationEngine]
-        M7[AnalyticsEngine]
+        M5[Services<br/>DB/Config/Log/Update/Tray]
+        M6[AutomationEngine + FlowRunner]
+        M7[DataSourceManager + IndicatorLibrary]
+        M8[AIService + ToolRegistry]
+        M9[TabManager]
     end
 
     subgraph RendererProcess1["渲染进程 #1 — 主工作台"]
@@ -114,14 +141,6 @@ graph LR
         P1[共享 Plugin Host<br/>受限 preload]
     end
 
-    subgraph WorkerThread["Worker 线程"]
-        W1[指标计算<br/>密集计算任务]
-    end
-
-    subgraph ChildProcess["子进程"]
-        C1[Python Runtime<br/>策略脚本执行]
-    end
-
     %% IPC 通道
     MainProcess <-->|"ipcMain/ipcRenderer<br/>contextBridge"| RendererProcess1
     MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess2
@@ -133,21 +152,15 @@ graph LR
     MainProcess -->|"EventBus fan-out"| RendererProcess1
     MainProcess -->|"EventBus fan-out"| RendererProcess2
     MainProcess -->|"EventBus fan-out"| RendererProcess3
-
-    %% 主进程扩展
-    M7 --> WorkerThread
-    M7 -->|"child_process.spawn"| ChildProcess
 ```
 
 ### 进程隔离策略
 
-| 进程类型 | 数量 | 权限 | 说明 |
-|---------|------|------|------|
-| 主进程 | 1 | 完整 Node.js API | 系统服务、引擎、插件管理 |
-| 渲染进程（模块） | N（按模块） | 受限（contextBridge） | 每个业务模块独立渲染进程 |
-| 渲染进程（Plugin Host） | 1（V1.0） | 高度受限 preload | 受信插件 UI 的共享宿主；V1.5 再升级为按插件隔离 |
-| Worker 线程 | 按需 | 计算专用 | 指标计算等 CPU 密集任务，避免阻塞主进程 |
-| 子进程 | 按需 | 独立 | Python 策略脚本执行 |
+| 进程类型                | 数量        | 权限                  | 说明                                            |
+| ----------------------- | ----------- | --------------------- | ----------------------------------------------- |
+| 主进程                  | 1           | 完整 Node.js API      | 系统服务、引擎、插件管理                        |
+| 渲染进程（模块）        | N（按模块） | 受限（contextBridge） | 每个业务模块独立渲染进程                        |
+| 渲染进程（Plugin Host） | 1（V1.0）   | 高度受限 preload      | 受信插件 UI 的共享宿主；V1.5 再升级为按插件隔离 |
 
 ---
 
@@ -161,7 +174,6 @@ sequenceDiagram
     participant PL as PluginLoader
     participant FS as 文件系统
     participant PC as PermissionChecker
-    participant PR as PluginRegistry
     participant IPC as IPC Controller
     participant UI as 插件中心 UI
 
@@ -177,9 +189,8 @@ sequenceDiagram
         alt 校验通过
             PC-->>PL: ✅ 通过
             PL->>PL: 加载插件入口文件
-            PL->>PR: 注册插件（元信息 + API + UI 配置）
-            PR->>IPC: 注册插件 IPC 通道
-            PR->>UI: 通知 UI 更新插件列表
+            PL->>IPC: 注册插件 IPC 通道
+            PL->>UI: 通知 UI 更新插件列表
         else 校验失败
             PC-->>PL: ❌ 拒绝
             PL->>PL: 记录错误日志，跳过此插件
@@ -195,7 +206,7 @@ sequenceDiagram
     participant UI as 自动化模块 UI
     participant IPC as IPC Controller
     participant FR as FlowRunner
-    participant AE as ActionExecutor
+    participant AE as AutomationEngine
     participant WCV as WebContentsView
     participant DB as SQLite
     participant LOG as LogService
@@ -253,9 +264,6 @@ sequenceDiagram
     participant DSM as DataSourceManager
     participant API as 外部行情 API
     participant IL as IndicatorLibrary
-    participant Worker as Worker 线程
-    participant SR as StrategyRunner
-    participant PB as PythonBridge
     participant DB as SQLite
 
     User->>UI: 选择股票 / 打开图表
@@ -277,23 +285,40 @@ sequenceDiagram
     User->>UI: 叠加技术指标（MA/MACD）
     UI->>IPC: stock:indicator {type, params}
     IPC->>IL: 计算指标
-    IL->>Worker: 委托密集计算
-    Worker-->>IL: 计算结果
-    IL->>IPC: stock:indicator:result
+    IL-->>IPC: 计算结果
     IPC->>UI: 叠加指标到图表
+```
 
-    User->>UI: 运行策略脚本
-    UI->>IPC: stock:strategy:run {script, lang}
+### 3.4 AI 对话链路
 
-    alt JavaScript 策略
-        IPC->>SR: VM 沙箱执行 JS 脚本
-        SR-->>IPC: 策略结果
-    else Python 策略
-        IPC->>PB: child_process.spawn python
-        PB-->>IPC: JSON 策略结果
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Chat as AIChatPanel (Ctrl+J)
+    participant IPC as IPC Controller
+    participant AIS as AIService
+    participant CTX as ContextManager
+    participant TR as ToolRegistry
+    participant LLM as LLMProvider
+
+    User->>Chat: 输入消息
+    Chat->>IPC: ai:chat {message, conversationId}
+    IPC->>AIS: 处理对话请求
+    AIS->>CTX: 收集上下文（系统指标 + 模块状态）
+    CTX-->>AIS: 上下文数据
+
+    AIS->>LLM: 发送 prompt + context + tools
+    LLM-->>AIS: LLM 响应
+
+    alt 需要工具调用
+        AIS->>TR: 执行工具（task_list / system_status / navigate）
+        TR-->>AIS: 工具执行结果
+        AIS->>LLM: 发送工具结果
+        LLM-->>AIS: 最终响应
     end
 
-    IPC->>UI: 显示策略执行结果
+    AIS->>IPC: ai:chat:response {reply}
+    IPC->>Chat: 更新对话 UI
 ```
 
 ---
@@ -360,7 +385,7 @@ graph TB
         DSM[DataSourceManager]
         AE[AutomationEngine]
         IL[IndicatorLibrary]
-        SR[StrategyRunner]
+        AIS2[AIService]
     end
 
     subgraph Storage["数据存储层"]
@@ -388,7 +413,7 @@ graph TB
     AE --> SQLite
     AE --> FileStore
     IL --> IDB
-    SR --> SQLite
+    AIS2 --> IPC
 
     SQLite --> Chart
     SQLite --> Table
@@ -405,57 +430,55 @@ graph TB
 
 ### 核心框架
 
-| 模块 | 技术选型 | 版本要求 | 选型理由 |
-|------|---------|---------|---------|
-| 桌面框架 | Electron | ≥ 28 | WebContentsView 支持、Chromium 内核复用、跨平台 |
-| UI 框架 | React | 18+ | 生态丰富、组件化、Concurrent Mode |
-| 构建工具 | Vite | 5+ | 原生 MPA 支持、HMR 极速、Rollup 生态 |
-| TypeScript | TypeScript | 5+ | 类型安全、IPC 消息类型校验 |
+| 模块       | 技术选型   | 版本要求 | 选型理由                                        |
+| ---------- | ---------- | -------- | ----------------------------------------------- |
+| 桌面框架   | Electron   | 33       | WebContentsView 支持、Chromium 内核复用、跨平台 |
+| UI 框架    | React      | 18       | 生态丰富、组件化、Concurrent Mode               |
+| 构建工具   | Vite       | 6        | 原生 MPA 支持、HMR 极速、Rollup 生态            |
+| TypeScript | TypeScript | 5.7      | 类型安全、IPC 消息类型校验                      |
 
 ### 状态管理 & UI
 
-| 模块 | 技术选型 | 选型理由 |
-|------|---------|---------|
-| 状态管理 | Zustand | 轻量、无样板代码、支持持久化中间件 |
-| 路由 | React Router v6 | 每个入口独立路由实例 |
-| UI 组件库 | Ant Design 5 / Radix UI | 企业级组件库、可定制主题 |
-| 图表库 | Lightweight Charts (TradingView) | 专业金融图表、K 线原生支持、高性能 |
-| CSS 方案 | Tailwind CSS + CSS Modules | 原子化 + 模块化样式隔离 |
+| 模块      | 技术选型                         | 选型理由                           |
+| --------- | -------------------------------- | ---------------------------------- |
+| 状态管理  | Zustand 5                        | 轻量、无样板代码、支持持久化中间件 |
+| 路由      | React Router v6                  | 每个入口独立路由实例               |
+| UI 组件库 | Ant Design 5 + Pro Components    | 企业级组件库、可定制主题           |
+| 图表库    | Lightweight Charts (TradingView) | 专业金融图表、K 线原生支持、高性能 |
+| CSS 方案  | CSS Modules                      | 模块化样式隔离                     |
 
 ### 数据 & 存储
 
-| 模块 | 技术选型 | 选型理由 |
-|------|---------|---------|
-| 结构化数据库 | better-sqlite3 | 同步 API、零网络开销、嵌入式 |
-| 文件存储 | Node.js fs + electron app.getPath | 平台无关的应用数据路径 |
-| 渲染端缓存 | IndexedDB (Dexie.js) | 渲染进程本地缓存、大数据量支持 |
-| 配置管理 | electron-store / conf | JSON 持久化、schema 校验 |
+| 模块         | 技术选型                          | 选型理由                       |
+| ------------ | --------------------------------- | ------------------------------ |
+| 结构化数据库 | better-sqlite3                    | 同步 API、零网络开销、嵌入式   |
+| 文件存储     | Node.js fs + electron app.getPath | 平台无关的应用数据路径         |
+| 渲染端缓存   | IndexedDB (Dexie.js)              | 渲染进程本地缓存、大数据量支持 |
+| 配置管理     | ConfigService (JSON 持久化)       | 经 EventBus 广播配置变更       |
 
 ### 引擎 & 运行时
 
-| 模块 | 技术选型 | 选型理由 |
-|------|---------|---------|
-| 自动化引擎 | Electron webContents API | 复用内置 Chromium，无需额外浏览器依赖 |
-| 技术指标计算 | technicalindicators (npm) | 成熟 JS 指标库、支持 MA/MACD/RSI/BOLL |
-| JS 策略沙箱 | quickjs-emscripten / isolated-vm | 降低执行不受信脚本的主进程风险 |
-| Python 桥接 | child_process + JSON stdio | 简单可靠、无额外依赖 |
-| 日志 | winston / electron-log | 文件轮转、多 transport 支持 |
+| 模块         | 技术选型                 | 选型理由                              |
+| ------------ | ------------------------ | ------------------------------------- |
+| 自动化引擎   | Electron webContents API | 复用内置 Chromium，无需额外浏览器依赖 |
+| 技术指标计算 | IndicatorLibrary (内置)  | MA/MACD/RSI/BOLL 等指标计算           |
+| 日志         | LogService (内置)        | 文件按日轮转、7 天保留                |
 
 ### 构建 & 打包
 
-| 模块 | 技术选型 | 选型理由 |
-|------|---------|---------|
-| Electron 打包 | electron-builder | dmg/nsis/AppImage 全平台支持 |
-| 自动更新 | electron-updater | 配合 electron-builder 的增量更新 |
-| 测试框架 | Vitest + Playwright | Vite 原生测试 + E2E 测试 |
+| 模块          | 技术选型                                      | 选型理由                         |
+| ------------- | --------------------------------------------- | -------------------------------- |
+| Electron 打包 | electron-builder                              | dmg/nsis/AppImage 全平台支持     |
+| 自动更新      | electron-updater                              | 配合 electron-builder 的增量更新 |
+| 测试框架      | Vitest 2 + @testing-library/react + happy-dom | Vite 原生测试 + 组件测试         |
 
 ### 插件系统
 
-| 模块 | 技术选型 | 选型理由 |
-|------|---------|---------|
+| 模块             | 技术选型                        | 选型理由                             |
+| ---------------- | ------------------------------- | ------------------------------------ |
 | 插件宿主（V1.0） | 共享 plugin-host + 受限 preload | 先收敛到单一宿主模型，降低实现复杂度 |
-| 插件通信 | IPC | 统一权限检查与错误处理链路 |
-| 插件包格式 | .ycplugin (zip + plugin.json) | 自定义包格式，V1.0 不引入签名体系 |
+| 插件通信         | IPC                             | 统一权限检查与错误处理链路           |
+| 插件包格式       | .ycplugin (zip + plugin.json)   | 自定义包格式，V1.0 不引入签名体系    |
 
 ---
 
@@ -477,13 +500,13 @@ graph TB
 
 ### 插件权限矩阵
 
-| 能力 | Level 1 (UI 只读) | Level 2 (网络+存储) | Level 3 (自动化+文件) |
-|------|:-:|:-:|:-:|
-| 渲染 UI | ✅ | ✅ | ✅ |
-| 读取公开应用状态 | ✅ | ✅ | ✅ |
-| 网络请求 | ❌ | ✅ | ✅ |
-| 插件专属存储读写 | ❌ | ✅ | ✅ |
-| 用户文件系统访问 | ❌ | ❌ | ✅（需逐次授权） |
-| 调用自动化引擎 | ❌ | ❌ | ✅（需逐次授权） |
-| 操作 WebContentsView | ❌ | ❌ | ✅（需逐次授权） |
-| 安装时需用户确认 | ❌ | ✅ | ✅ |
+| 能力                 | Level 1 (UI 只读) | Level 2 (网络+存储) | Level 3 (自动化+文件) |
+| -------------------- | :---------------: | :-----------------: | :-------------------: |
+| 渲染 UI              |        ✅         |         ✅          |          ✅           |
+| 读取公开应用状态     |        ✅         |         ✅          |          ✅           |
+| 网络请求             |        ❌         |         ✅          |          ✅           |
+| 插件专属存储读写     |        ❌         |         ✅          |          ✅           |
+| 用户文件系统访问     |        ❌         |         ❌          |   ✅（需逐次授权）    |
+| 调用自动化引擎       |        ❌         |         ❌          |   ✅（需逐次授权）    |
+| 操作 WebContentsView |        ❌         |         ❌          |   ✅（需逐次授权）    |
+| 安装时需用户确认     |        ❌         |         ✅          |          ✅           |

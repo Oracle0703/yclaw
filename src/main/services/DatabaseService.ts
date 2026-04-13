@@ -9,6 +9,7 @@ import { getDatabasePath } from '../utils/paths';
  * - 基础迁移机制
  */
 export class DatabaseService {
+  private static instance: DatabaseService;
   private db: Database.Database | null = null;
   private dbDir: string;
   private dbPath: string;
@@ -17,6 +18,13 @@ export class DatabaseService {
   constructor(dbName = 'yclaw.sqlite') {
     this.dbDir = getDatabasePath();
     this.dbPath = path.join(this.dbDir, dbName);
+  }
+
+  static getInstance(dbName?: string): DatabaseService {
+    if (!DatabaseService.instance) {
+      DatabaseService.instance = new DatabaseService(dbName);
+    }
+    return DatabaseService.instance;
   }
 
   /**
@@ -78,6 +86,21 @@ export class DatabaseService {
       this.db.close();
       this.db = null;
     }
+  }
+
+  getTasks(): Array<{
+    id: string;
+    name: string;
+    status: string;
+    updatedAt: string;
+  }> {
+    this.ensureOpen();
+    const rows = this.db!.prepare(`
+      SELECT id, name, status, updated_at as updatedAt
+      FROM tasks
+      ORDER BY updated_at DESC
+    `).all() as Array<{ id: string; name: string; status: string; updatedAt: string }>;
+    return rows;
   }
 
   private ensureOpen(): void {

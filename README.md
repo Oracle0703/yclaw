@@ -8,9 +8,9 @@
 ![TypeScript](https://img.shields.io/badge/typescript-5-0f766e.svg)
 ![Vite](https://img.shields.io/badge/vite-6-7c3aed.svg)
 
-YClaw is a modular desktop workbench for operations-heavy workflows: analytics, automation, embedded browsing, plugin governance, and shared system services. It is structured as an Electron shell with multiple renderer entries, a typed IPC layer, and a plugin-oriented architecture.
+YClaw is a modular desktop workbench for operations-heavy workflows: analytics, automation, embedded browsing, AI assistant, plugin governance, and shared system services. It is structured as an Electron shell with 6 renderer entries, a typed IPC layer (60+ channels), an AI service layer, and a plugin-oriented architecture.
 
-The repository is currently in an early open-source friendly stage: core scaffolding, module shells, services, tests, and product docs are present; some production capabilities are still evolving.
+Core capabilities are implemented: main-process services, multi-window management, IPC bridge, automation/analytics engines, AI assistant (LLM + tool calling), command palette, and comprehensive test coverage (38 files, 370+ tests).
 
 ## Why YClaw
 
@@ -23,67 +23,79 @@ YClaw targets a practical gap between generic admin panels and heavyweight inter
 
 ## At A Glance
 
-- Docs: [`docs/prd.md`](/Users/huangyu/Desktop/allProject/yclaw/docs/prd.md), [`docs/architecture.md`](/Users/huangyu/Desktop/allProject/yclaw/docs/architecture.md), [`docs/specs.md`](/Users/huangyu/Desktop/allProject/yclaw/docs/specs.md)
-- Changelog: [`CHANGELOG.md`](/Users/huangyu/Desktop/allProject/yclaw/CHANGELOG.md)
-- Contribution guide: [`CONTRIBUTING.md`](/Users/huangyu/Desktop/allProject/yclaw/CONTRIBUTING.md)
-- Code of conduct: [`CODE_OF_CONDUCT.md`](/Users/huangyu/Desktop/allProject/yclaw/CODE_OF_CONDUCT.md)
-- Security policy: [`SECURITY.md`](/Users/huangyu/Desktop/allProject/yclaw/SECURITY.md)
-- License: [`LICENSE`](/Users/huangyu/Desktop/allProject/yclaw/LICENSE)
+- Docs: [docs/prd.md](docs/prd.md), [docs/architecture.md](docs/architecture.md), [docs/specs.md](docs/specs.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+- License: [LICENSE](LICENSE)
 
 ## Highlights
 
-- Electron desktop shell with multi-window module management
-- React + Vite renderer architecture with multiple entry pages
-- Shared IPC bridge and event bus between main and renderer processes
-- Built-in module shells for:
-  - `workbench`
-  - `stock`
-  - `automation`
-  - `browser`
-  - `plugin-center`
-- Plugin host and plugin template for future extension points
-- System services for config, logging, updates, tray, and local storage
-- Test coverage for services, engines, shared utilities, and renderer components
+- Electron desktop shell with multi-window module management (WindowManager, up to 10 windows)
+- React + Vite renderer architecture with **6 independent entry pages**
+- Typed IPC bridge (60+ channels) with rate limiting (100/s) and EventBus
+- **AI assistant**: LLM service layer (OpenAI / Ollama), tool registry, context manager, chat panel (Ctrl+J)
+- **Command palette** (Ctrl+K) with fuzzy search and command registry
+- Built-in module entries:
+  - `workbench` — operations cockpit with KPI dashboard
+  - `stock` — K-line charts + technical indicators (MA/MACD/RSI/BOLL)
+  - `automation` — task flow editor + execution panel
+  - `browser` — multi-tab embedded browser (WebContentsView)
+  - `plugin-center` — plugin management + permission review
+  - `plugin-host` — sandboxed plugin runtime
+- Shared UI components: PageShell, TitleBar, GlobalLoading, Sparkline, RingGauge, TaskTimeline
+- Plugin host with three-level permission model (L1/L2/L3)
+- System services: SQLite (WAL mode), config, logging (7-day rotation), tray, auto-update
+- Automation engine: 5 actions (click/input/scroll/extract/screenshot), flow runner with breakpoint resume
+- Analytics engine: DataSourceManager (REST/WebSocket), IndicatorLibrary
+- Test coverage: 38 files, 370+ tests (services, engines, components, shared, regression)
 
 ## Current Status
 
-Implemented in this repository today:
+Implemented and tested:
 
-- Electron main-process app lifecycle and window management
-- Preload + `contextBridge` IPC bridge
-- Workbench UI and module navigation shell
-- Stock analysis demo page with chart/indicator workflow
-- Automation task list/editor/execution panel shell
-- Embedded browser session shell with tab/address abstractions
-- Plugin center shell with permission review flow
-- SQLite-backed database service, config service, log service, tray service, update service
-- Unit tests via Vitest
+- Electron main-process app lifecycle and multi-window management (up to 10)
+- Preload + `contextBridge` IPC bridge with 60+ typed channels
+- IPC Controller with rate limiting (100 req/s) and EventBus fan-out
+- AI service layer: AIService, ContextManager, ToolRegistry, LLMProvider (OpenAI/Ollama)
+- AI Chat Panel (Ctrl+J) with Zustand state management
+- Command Palette (Ctrl+K) with fuzzy search and command registry
+- Workbench UI with module navigation, KPI cards, AI assistant integration
+- Stock analysis module with K-line chart and indicator workflow
+- Automation task list/editor/execution panel with step editor
+- Embedded browser with multi-tab management (TabManager, up to 20 tabs)
+- Plugin center with permission review flow and three-level permission model
+- SQLite database service (WAL mode), config service, log service (7-day rotation), tray, auto-update
+- Automation engine: 5 operations, flow runner with retry + breakpoint resume
+- Analytics engine: DataSourceManager, IndicatorLibrary (MA/MACD/RSI/BOLL)
+- Shared components: PageShell, TitleBar, ErrorBoundary, GlobalLoading, AppProviders, Sparkline, RingGauge, TaskTimeline
+- Comprehensive unit tests (38 files, 370+ tests) including regression tests
 
 Still evolving:
 
 - Full production-grade automation execution against real pages
-- Complete plugin runtime isolation strategy
-- Broader production packaging verification across all modules
-- End-to-end flows beyond the current unit-focused coverage
+- Complete plugin runtime isolation (V1.5 target)
+- End-to-end test coverage
+- Production packaging verification across all platforms
 
 ## Tech Stack
 
 - Electron 33
 - React 18
 - Vite 6
-- TypeScript 5
+- TypeScript 5.7
 - Ant Design 5 + Pro Components
-- better-sqlite3
-- electron-store
-- electron-log
+- Zustand 5 (state management)
+- better-sqlite3 (SQLite with WAL)
 - electron-builder
-- Vitest + Testing Library
+- Vitest 2 + @testing-library/react + happy-dom
 
 ## Quick Start
 
 ### Requirements
 
-- Node.js `>= 18`
+- Node.js `>= 20.19.0`
 - npm
 - macOS / Windows / Linux supported by Electron tooling
 
@@ -139,22 +151,22 @@ npm run typecheck
 
 ## Available Scripts
 
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Start Vite + preload watcher + Electron development flow |
-| `npm run build` | Build renderer entries and main process |
-| `npm run build:renderer` | Build Vite renderer bundles |
-| `npm run build:main` | Compile Electron main process |
-| `npm run lint` | Run ESLint on `src/` and `tests/` |
-| `npm run format` | Format TypeScript/CSS files with Prettier |
-| `npm test` | Run Vitest test suite |
-| `npm run test:coverage` | Run tests with coverage |
-| `npm run test:e2e` | Run Playwright tests |
-| `npm run pack` | Create unpacked Electron build |
-| `npm run dist` | Build distributable app packages |
-| `npm run dist:mac` | Build macOS release artifacts |
-| `npm run dist:win` | Build Windows release artifacts |
-| `npm run dist:linux` | Build Linux release artifacts |
+| Command                  | Description                                              |
+| ------------------------ | -------------------------------------------------------- |
+| `npm run dev`            | Start Vite + preload watcher + Electron development flow |
+| `npm run build`          | Build renderer entries and main process                  |
+| `npm run build:renderer` | Build Vite renderer bundles                              |
+| `npm run build:main`     | Compile Electron main process                            |
+| `npm run lint`           | Run ESLint on `src/` and `tests/`                        |
+| `npm run format`         | Format TypeScript/CSS files with Prettier                |
+| `npm test`               | Run Vitest test suite                                    |
+| `npm run test:coverage`  | Run tests with coverage                                  |
+| `npm run test:e2e`       | Run Playwright tests                                     |
+| `npm run pack`           | Create unpacked Electron build                           |
+| `npm run dist`           | Build distributable app packages                         |
+| `npm run dist:mac`       | Build macOS release artifacts                            |
+| `npm run dist:win`       | Build Windows release artifacts                          |
+| `npm run dist:linux`     | Build Linux release artifacts                            |
 
 ## Quality Gates
 
@@ -167,20 +179,35 @@ Current repository validation baseline:
 
 The current local baseline is green across all four commands.
 
-Release automation is configured through [release.yml](/Users/huangyu/Desktop/allProject/yclaw/.github/workflows/release.yml) and publishes tagged builds for `v*`.
-GitHub release notes are generated from [CHANGELOG.md](/Users/huangyu/Desktop/allProject/yclaw/CHANGELOG.md) through [extract-release-notes.mjs](/Users/huangyu/Desktop/allProject/yclaw/.github/scripts/extract-release-notes.mjs).
-Dependency update automation is configured through [dependabot.yml](/Users/huangyu/Desktop/allProject/yclaw/.github/dependabot.yml).
+Release automation is configured through [release.yml](.github/workflows/release.yml) and publishes tagged builds for `v*`.
+GitHub release notes are generated from [CHANGELOG.md](CHANGELOG.md) through [extract-release-notes.mjs](.github/scripts/extract-release-notes.mjs).
+Dependency update automation is configured through [dependabot.yml](.github/dependabot.yml).
 
 ## Project Structure
 
 ```text
 src/
   main/                 Electron main process
+    ai/                 AI service layer (AIService, ContextManager, ToolRegistry, LLMProvider)
+    browser/            TabManager (WebContentsView management)
+    ipc/                IPC Controller + EventBus
+    plugin-loader/      Plugin scanning + permission checking
+    services/           DB, Config, Log, Tray, Update services
+    windows/            WindowManager + preload
   renderer/
-    entries/            Module entry pages
-    plugin-host/        Shared plugin host page
+    entries/            6 module entry pages
+      workbench/        Main operations cockpit
+      stock/            Stock analysis module
+      automation/       Task automation module
+      browser/          Embedded browser module
+      plugin-center/    Plugin management module
+    plugin-host/        Sandboxed plugin runtime
     shared/             Shared renderer components/hooks/styles
+      components/       PageShell, TitleBar, CommandPalette, AIChatPanel, Sparkline, etc.
+      hooks/            useIpc, useEventBus, useLoading
   shared/               Cross-process types/constants/utils
+    types/              IPC, plugin, task, stock, config, browser, AI types
+    constants/          60+ IPC channels, permissions, events
   engines/              Automation + analytics engines
 plugins/
   _template/            Plugin starter template
@@ -188,10 +215,15 @@ docs/
   prd.md                Product requirements
   plan.md               Milestones and feasibility notes
   architecture.md       Technical architecture
-  structure.md          Intended project structure
-  specs.md              Spec breakdown and acceptance criteria
+  structure.md          Project structure
+  specs.md              Spec breakdown (SPEC-001 ~ SPEC-022)
+  specs-enhancements.md Enhancement specs (SPEC-023 ~ SPEC-028)
 tests/
-  unit/                 Unit tests for services/components/engines/shared
+  unit/                 Unit tests (38 files, 370+ tests)
+    components/         UI component + regression tests
+    services/           Service layer tests (including AI)
+    engines/            Engine tests
+    shared/             Shared utility tests
 scripts/
   dev.ts                Development launcher
 ```
@@ -200,11 +232,11 @@ scripts/
 
 ### Workbench
 
-The primary operations cockpit. It provides the shared navigation shell, cross-module overview, settings, and the admin-style UI baseline used by the rest of the product.
+The primary operations cockpit. It provides the shared navigation shell, cross-module overview, settings, CommandPalette (Ctrl+K), AI Chat Panel (Ctrl+J), and the admin-style UI baseline used by the rest of the product.
 
 ### Stock
 
-Market/indicator-oriented workspace with K-line rendering, timeframe selection, and technical indicator toggles. The current codebase includes a demo-ready shell and calculation pipeline wiring.
+Market/indicator-oriented workspace with K-line rendering, timeframe selection, and technical indicator toggles (MA, MACD, RSI, BOLL). Powered by IndicatorLibrary and DataSourceManager engines.
 
 ### Automation
 
@@ -212,7 +244,7 @@ Task-oriented flow editor and execution panel. It is designed as the UI companio
 
 ### Browser
 
-Embedded browser workspace for controlled sessions, tabs, address input, and later automation integration through Electron-managed web contents.
+Embedded browser workspace with multi-tab management (TabManager, up to 20 tabs), address bar, and WebViewContainer. Uses WebContentsView for controlled sessions with IPC-based navigation.
 
 ### Plugin Center
 
@@ -220,23 +252,25 @@ UI shell for plugin installation, enable/disable, uninstall, permission review, 
 
 ## Architecture Notes
 
-- Main/renderer communication is routed through Electron IPC.
+- Main/renderer communication is routed through Electron IPC (60+ typed channels).
 - Shared constants and type definitions live under `src/shared/`.
-- Window management is centralized in [`src/main/windows/WindowManager.ts`](/Users/huangyu/Desktop/allProject/yclaw/src/main/windows/WindowManager.ts).
-- Renderer entry resolution is handled through [`src/main/utils/paths.ts`](/Users/huangyu/Desktop/allProject/yclaw/src/main/utils/paths.ts).
-- Vite multi-entry build configuration is defined in [`vite.config.ts`](/Users/huangyu/Desktop/allProject/yclaw/vite.config.ts).
-- Shared page framing for renderer modules lives in [`src/renderer/shared/components/PageShell.tsx`](/Users/huangyu/Desktop/allProject/yclaw/src/renderer/shared/components/PageShell.tsx).
+- AI service layer provides LLM integration with tool calling (task_list, system_status, navigate).
+- Window management is centralized in [src/main/windows/WindowManager.ts](src/main/windows/WindowManager.ts).
+- Renderer entry resolution is handled through [src/main/utils/paths.ts](src/main/utils/paths.ts).
+- Vite multi-entry build configuration is defined in [vite.config.ts](vite.config.ts).
+- Shared page framing for renderer modules lives in [src/renderer/shared/components/PageShell.tsx](src/renderer/shared/components/PageShell.tsx).
+- Path aliases: `@shared`, `@main`, `@renderer`, `@engines`.
 
 For deeper background, see:
 
-- [`docs/prd.md`](/Users/huangyu/Desktop/allProject/yclaw/docs/prd.md)
-- [`docs/architecture.md`](/Users/huangyu/Desktop/allProject/yclaw/docs/architecture.md)
-- [`docs/structure.md`](/Users/huangyu/Desktop/allProject/yclaw/docs/structure.md)
-- [`docs/specs.md`](/Users/huangyu/Desktop/allProject/yclaw/docs/specs.md)
+- [docs/prd.md](docs/prd.md)
+- [docs/architecture.md](docs/architecture.md)
+- [docs/structure.md](docs/structure.md)
+- [docs/specs.md](docs/specs.md)
 
 ## Plugin Development
 
-There is a starter template in [`plugins/_template`](/Users/huangyu/Desktop/allProject/yclaw/plugins/_template) with:
+There is a starter template in [plugins/\_template](plugins/_template) with:
 
 - `plugin.json` manifest
 - `src/index.ts` entry
@@ -246,28 +280,31 @@ The long-term design is permission-aware and plugin-driven, but the current repo
 
 ## Testing
 
-The repository currently includes unit coverage for:
+The repository includes comprehensive unit coverage (38 files, 370+ tests):
 
-- main-process services
-- IPC controller and event bus
-- browser/tab utilities
-- automation and analytics engines
-- shared validators, constants, formatters, and logger helpers
-- renderer components such as charts, step editor, plugin card, address bar, and tab bar
+- Main-process services: ConfigService, LogService, DatabaseService, TrayService, UpdateService
+- AI service layer: AIService, ContextManager, ToolRegistry
+- IPC controller and EventBus
+- Browser/tab management: TabManager, WindowManager
+- Automation engines: AutomationEngine, FlowRunner, RetryPolicy, SelectorGenerator
+- Analytics engines: DataSourceManager, IndicatorLibrary
+- Shared validators, constants, formatters, and logger helpers
+- Renderer components: KLineChart, StepEditor, ExecutionPanel, PluginCard, PermissionDialog, AddressBar, TabBar, Sparkline, RingGauge, TaskTimeline, CommandRegistry, WebViewContainer
+- Regression tests: BrowserApp, Loading
 
 Test entrypoint:
 
-- [`tests/setup.ts`](/Users/huangyu/Desktop/allProject/yclaw/tests/setup.ts)
+- [tests/setup.ts](tests/setup.ts)
 
 ## Roadmap
 
 Near-term priorities:
 
-- stabilize the multi-entry desktop shell
-- improve real browser/automation integration
-- harden plugin permission boundaries
-- expand integration and e2e coverage
-- continue aligning the repository implementation with the product/spec documents
+- Production-grade automation execution against real pages
+- Plugin runtime isolation upgrade (V1.5: per-plugin process)
+- End-to-end test coverage with Playwright
+- AI assistant: streaming responses, more tool integrations
+- Production packaging verification across all platforms
 
 ## Contributing
 
@@ -279,8 +316,8 @@ Issues and pull requests are welcome. If you contribute, prefer:
 - adding or updating tests when behavior changes
 - keeping docs in sync with actual code
 
-See [`CONTRIBUTING.md`](/Users/huangyu/Desktop/allProject/yclaw/CONTRIBUTING.md) for the contributor workflow and PR expectations.
-Community participation is also governed by [`CODE_OF_CONDUCT.md`](/Users/huangyu/Desktop/allProject/yclaw/CODE_OF_CONDUCT.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor workflow and PR expectations.
+Community participation is also governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 Before opening a PR, a good baseline is:
 

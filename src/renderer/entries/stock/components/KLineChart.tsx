@@ -14,14 +14,60 @@ const PADDING = { top: 20, right: 60, bottom: 30, left: 10 };
 
 /**
  * K 线图表组件
- * 使用 Canvas 渲染，支持缩放 / 拖拽 / 十字光标
+ * 使用 Canvas 渲染，支持缩放 / 拖拽 / 十字光标 / 自适应宽度 / 全屏
  */
-export function KLineChart({ data, indicators = [], width = 800, height = 400 }: KLineChartProps) {
+export function KLineChart({
+  data,
+  indicators = [],
+  width: propWidth,
+  height: propHeight = 520,
+}: KLineChartProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [offset, setOffset] = useState(0);
   const [crosshair, setCrosshair] = useState<{ x: number; y: number } | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [containerSize, setContainerSize] = useState({
+    width: propWidth ?? 800,
+    height: propHeight,
+  });
 
-  const visibleCount = Math.floor((width - PADDING.left - PADDING.right) / (CANDLE_WIDTH + CANDLE_GAP));
+  // 自适应容器宽度
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        const w = Math.floor(entry.contentRect.width);
+        if (w > 0) {
+          setContainerSize((prev) => ({
+            width: propWidth ?? w,
+            height: isFullscreen ? window.innerHeight - 48 : propHeight,
+          }));
+        }
+      }
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [propWidth, propHeight, isFullscreen]);
+
+  // 全屏切换时更新高度
+  useEffect(() => {
+    setContainerSize((prev) => ({
+      ...prev,
+      height: isFullscreen ? window.innerHeight - 48 : propHeight,
+    }));
+  }, [isFullscreen, propHeight]);
+
+  const width = containerSize.width;
+  const height = containerSize.height;
+
+  const visibleCount = Math.floor(
+    (width - PADDING.left - PADDING.right) / (CANDLE_WIDTH + CANDLE_GAP),
+  );
   const startIndex = Math.max(0, data.length - visibleCount - offset);
   const endIndex = Math.min(data.length, startIndex + visibleCount);
   const visibleData = data.slice(startIndex, endIndex);
@@ -39,7 +85,8 @@ export function KLineChart({ data, indicators = [], width = 800, height = 400 }:
     const priceRange = maxPrice - minPrice || 1;
 
     const chartHeight = height - PADDING.top - PADDING.bottom;
-    const toY = (price: number) => PADDING.top + (1 - (price - minPrice) / priceRange) * chartHeight;
+    const toY = (price: number) =>
+      PADDING.top + (1 - (price - minPrice) / priceRange) * chartHeight;
 
     // 绘制 K 线
     visibleData.forEach((d, i) => {
@@ -74,8 +121,10 @@ export function KLineChart({ data, indicators = [], width = 800, height = 400 }:
         if (isNaN(val)) continue;
         const x = PADDING.left + i * (CANDLE_WIDTH + CANDLE_GAP) + CANDLE_WIDTH / 2;
         const y = toY(val);
-        if (!started) { ctx.moveTo(x, y); started = true; }
-        else ctx.lineTo(x, y);
+        if (!started) {
+          ctx.moveTo(x, y);
+          started = true;
+        } else ctx.lineTo(x, y);
       }
       ctx.stroke();
     });
@@ -117,7 +166,9 @@ export function KLineChart({ data, indicators = [], width = 800, height = 400 }:
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    setOffset((prev) => Math.max(0, Math.min(data.length - visibleCount, prev + Math.sign(e.deltaY) * 3)));
+    setOffset((prev) =>
+      Math.max(0, Math.min(data.length - visibleCount, prev + Math.sign(e.deltaY) * 3)),
+    );
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -127,7 +178,10 @@ export function KLineChart({ data, indicators = [], width = 800, height = 400 }:
   };
 
   return (
-    <div className="kline-chart">
+    <div
+      ref={containerRef}
+      className={`kline-chart${isFullscreen ? ' kline-chart-fullscreen' : ''}`}
+    >
       <canvas
         ref={canvasRef}
         width={width}
@@ -136,6 +190,13 @@ export function KLineChart({ data, indicators = [], width = 800, height = 400 }:
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setCrosshair(null)}
       />
+      <button
+        className="kline-fullscreen-btn"
+        onClick={() => setIsFullscreen((v) => !v)}
+        title={isFullscreen ? '退出全屏' : '全屏'}
+      >
+        {isFullscreen ? '✕ 退出全屏' : '⛶ 全屏'}
+      </button>
     </div>
   );
 }

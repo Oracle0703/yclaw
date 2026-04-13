@@ -1,11 +1,4 @@
-import React from 'react';
-
-interface Tab {
-  id: number;
-  title: string;
-  url: string;
-  loading: boolean;
-}
+import type { Tab } from '@shared/types/browser';
 
 export function TabBar({
   tabs,

@@ -35,23 +35,26 @@ export default function App() {
   const [activeIndicators, setActiveIndicators] = useState<IndicatorType[]>(['MA']);
   const activeIndicatorsRef = useRef<IndicatorType[]>(activeIndicators);
 
-  const calculateIndicators = useCallback(async (series: OHLCVData[], nextIndicators: IndicatorType[]) => {
-    const results: IndicatorResult[] = [];
-    for (const type of nextIndicators) {
-      try {
-        const result = await invoke<IndicatorResult>(IPC_CHANNELS.STOCK_INDICATOR_CALC, {
-          type,
-          data: series,
-        });
-        if (result) {
-          results.push(result);
+  const calculateIndicators = useCallback(
+    async (series: OHLCVData[], nextIndicators: IndicatorType[]) => {
+      const results: IndicatorResult[] = [];
+      for (const type of nextIndicators) {
+        try {
+          const result = await invoke<IndicatorResult>(IPC_CHANNELS.STOCK_INDICATOR_CALC, {
+            type,
+            data: series,
+          });
+          if (result) {
+            results.push(result);
+          }
+        } catch {
+          // ignore indicator calculation errors for the demo dashboard
         }
-      } catch {
-        // ignore indicator calculation errors for the demo dashboard
       }
-    }
-    setIndicators(results);
-  }, [invoke]);
+      setIndicators(results);
+    },
+    [invoke],
+  );
 
   useEffect(() => {
     activeIndicatorsRef.current = activeIndicators;
@@ -93,10 +96,7 @@ export default function App() {
   const stockKpis: StockKpi[] = [
     {
       title: '最新收盘价',
-      value:
-        typeof latest?.close === 'number'
-          ? `${latest.close.toFixed(2)} USD`
-          : '--',
+      value: typeof latest?.close === 'number' ? `${latest.close.toFixed(2)} USD` : '--',
     },
     {
       title: '涨跌额',
@@ -183,7 +183,7 @@ export default function App() {
                 </div>
               }
             >
-              <KLineChart data={data} indicators={indicators} width={1100} height={520} />
+              <KLineChart data={data} indicators={indicators} height={520} />
             </Suspense>
           </Space>
         </ProCard>
