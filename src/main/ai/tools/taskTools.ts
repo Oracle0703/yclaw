@@ -4,8 +4,6 @@
 
 import type { AITool } from '../types';
 
-import { DatabaseService } from '../../services/DatabaseService';
-
 export const taskListTool: AITool = {
   name: 'task_list',
   description: '列出所有自动化任务及其状态',
@@ -13,6 +11,7 @@ export const taskListTool: AITool = {
   confirmationLevel: 0,
   async execute() {
     try {
+      const { DatabaseService } = await import('../../services/DatabaseService');
       const db = DatabaseService.getInstance();
       const tasks = db.getTasks();
       const summary = {
