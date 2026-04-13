@@ -34,6 +34,8 @@ export default defineConfig({
     alias: {
       '@shared': resolve(__dirname, 'src/shared'),
       '@renderer': resolve(__dirname, 'src/renderer'),
+      '@main': resolve(__dirname, 'src/main'),
+      '@engines': resolve(__dirname, 'src/engines'),
     },
   },
   build: {
