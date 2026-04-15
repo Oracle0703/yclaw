@@ -42,7 +42,7 @@ export class App {
     this.trayService = new TrayService(this.windowManager);
     this.updateService = new UpdateService(this.logService);
     this.tabManager = new TabManager();
-    this.aiService = new AIService();
+    this.aiService = new AIService(this.configService.get('ai'));
     this.pluginLoader = new PluginLoader();
     this.indicatorLibrary = new IndicatorLibrary();
   }
@@ -173,12 +173,14 @@ export class App {
     });
 
     this.ipcController.handle(IPC_CHANNELS.AI_CONFIG_GET, () => {
-      return this.aiService.getConfig();
+      return this.configService.get('ai');
     });
 
     this.ipcController.handle(IPC_CHANNELS.AI_CONFIG_SET, (config: unknown) => {
-      this.aiService.updateConfig(config as Partial<AIConfig>);
-      return this.aiService.getConfig();
+      const nextConfig = { ...this.configService.get('ai'), ...(config as Partial<AIConfig>) };
+      this.configService.set('ai', nextConfig);
+      this.aiService.updateConfig(nextConfig);
+      return nextConfig;
     });
 
     this.ipcController.handle(IPC_CHANNELS.AI_TOOLS_LIST, () => {

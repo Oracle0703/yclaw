@@ -18,6 +18,7 @@ import { taskListTool } from './tools/taskTools';
 import { systemStatusTool } from './tools/systemTools';
 import { navigateTool } from './tools/navigateTools';
 import type { LLMProvider } from './types';
+import { DatabaseService } from '../services/DatabaseService';
 
 export class AIService {
   private provider: LLMProvider;
@@ -25,6 +26,7 @@ export class AIService {
   private toolRegistry: ToolRegistry;
   private conversations = new Map<string, Conversation>();
   private config: AIConfig;
+  private databaseService = DatabaseService.getInstance();
 
   constructor(config?: Partial<AIConfig>) {
     this.config = {
@@ -102,6 +104,7 @@ export class AIService {
       timestamp: Date.now(),
     };
     conversation.messages.push(userMessage);
+    this.databaseService.saveAIMessage(conversationId, userMessage);
 
     // Collect context and build system prompt
     const context = await this.contextManager.collectContext();
@@ -124,6 +127,8 @@ export class AIService {
     };
     conversation.messages.push(assistantMessage);
     conversation.updatedAt = Date.now();
+    this.databaseService.saveAIConversation(conversation);
+    this.databaseService.saveAIMessage(conversationId, assistantMessage);
 
     return {
       message: assistantMessage,
@@ -136,7 +141,9 @@ export class AIService {
   }
 
   deleteConversation(id: string): boolean {
-    return this.conversations.delete(id);
+    const removed = this.conversations.delete(id);
+    const deletedFromDb = this.databaseService.deleteAIConversation(id);
+    return removed || deletedFromDb;
   }
 
   private generateId(): string {

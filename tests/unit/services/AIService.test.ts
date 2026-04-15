@@ -18,6 +18,20 @@ vi.mock('os', () => ({
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
+const mockDb = {
+  saveAIConversation: vi.fn(),
+  saveAIMessage: vi.fn(),
+  deleteAIConversation: vi.fn(() => true),
+  getTasks: vi.fn(() => []),
+  getInstalledPlugins: vi.fn(() => []),
+};
+
+vi.mock('@main/services/DatabaseService', () => ({
+  DatabaseService: {
+    getInstance: vi.fn(() => mockDb),
+  },
+}));
+
 import { AIService } from '@main/ai/AIService';
 
 describe('AIService', () => {
@@ -126,6 +140,36 @@ describe('AIService', () => {
     const deleted = service.deleteConversation(r.conversationId);
     expect(deleted).toBe(true);
     expect(service.listConversations()).toHaveLength(0);
+  });
+
+  it('should persist conversation and messages to database', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: '已记录到数据库' } }],
+        }),
+    });
+
+    await service.chat({ message: '请记录这段对话' });
+
+    expect(mockDb.saveAIConversation).toHaveBeenCalledTimes(1);
+    expect(mockDb.saveAIMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('should delete persisted conversation from database', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: 'ok' } }],
+        }),
+    });
+
+    const response = await service.chat({ message: '待删除会话' });
+    service.deleteConversation(response.conversationId);
+
+    expect(mockDb.deleteAIConversation).toHaveBeenCalledWith(response.conversationId);
   });
 
   it('should return prompt without API key warning', async () => {

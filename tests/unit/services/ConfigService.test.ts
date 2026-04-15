@@ -45,11 +45,37 @@ describe('ConfigService', () => {
     expect(config.general.language).toBe('zh-CN');
     expect(config.general.startupBehavior).toBe('showWorkbench');
     expect(config.general.closeToTray).toBe(false);
+    expect((config as Record<string, unknown>).ai).toMatchObject({
+      provider: 'openai',
+      model: 'gpt-3.5-turbo',
+    });
   });
 
   it('should get a specific section', () => {
     const general = service.get('general');
     expect(general.theme).toBe('system');
+  });
+
+  it('should persist ai config section', () => {
+    (service as unknown as { set: (key: string, value: unknown) => void }).set('ai', {
+      provider: 'ollama',
+      baseUrl: 'http://localhost:11434',
+      model: 'llama3',
+      temperature: 0.2,
+      maxTokens: 4096,
+    });
+
+    const config = service.getAll() as Record<string, unknown>;
+    expect(config.ai).toMatchObject({
+      provider: 'ollama',
+      model: 'llama3',
+      maxTokens: 4096,
+    });
+
+    const filePath = path.join(testDir, 'settings.json');
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    expect(raw.ai.provider).toBe('ollama');
+    expect(raw.ai.model).toBe('llama3');
   });
 
   it('should set a section and persist', () => {

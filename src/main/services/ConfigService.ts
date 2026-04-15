@@ -14,6 +14,13 @@ const DEFAULT_CONFIG: AppConfig = {
   },
   modules: {},
   plugins: {},
+  ai: {
+    provider: 'openai',
+    model: 'gpt-3.5-turbo',
+    baseUrl: 'https://api.openai.com/v1',
+    temperature: 0.7,
+    maxTokens: 2048,
+  },
 };
 
 /**

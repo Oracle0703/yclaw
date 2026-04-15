@@ -4,9 +4,11 @@
 
 import type { AIServiceContext } from '@shared/types';
 import os from 'os';
+import { DatabaseService } from '../services/DatabaseService';
 
 export class ContextManager {
   private currentModule = 'workbench';
+  private databaseService = DatabaseService.getInstance();
 
   setCurrentModule(module: string): void {
     this.currentModule = module;
@@ -16,6 +18,12 @@ export class ContextManager {
     const cpus = os.cpus();
     const totalMemory = os.totalmem();
     const freeMemory = os.freemem();
+    const recentTasks = this.databaseService.getTasks().slice(0, 5).map((task) => ({
+      name: task.name,
+      status: task.status,
+      updatedAt: task.updatedAt,
+    }));
+    const installedPlugins = this.databaseService.getInstalledPlugins().slice(0, 5);
 
     return {
       currentModule: this.currentModule,
@@ -28,8 +36,8 @@ export class ContextManager {
         disk: 0, // Placeholder; real implementation would use disk usage APIs
         uptime: Math.round(os.uptime()),
       },
-      recentTasks: [],
-      installedPlugins: [],
+      recentTasks,
+      installedPlugins,
     };
   }
 
