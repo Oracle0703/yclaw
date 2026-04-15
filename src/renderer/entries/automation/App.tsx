@@ -10,8 +10,14 @@ import { ExecutionPanel } from './components/ExecutionPanel';
 import { StepEditor } from './components/StepEditor';
 import { TaskList } from './components/TaskList';
 
+interface SelectedTaskSummary {
+  id: string;
+  stepsCount?: number;
+}
+
 export default function App() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskSummary, setSelectedTaskSummary] = useState<SelectedTaskSummary | null>(null);
   const [steps, setSteps] = useState<TaskStep[]>([]);
   const [execStatus, setExecStatus] = useState('idle');
   const [execStep, setExecStep] = useState(0);
@@ -19,9 +25,18 @@ export default function App() {
   const [hasBreakpoint, setHasBreakpoint] = useState(false);
   const [showExecution, setShowExecution] = useState(false);
 
-  const handleSelectTask = (id: string) => {
-    setSelectedTaskId(id === 'new' ? null : id);
+  const handleSelectTask = (task: SelectedTaskSummary | 'new') => {
+    if (task === 'new') {
+      setSelectedTaskId(null);
+      setSelectedTaskSummary(null);
+      return;
+    }
+
+    setSelectedTaskId(task.id);
+    setSelectedTaskSummary(task);
   };
+
+  const totalSteps = steps.length > 0 ? steps.length : (selectedTaskSummary?.stepsCount ?? 0);
 
   useIpcEvent(EVENTS.TASK_STARTED, (_data: unknown) => {
     const data = _data as { flowId?: string };
@@ -71,6 +86,7 @@ export default function App() {
             icon={<PlusOutlined />}
             onClick={() => {
               setSelectedTaskId(null);
+              setSelectedTaskSummary(null);
               setSteps([]);
             }}
           >
@@ -104,7 +120,7 @@ export default function App() {
                 taskId={selectedTaskId}
                 status={execStatus}
                 currentStep={execStep}
-                totalSteps={steps.length}
+                totalSteps={totalSteps}
                 logs={execLogs}
                 hasBreakpoint={hasBreakpoint}
                 onStatusChange={setExecStatus}

@@ -10,11 +10,15 @@ interface TaskSummary {
   id: string;
   name: string;
   status: TaskStatus;
-  stepsCount: number;
+  stepsCount?: number;
   updatedAt: string;
 }
 
-export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
+export function TaskList({
+  onSelect,
+}: {
+  onSelect: (task: TaskSummary | 'new') => void;
+}) {
   const { invoke } = useIpc();
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,7 +26,12 @@ export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
   const fetchTasks = useCallback(async () => {
     setLoading(true);
     const res = await invoke<TaskSummary[]>(IPC_CHANNELS.TASK_LIST);
-    setTasks(res ?? []);
+    setTasks(
+      (res ?? []).map((task) => ({
+        ...task,
+        stepsCount: typeof task.stepsCount === 'number' ? task.stepsCount : 0,
+      })),
+    );
     setLoading(false);
   }, [invoke]);
 
@@ -78,7 +87,7 @@ export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
       key: 'action',
       width: 120,
       render: (_, record) => (
-        <Button type="link" onClick={() => onSelect(record.id)}>
+        <Button type="link" onClick={() => onSelect(record)}>
           打开
         </Button>
       ),
@@ -103,7 +112,7 @@ export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
         locale={{ emptyText: '暂无任务，点击右上角按钮创建' }}
         pagination={false}
         onRow={(record) => ({
-          onClick: () => onSelect(record.id),
+          onClick: () => onSelect(record),
         })}
       />
     </ProCard>
