@@ -9,6 +9,10 @@ import { TrayService } from './services/TrayService';
 import { UpdateService } from './services/UpdateService';
 import { TabManager } from './browser/TabManager';
 import { IPC_CHANNELS } from '@shared/constants';
+import { AIService } from './ai/AIService';
+import { PluginLoader } from './plugin-loader/PluginLoader';
+import { IndicatorLibrary } from '@engines/analytics/IndicatorLibrary';
+import type { AIChatRequest, AIConfig, OHLCVData, IndicatorType } from '@shared/types';
 
 /**
  * 应用生命周期管理
@@ -23,6 +27,9 @@ export class App {
   private trayService: TrayService;
   private updateService: UpdateService;
   private tabManager: TabManager;
+  private aiService: AIService;
+  private pluginLoader: PluginLoader;
+  private indicatorLibrary: IndicatorLibrary;
   private started = false;
 
   constructor() {
@@ -35,6 +42,9 @@ export class App {
     this.trayService = new TrayService(this.windowManager);
     this.updateService = new UpdateService(this.logService);
     this.tabManager = new TabManager();
+    this.aiService = new AIService();
+    this.pluginLoader = new PluginLoader();
+    this.indicatorLibrary = new IndicatorLibrary();
   }
 
   async start(): Promise<void> {
@@ -47,6 +57,7 @@ export class App {
 
     // 初始化数据库
     this.databaseService.open();
+    await this.pluginLoader.loadAll();
     this.logService.info('main', 'Application starting...');
 
     // 注册 IPC handlers
@@ -156,6 +167,95 @@ export class App {
       await this.updateService.checkForUpdates();
     });
 
+    // AI 助手
+    this.ipcController.handle(IPC_CHANNELS.AI_CHAT, async (request: unknown) => {
+      return this.aiService.chat(request as AIChatRequest);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_CONFIG_GET, () => {
+      return this.aiService.getConfig();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_CONFIG_SET, (config: unknown) => {
+      this.aiService.updateConfig(config as Partial<AIConfig>);
+      return this.aiService.getConfig();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_TOOLS_LIST, () => {
+      return this.aiService.getToolRegistry().list();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_CONVERSATION_LIST, () => {
+      return this.aiService.listConversations();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_CONVERSATION_DELETE, (id: unknown) => {
+      return this.aiService.deleteConversation(String(id));
+    });
+
+    // 插件
+    this.ipcController.handle(IPC_CHANNELS.PLUGIN_LIST, () => {
+      return this.pluginLoader.getAll();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.PLUGIN_ENABLE, (params: unknown) => {
+      const { name } = params as { name: string };
+      this.pluginLoader.activate(name);
+      return { name, status: 'active' };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.PLUGIN_DISABLE, (params: unknown) => {
+      const { name } = params as { name: string };
+      this.pluginLoader.deactivate(name);
+      return { name, status: 'inactive' };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.PLUGIN_UNINSTALL, (params: unknown) => {
+      const { name } = params as { name: string };
+      this.pluginLoader.uninstall(name);
+      return { name, status: 'uninstalled' };
+    });
+
+    // 任务
+    this.ipcController.handle(IPC_CHANNELS.TASK_LIST, () => {
+      return this.databaseService.getTasks();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_START, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      return { taskId, status: 'running' };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_PAUSE, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      return { taskId, status: 'paused' };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_RESUME, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      return { taskId, status: 'running' };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_STOP, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      return { taskId, status: 'idle' };
+    });
+
+    // 股票
+    this.ipcController.handle(IPC_CHANNELS.STOCK_DATA, (params: unknown) => {
+      const { symbol } = (params as { symbol?: string }) ?? {};
+      return this.createMockStockHistory(symbol ?? 'AAPL');
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.STOCK_INDICATOR_CALC, (params: unknown) => {
+      const { type, data, options } = params as {
+        type: IndicatorType;
+        data: OHLCVData[];
+        options?: Record<string, number>;
+      };
+      return this.indicatorLibrary.calculate(type, data, options);
+    });
+
     // 浏览器标签页
     this.ipcController.handle(IPC_CHANNELS.BROWSER_CREATE_TAB, (params: unknown) => {
       const { url } = (params as { url?: string }) ?? {};
@@ -198,5 +298,33 @@ export class App {
     this.trayService.destroy();
     this.tabManager.closeAll();
     this.windowManager.closeAll();
+  }
+
+  private createMockStockHistory(symbol: string): OHLCVData[] {
+    const data: OHLCVData[] = [];
+    const baseTime = Date.now() - 29 * 24 * 60 * 60 * 1000;
+    let lastClose = symbol === 'TSLA' ? 180 : 100;
+
+    for (let index = 0; index < 30; index++) {
+      const open = lastClose;
+      const drift = Math.sin(index / 3) * 2 + index * 0.15;
+      const close = Number((open + drift).toFixed(2));
+      const high = Number((Math.max(open, close) + 1.8).toFixed(2));
+      const low = Number((Math.min(open, close) - 1.5).toFixed(2));
+      const volume = 100000 + index * 2500;
+
+      data.push({
+        time: baseTime + index * 24 * 60 * 60 * 1000,
+        open: Number(open.toFixed(2)),
+        high,
+        low,
+        close,
+        volume,
+      });
+
+      lastClose = close;
+    }
+
+    return data;
   }
 }
