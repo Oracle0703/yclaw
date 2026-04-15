@@ -1,6 +1,14 @@
 /**
  * IPC 消息类型定义
  */
+import type {
+  ExtractionResult,
+  ExtractionTemplate,
+  ScheduleConfig,
+  TaskBatch,
+  TaskBreakpoint,
+} from './task';
+import type { InterventionState, BrowserSession } from './browser';
 
 /** IPC 请求/响应的基础格式 */
 export interface IpcResponse<T = unknown> {
@@ -30,6 +38,73 @@ export interface LogWriteParams {
   source: 'main' | 'renderer' | 'plugin' | 'engine';
   message: string;
   data?: unknown;
+}
+
+export interface TaskUpsertPayload {
+  id?: string;
+  name: string;
+  description?: string;
+  entryUrl?: string;
+  schedule?: ScheduleConfig | null;
+  templateId?: string | null;
+  sessionId?: string | null;
+}
+
+export interface BatchQueryPayload {
+  taskId: string;
+}
+
+export interface BatchDetailPayload {
+  batchId: string;
+}
+
+export interface ResultExportPayload {
+  taskId?: string;
+  batchId?: string;
+  format: 'csv' | 'json';
+}
+
+export interface SessionBindPayload {
+  taskId: string;
+  sessionId: string;
+}
+
+export interface TemplateSavePayload {
+  id?: string;
+  name: string;
+  fields: ExtractionTemplate['fields'];
+}
+
+export interface TaskDetailResponse {
+  taskId: string;
+  latestBatch?: TaskBatch | null;
+  breakpoint?: TaskBreakpoint | null;
+}
+
+export interface SchedulerStatusResponse {
+  runningCount: number;
+  queuedCount: number;
+}
+
+export interface ResultExportResponse {
+  path: string;
+}
+
+export interface AlertRecord {
+  id: string;
+  taskId: string;
+  batchId?: string;
+  message: string;
+  createdAt: string;
+  read: boolean;
+}
+
+export interface AutomationBrowserOpsPayloadMap {
+  task: TaskUpsertPayload;
+  batch: TaskBatch;
+  result: ExtractionResult;
+  session: BrowserSession;
+  intervention: InterventionState;
 }
 
 /** electronAPI 暴露到渲染进程的接口 */

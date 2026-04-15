@@ -111,4 +111,40 @@ describe('TaskService', () => {
     expect(mockRunner.abort).toHaveBeenCalled();
     expect(result).toEqual({ taskId: 'task-1', status: 'idle' });
   });
+
+  it('stores schedule and batch metadata on task records', () => {
+    mockDb.getTasks.mockReturnValueOnce([
+      {
+        id: 'task-1',
+        name: '采集任务',
+        status: 'idle',
+        updatedAt: '2026-04-15 10:00:00',
+        schedule: {
+          type: 'cron',
+          cron: '0 * * * *',
+        },
+        nextRunAt: '2026-04-15T11:00:00.000Z',
+        lastRunAt: '2026-04-15T10:00:00.000Z',
+        latestBatch: {
+          id: 'batch-1',
+          taskId: 'task-1',
+          status: 'running',
+          createdAt: '2026-04-15T10:00:00.000Z',
+          stepResults: [],
+        },
+      },
+    ]);
+
+    const [task] = service.listTasks();
+
+    expect(task).toMatchObject({
+      schedule: { type: 'cron', cron: '0 * * * *' },
+      nextRunAt: '2026-04-15T11:00:00.000Z',
+      lastRunAt: '2026-04-15T10:00:00.000Z',
+      latestBatch: {
+        id: 'batch-1',
+        status: 'running',
+      },
+    });
+  });
 });

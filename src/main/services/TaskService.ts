@@ -11,6 +11,22 @@ export interface TaskSummary {
   name: string;
   status: string;
   updatedAt: string;
+  schedule?: {
+    type: 'manual' | 'once' | 'cron';
+    cron?: string;
+    runAt?: string;
+    timeoutMs?: number;
+    maxConcurrency?: number;
+  } | null;
+  nextRunAt?: string | null;
+  lastRunAt?: string | null;
+  latestBatch?: {
+    id: string;
+    taskId: string;
+    status: string;
+    createdAt: string;
+    stepResults: unknown[];
+  } | null;
 }
 
 export interface TaskState {

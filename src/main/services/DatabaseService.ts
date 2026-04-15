@@ -14,7 +14,7 @@ export class DatabaseService {
   private db: Database.Database | null = null;
   private dbDir: string;
   private dbPath: string;
-  private readonly currentVersion = 2;
+  private readonly currentVersion = 3;
 
   constructor(dbName = 'yclaw.sqlite') {
     this.dbDir = getDatabasePath();
@@ -94,14 +94,69 @@ export class DatabaseService {
     name: string;
     status: string;
     updatedAt: string;
+    schedule?: {
+      type: 'manual' | 'once' | 'cron';
+      cron?: string;
+      runAt?: string;
+      timeoutMs?: number;
+      maxConcurrency?: number;
+    } | null;
+    nextRunAt?: string | null;
+    lastRunAt?: string | null;
+    latestBatch?: {
+      id: string;
+      taskId: string;
+      status: string;
+      createdAt: string;
+      stepResults: unknown[];
+    } | null;
   }> {
     this.ensureOpen();
     const rows = this.db!.prepare(`
-      SELECT id, name, status, updated_at as updatedAt
+      SELECT
+        t.id,
+        t.name,
+        t.status,
+        t.schedule_json as scheduleJson,
+        t.next_run_at as nextRunAt,
+        t.last_run_at as lastRunAt,
+        t.updated_at as updatedAt,
+        (
+          SELECT json_object(
+            'id', tb.id,
+            'taskId', tb.task_id,
+            'status', tb.status,
+            'createdAt', tb.created_at,
+            'stepResults', COALESCE(json(tb.step_results), json('[]'))
+          )
+          FROM task_batches tb
+          WHERE tb.task_id = t.id
+          ORDER BY tb.created_at DESC
+          LIMIT 1
+        ) as latestBatchJson
       FROM tasks
-      ORDER BY updated_at DESC
-    `).all() as Array<{ id: string; name: string; status: string; updatedAt: string }>;
-    return rows;
+      ORDER BY t.updated_at DESC
+    `).all() as Array<{
+      id: string;
+      name: string;
+      status: string;
+      scheduleJson?: string | null;
+      nextRunAt?: string | null;
+      lastRunAt?: string | null;
+      updatedAt: string;
+      latestBatchJson?: string | null;
+    }>;
+
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      updatedAt: row.updatedAt,
+      schedule: row.scheduleJson ? JSON.parse(row.scheduleJson) : null,
+      nextRunAt: row.nextRunAt ?? null,
+      lastRunAt: row.lastRunAt ?? null,
+      latestBatch: row.latestBatchJson ? JSON.parse(row.latestBatchJson) : null,
+    }));
   }
 
   getTaskFlow(taskId: string): TaskFlow | null {
@@ -349,6 +404,82 @@ export class DatabaseService {
           ON ai_messages(conversation_id, timestamp);
 
         INSERT INTO migrations (version) VALUES (2);
+      `);
+    }
+
+    if (currentDbVersion < 3) {
+      this.db!.exec(`
+        ALTER TABLE tasks ADD COLUMN schedule_json TEXT;
+        ALTER TABLE tasks ADD COLUMN session_id TEXT;
+        ALTER TABLE tasks ADD COLUMN template_id TEXT;
+        ALTER TABLE tasks ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE tasks ADD COLUMN tags_json TEXT;
+        ALTER TABLE tasks ADD COLUMN last_run_at TEXT;
+        ALTER TABLE tasks ADD COLUMN next_run_at TEXT;
+
+        CREATE TABLE IF NOT EXISTS task_batches (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          started_at TEXT,
+          finished_at TEXT,
+          step_results TEXT NOT NULL DEFAULT '[]',
+          error TEXT,
+          breakpoint_json TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS extraction_templates (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          fields TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS extraction_results (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          batch_id TEXT NOT NULL,
+          template_id TEXT,
+          data TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'normal',
+          source_url TEXT,
+          screenshot TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (batch_id) REFERENCES task_batches(id) ON DELETE CASCADE,
+          FOREIGN KEY (template_id) REFERENCES extraction_templates(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS sessions (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          domain TEXT NOT NULL,
+          partition TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS execution_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_id TEXT NOT NULL,
+          batch_id TEXT NOT NULL,
+          step_index INTEGER,
+          level TEXT NOT NULL DEFAULT 'info',
+          message TEXT NOT NULL,
+          metadata TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_task_batches_task_id ON task_batches(task_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_results_task ON extraction_results(task_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_results_batch ON extraction_results(batch_id);
+        CREATE INDEX IF NOT EXISTS idx_sessions_partition ON sessions(partition);
+        CREATE INDEX IF NOT EXISTS idx_execution_logs_task_batch ON execution_logs(task_id, batch_id, created_at DESC);
+
+        INSERT INTO migrations (version) VALUES (3);
       `);
     }
   }
