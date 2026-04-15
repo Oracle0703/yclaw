@@ -165,6 +165,19 @@ export class TabManager {
     return view;
   }
 
+  getOrCreateTabBySession(sessionPartition: string, url = 'about:blank'): WebContentsView {
+    for (const [id, view] of this.tabs.entries()) {
+      if ((this.tabSessions.get(id) ?? this.sessionPartition) === sessionPartition) {
+        this.activeTabId = id;
+        return view;
+      }
+    }
+
+    return sessionPartition === this.sessionPartition
+      ? this.createTab(url)
+      : this.createIsolatedTab(url);
+  }
+
   getTabInfo(id: number): TabInfo | undefined {
     const view = this.tabs.get(id);
     if (!view) return undefined;

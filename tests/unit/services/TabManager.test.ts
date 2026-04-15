@@ -230,6 +230,13 @@ describe('TabManager', () => {
       const view = tabManager.createIsolatedTab('https://isolated.com');
       expect(tabManager.getTabInfo(view.webContents.id)?.sessionPartition).toMatch(/^temp:/);
     });
+
+    it('reuses an existing tab for the same intervention session partition', () => {
+      const first = tabManager.createTab('https://example.com');
+      const recovered = tabManager.getOrCreateTabBySession('default', 'https://example.com');
+
+      expect(recovered.webContents.id).toBe(first.webContents.id);
+    });
   });
 
   describe('closeAll', () => {

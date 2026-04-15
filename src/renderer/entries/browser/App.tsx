@@ -7,15 +7,17 @@ import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
 import { useLoading } from '../../shared/hooks/useLoading';
 import { AddressBar } from './components/AddressBar';
+import { InterventionPanel } from './components/InterventionPanel';
 import { TabBar } from './components/TabBar';
 import { WebViewContainer } from './components/WebViewContainer';
-import type { Tab } from '@shared/types/browser';
+import type { InterventionState, Tab } from '@shared/types/browser';
 
 export default function App() {
   const { invoke } = useIpc();
   const { withLoading } = useLoading();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
+  const [interventionState, setInterventionState] = useState<InterventionState | null>(null);
 
   // 初始化：从主进程同步当前标签列表
   useEffect(() => {
@@ -82,6 +84,10 @@ export default function App() {
     setTabs((prev) => prev.map((t) => (t.id === nextTab.id ? { ...t, ...nextTab } : t)));
   });
 
+  useIpcEvent(IPC_CHANNELS.INTERVENTION_STEP_INFO, (data: unknown) => {
+    setInterventionState(data as InterventionState);
+  });
+
   return (
     <PageShell
       title="内嵌浏览器"
@@ -144,9 +150,11 @@ export default function App() {
 
         <ProCard className="yclaw-panel-card" title="当前视图">
           <div className="browser-viewport yclaw-browser-frame">
-            <WebViewContainer tab={activeTab ?? null} />
+            <WebViewContainer tab={activeTab ?? null} interventionState={interventionState} />
           </div>
         </ProCard>
+
+        <InterventionPanel state={interventionState} />
       </Space>
     </PageShell>
   );

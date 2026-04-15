@@ -1,15 +1,16 @@
 import { Descriptions, Empty, Tag, Typography } from 'antd';
-import type { Tab } from '@shared/types/browser';
+import type { InterventionState, Tab } from '@shared/types/browser';
 
 interface WebViewContainerProps {
   tab: Tab | null;
+  interventionState?: InterventionState | null;
 }
 
 /**
  * 浏览器会话控制台
  * 当前版本明确展示标签元信息与会话状态，而不是伪装成真实嵌入浏览视图
  */
-export function WebViewContainer({ tab }: WebViewContainerProps) {
+export function WebViewContainer({ tab, interventionState = null }: WebViewContainerProps) {
   if (tab == null) {
     return (
       <Empty
@@ -39,6 +40,17 @@ export function WebViewContainer({ tab }: WebViewContainerProps) {
             {tab.loading ? '加载中' : '已就绪'}
           </Tag>
         </Descriptions.Item>
+        {interventionState && (
+          <>
+            <Descriptions.Item label="介入批次">{interventionState.batchId}</Descriptions.Item>
+            <Descriptions.Item label="介入状态">
+              <Tag color="warning">{interventionState.flowRunnerStatus}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="断点错误">
+              <Typography.Text>{interventionState.breakpoint?.error ?? '无'}</Typography.Text>
+            </Descriptions.Item>
+          </>
+        )}
       </Descriptions>
     </div>
   );

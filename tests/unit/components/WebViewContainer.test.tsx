@@ -40,6 +40,36 @@ describe('Regression: WebViewContainer', () => {
     expect(screen.getByText(/可后退/)).toBeDefined();
   });
 
+  it('should render intervention state details when provided', () => {
+    render(
+      <WebViewContainer
+        tab={{
+          id: 42,
+          title: 'Example',
+          url: 'https://example.com',
+          loading: false,
+          canGoBack: true,
+          canGoForward: false,
+          sessionPartition: 'persist:workspace-a',
+        }}
+        interventionState={{
+          taskId: 'task-1',
+          batchId: 'batch-1',
+          flowRunnerStatus: 'intervention',
+          webContentsId: 42,
+          sessionPartition: 'persist:workspace-a',
+          breakpoint: {
+            stepIndex: 1,
+            error: 'need login',
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/need login/)).toBeDefined();
+    expect(screen.getByText(/batch-1/)).toBeDefined();
+  });
+
   it('should not expose future-placeholder wording', () => {
     render(
       <WebViewContainer
