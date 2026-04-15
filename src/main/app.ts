@@ -9,6 +9,7 @@ import { LogService } from './services/LogService';
 import { TrayService } from './services/TrayService';
 import { UpdateService } from './services/UpdateService';
 import { SchedulerService } from './services/SchedulerService';
+import { SessionRegistry } from './services/SessionRegistry';
 import { TabManager } from './browser/TabManager';
 import { IPC_CHANNELS } from '@shared/constants';
 import { AIService } from './ai/AIService';
@@ -44,6 +45,7 @@ export class App {
   private permissionChecker: PermissionChecker;
   private taskService: TaskService;
   private schedulerService: SchedulerService;
+  private sessionRegistry: SessionRegistry;
   private dataSourceManager: DataSourceManager;
   private indicatorLibrary: IndicatorLibrary;
   private eventForwarders: Array<{ event: string; listener: (...args: unknown[]) => void }> = [];
@@ -71,6 +73,7 @@ export class App {
     this.permissionChecker = new PermissionChecker();
     this.taskService = new TaskService({ databaseService: this.databaseService });
     this.schedulerService = new SchedulerService({ taskService: this.taskService });
+    this.sessionRegistry = new SessionRegistry();
     this.dataSourceManager = new DataSourceManager();
     this.indicatorLibrary = new IndicatorLibrary();
   }
@@ -329,6 +332,27 @@ export class App {
     this.ipcController.handle(IPC_CHANNELS.BATCH_RETRY, (params: unknown) => {
       const { batchId } = params as { batchId: string };
       return this.taskService.retryBatch(batchId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.SESSION_LIST, () => {
+      return this.sessionRegistry.listSessions();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.SESSION_CREATE, (params: unknown) => {
+      const { name, domain } = params as { name: string; domain: string };
+      return this.sessionRegistry.createSession(name, domain);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.SESSION_DELETE, (params: unknown) => {
+      const { sessionId } = params as { sessionId: string };
+      this.sessionRegistry.deleteSession(sessionId);
+      return { sessionId };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.SESSION_BIND, (params: unknown) => {
+      const { taskId, sessionId } = params as { taskId: string; sessionId: string };
+      this.sessionRegistry.bindTaskSession(taskId, sessionId);
+      return { taskId, sessionId };
     });
 
     // 股票
