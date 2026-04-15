@@ -94,6 +94,21 @@ const mockAiListTools = vi.fn(() => []);
 const mockAiListConversations = vi.fn(() => []);
 const mockAiDeleteConversation = vi.fn(() => true);
 const mockIndicatorCalculate = vi.fn(() => ({ type: 'MA', values: [1, 2, 3] }));
+const mockConfigGet = vi.fn((key: string) => {
+  if (key === 'ai') {
+    return { provider: 'openai', model: 'gpt-3.5-turbo' };
+  }
+  if (key === 'modules') {
+    return {};
+  }
+  return undefined;
+});
+const mockConfigGetGeneral = vi.fn(() => ({
+  theme: 'system',
+  language: 'zh-CN',
+  startupBehavior: 'showWorkbench',
+  closeToTray: false,
+}));
 
 vi.mock('electron', () => ({
   app: {
@@ -135,7 +150,8 @@ vi.mock('@main/services/DatabaseService', () => ({
 
 vi.mock('@main/services/ConfigService', () => ({
   ConfigService: vi.fn().mockImplementation(() => ({
-    get: vi.fn(),
+    get: mockConfigGet,
+    getGeneral: mockConfigGetGeneral,
     set: vi.fn(),
     getAll: vi.fn(() => ({ general: {}, modules: {}, plugins: {} })),
     reset: vi.fn(),

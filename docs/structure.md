@@ -82,8 +82,8 @@ yclaw/
 │   │   │   │   │   └── ExecutionPanel.tsx
 │   │   │   │   └── ...
 │   │   │   │
-│   │   │   ├── browser/           # 内嵌浏览器模块
-│   │   │   │   ├── App.tsx        # 标签页管理 + IPC 常量调用
+│   │   │   ├── browser/           # 浏览器会话控制台
+│   │   │   │   ├── App.tsx        # 标签页管理 + 会话信息展示 + IPC 常量调用
 │   │   │   │   ├── components/
 │   │   │   │   │   ├── TabBar.tsx
 │   │   │   │   │   ├── AddressBar.tsx
@@ -284,8 +284,8 @@ yclaw/
 | `workbench/`     | 主工作台：模块导航、KPI 卡片、CommandPalette（Ctrl+K）、AIChatPanel（Ctrl+J） |
 | `stock/`         | 股票分析：K 线图表、技术指标面板                                              |
 | `automation/`    | 自动化采集：任务列表、步骤编辑器、执行面板                                    |
-| `browser/`       | 内嵌浏览器：多标签管理、地址栏、WebViewContainer                              |
-| `plugin-center/` | 插件中心：插件卡片、权限授权弹窗                                              |
+| `browser/`       | 浏览器会话控制台：多标签管理、地址栏、会话信息、WebViewContainer              |
+| `plugin-center/` | 插件中心：本地安装、插件卡片、权限授权弹窗                                    |
 | `plugin-host/`   | 插件宿主容器（受限 API 集 + PluginBridge 桥接）                               |
 
 ### `src/renderer/shared/` — 渲染进程共享

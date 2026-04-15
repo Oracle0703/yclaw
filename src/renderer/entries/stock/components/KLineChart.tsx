@@ -42,7 +42,7 @@ export function KLineChart({
       if (entry) {
         const w = Math.floor(entry.contentRect.width);
         if (w > 0) {
-          setContainerSize((prev) => ({
+          setContainerSize((_prev) => ({
             width: propWidth ?? w,
             height: isFullscreen ? window.innerHeight - 48 : propHeight,
           }));

@@ -10,7 +10,7 @@
 
 YClaw is a modular desktop workbench for operations-heavy workflows: analytics, automation, embedded browsing, AI assistant, plugin governance, and shared system services. It is structured as an Electron shell with 6 renderer entries, a typed IPC layer (60+ channels), an AI service layer, and a plugin-oriented architecture.
 
-Core capabilities are implemented: main-process services, multi-window management, IPC bridge, automation/analytics engines, AI assistant (LLM + tool calling), command palette, and comprehensive test coverage (38 files, 370+ tests).
+Core capabilities are implemented: main-process services, multi-window management, IPC bridge, automation/analytics engines, AI assistant (LLM + tool calling), command palette, and broad unit/regression test coverage.
 
 ## Why YClaw
 
@@ -41,15 +41,15 @@ YClaw targets a practical gap between generic admin panels and heavyweight inter
   - `workbench` — operations cockpit with KPI dashboard
   - `stock` — K-line charts + technical indicators (MA/MACD/RSI/BOLL)
   - `automation` — task flow editor + execution panel
-  - `browser` — multi-tab embedded browser (WebContentsView)
-  - `plugin-center` — plugin management + permission review
-  - `plugin-host` — sandboxed plugin runtime
+  - `browser` — multi-tab browser session console backed by main-process WebContentsView
+  - `plugin-center` — local plugin management + permission review
+  - `plugin-host` — shared plugin runtime with restricted preload APIs
 - Shared UI components: PageShell, TitleBar, GlobalLoading, Sparkline, RingGauge, TaskTimeline
 - Plugin host with three-level permission model (L1/L2/L3)
 - System services: SQLite (WAL mode), config, logging (7-day rotation), tray, auto-update
 - Automation engine: 5 actions (click/input/scroll/extract/screenshot), flow runner with breakpoint resume
 - Analytics engine: DataSourceManager (REST/WebSocket), IndicatorLibrary
-- Test coverage: 38 files, 370+ tests (services, engines, components, shared, regression)
+- Test coverage: unit and regression suites across services, engines, components, shared utilities, and scripts
 
 ## Current Status
 
@@ -64,13 +64,13 @@ Implemented and tested:
 - Workbench UI with module navigation, KPI cards, AI assistant integration
 - Stock analysis module with K-line chart and indicator workflow
 - Automation task list/editor/execution panel with step editor
-- Embedded browser with multi-tab management (TabManager, up to 20 tabs)
-- Plugin center with permission review flow and three-level permission model
+- Browser session console with multi-tab management, navigation state, and configurable session partitions
+- Plugin center with local install, enable/disable, uninstall confirmation, permission review flow, and three-level permission model
 - SQLite database service (WAL mode), config service, log service (7-day rotation), tray, auto-update
 - Automation engine: 5 operations, flow runner with retry + breakpoint resume
 - Analytics engine: DataSourceManager, IndicatorLibrary (MA/MACD/RSI/BOLL)
 - Shared components: PageShell, TitleBar, ErrorBoundary, GlobalLoading, AppProviders, Sparkline, RingGauge, TaskTimeline
-- Comprehensive unit tests (38 files, 370+ tests) including regression tests
+- Comprehensive unit and regression tests across core services and renderer components
 
 Still evolving:
 
@@ -189,7 +189,7 @@ Dependency update automation is configured through [dependabot.yml](.github/depe
 src/
   main/                 Electron main process
     ai/                 AI service layer (AIService, ContextManager, ToolRegistry, LLMProvider)
-    browser/            TabManager (WebContentsView management)
+    browser/            TabManager (browser session and WebContentsView management)
     ipc/                IPC Controller + EventBus
     plugin-loader/      Plugin scanning + permission checking
     services/           DB, Config, Log, Tray, Update services
@@ -199,7 +199,7 @@ src/
       workbench/        Main operations cockpit
       stock/            Stock analysis module
       automation/       Task automation module
-      browser/          Embedded browser module
+      browser/          Browser session console
       plugin-center/    Plugin management module
     plugin-host/        Sandboxed plugin runtime
     shared/             Shared renderer components/hooks/styles
@@ -219,7 +219,7 @@ docs/
   specs.md              Spec breakdown (SPEC-001 ~ SPEC-022)
   specs-enhancements.md Enhancement specs (SPEC-023 ~ SPEC-028)
 tests/
-  unit/                 Unit tests (38 files, 370+ tests)
+  unit/                 Unit and regression tests
     components/         UI component + regression tests
     services/           Service layer tests (including AI)
     engines/            Engine tests
@@ -244,11 +244,11 @@ Task-oriented flow editor and execution panel. It is designed as the UI companio
 
 ### Browser
 
-Embedded browser workspace with multi-tab management (TabManager, up to 20 tabs), address bar, and WebViewContainer. Uses WebContentsView for controlled sessions with IPC-based navigation.
+Browser session console with multi-tab management (TabManager, up to 20 tabs), address bar, navigation state, and WebViewContainer metadata. The main process owns WebContentsView instances; the renderer intentionally presents a controlled session console rather than pretending to embed the native view directly.
 
 ### Plugin Center
 
-UI shell for plugin installation, enable/disable, uninstall, permission review, and metadata display. Plugin loading and permission enforcement logic live in the main process.
+UI for local plugin installation, enable/disable, uninstall confirmation, permission review, and metadata display. Plugin loading and permission enforcement logic live in the main process.
 
 ## Architecture Notes
 
@@ -280,7 +280,7 @@ The long-term design is permission-aware and plugin-driven, but the current repo
 
 ## Testing
 
-The repository includes comprehensive unit coverage (38 files, 370+ tests):
+The repository includes comprehensive unit and regression coverage:
 
 - Main-process services: ConfigService, LogService, DatabaseService, TrayService, UpdateService
 - AI service layer: AIService, ContextManager, ToolRegistry
