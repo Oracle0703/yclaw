@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { EVENTS, IPC_CHANNELS } from '@shared/constants';
+import { EVENTS } from '@shared/constants';
 import type { TaskStatus } from '@shared/types';
 import { ProCard } from '@ant-design/pro-components';
 import { useIpc, useIpcEvent } from '../../../shared/hooks';
@@ -10,21 +10,25 @@ interface TaskSummary {
   id: string;
   name: string;
   status: TaskStatus;
-  stepsCount: number;
+  stepsCount?: number;
   updatedAt: string;
+  latestBatch?: {
+    id: string;
+    status: string;
+  } | null;
 }
 
 export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
-  const { invoke } = useIpc();
+  const { automation } = useIpc();
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
-    const res = await invoke<TaskSummary[]>(IPC_CHANNELS.TASK_LIST);
+    const res = await automation.listTasks() as TaskSummary[];
     setTasks(res ?? []);
     setLoading(false);
-  }, [invoke]);
+  }, [automation]);
 
   useEffect(() => {
     void fetchTasks();
@@ -76,11 +80,21 @@ export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 220,
       render: (_, record) => (
-        <Button type="link" onClick={() => onSelect(record.id)}>
-          打开
-        </Button>
+        <Space>
+          <Button type="link" onClick={() => onSelect(record.id)}>
+            打开
+          </Button>
+          <Button type="link" onClick={() => void automation.startTask(record.id)}>
+            启动
+          </Button>
+          {record.latestBatch?.status === 'failed' && (
+            <Button type="link" onClick={() => void automation.retryBatch(record.latestBatch!.id)}>
+              复跑
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];

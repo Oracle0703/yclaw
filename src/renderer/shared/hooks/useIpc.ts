@@ -13,7 +13,17 @@ export function useIpc() {
     return response.data as T;
   }, []);
 
-  return { invoke };
+  const automation = {
+    listTasks: () => invoke('task:list'),
+    startTask: (taskId: string) => invoke('task:start', { taskId }),
+    retryBatch: (batchId: string) => invoke('batch:retry', { batchId }),
+    listBatches: (taskId: string) => invoke('batch:list', { taskId }),
+    listResults: (taskId: string, batchId?: string) => invoke('result:list', { taskId, batchId }),
+    exportResults: (taskId: string, batchId: string | undefined, format: 'csv' | 'json') =>
+      invoke('result:export', { taskId, batchId, format }),
+  };
+
+  return { invoke, automation };
 }
 
 /**

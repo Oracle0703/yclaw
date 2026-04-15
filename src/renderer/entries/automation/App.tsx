@@ -6,12 +6,15 @@ import { EVENTS } from '@shared/constants';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpcEvent } from '../../shared/hooks';
 import type { TaskStep } from '@shared/types';
+import { BatchList } from './components/BatchList';
 import { ExecutionPanel } from './components/ExecutionPanel';
+import { ResultTable } from './components/ResultTable';
 import { StepEditor } from './components/StepEditor';
 import { TaskList } from './components/TaskList';
 
 export default function App() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [steps, setSteps] = useState<TaskStep[]>([]);
   const [execStatus, setExecStatus] = useState('idle');
   const [execStep, setExecStep] = useState(0);
@@ -21,6 +24,7 @@ export default function App() {
 
   const handleSelectTask = (id: string) => {
     setSelectedTaskId(id === 'new' ? null : id);
+    setSelectedBatchId(null);
   };
 
   useIpcEvent(EVENTS.TASK_STARTED, (_data: unknown) => {
@@ -97,6 +101,10 @@ export default function App() {
           <ProCard className="yclaw-panel-card" title="步骤编辑器" style={{ flex: 1 }}>
             <StepEditor steps={steps} onChange={setSteps} />
           </ProCard>
+
+          <BatchList taskId={selectedTaskId} onSelectBatch={setSelectedBatchId} />
+
+          <ResultTable taskId={selectedTaskId} batchId={selectedBatchId} />
 
           {showExecution && (
             <ProCard className="yclaw-panel-card" title="执行面板" style={{ flex: 'none' }}>
