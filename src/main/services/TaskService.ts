@@ -28,6 +28,11 @@ export interface TaskServiceOptions {
   eventBus?: EventBus;
 }
 
+export interface SaveTaskFlowPayload {
+  name?: string;
+  steps: TaskFlow['steps'];
+}
+
 interface ActiveTask {
   flow: TaskFlow;
   runner: FlowRunner;
@@ -60,24 +65,33 @@ export class TaskService {
     return flow;
   }
 
-  saveTaskSteps(taskId: string | null | undefined, steps: TaskFlow['steps']): TaskFlow {
+  saveTaskFlow(
+    taskId: string | null | undefined,
+    payload: SaveTaskFlowPayload,
+  ): TaskFlow {
     const now = new Date().toISOString();
+    const normalizedName = payload.name?.trim() || '未命名任务';
     const currentFlow = taskId
       ? this.getTaskFlow(taskId)
       : {
           id: crypto.randomUUID(),
-          name: '未命名任务',
+          name: normalizedName,
           steps: [],
           createdAt: now,
           updatedAt: now,
         };
     const nextFlow: TaskFlow = {
       ...currentFlow,
-      steps,
+      name: normalizedName,
+      steps: payload.steps,
       updatedAt: now,
     };
     this.databaseService.saveTaskFlow(nextFlow);
     return nextFlow;
+  }
+
+  saveTaskSteps(taskId: string | null | undefined, steps: TaskFlow['steps']): TaskFlow {
+    return this.saveTaskFlow(taskId, { steps });
   }
 
   startTask(taskId: string, webContents: WebContents): TaskState {
