@@ -453,6 +453,41 @@ describe('App IPC integration', () => {
     });
   });
 
+  it('persists updated task name through task:save', async () => {
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.TASK_SAVE);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, {
+      taskId: 'task-1',
+      name: '价格采集任务',
+      steps: [
+        {
+          id: 'step-1',
+          name: '打开页面',
+          action: { type: 'click', selector: '#open' },
+        },
+      ],
+    });
+
+    expect(mockDbSaveTaskFlow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'task-1',
+        name: '价格采集任务',
+      }),
+    );
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        id: 'task-1',
+        name: '价格采集任务',
+      },
+    });
+  });
+
   it('creates a new task through task:save when taskId is missing', async () => {
     const app = new App();
 

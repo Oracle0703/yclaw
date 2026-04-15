@@ -293,11 +293,12 @@ export class App {
     });
 
     this.ipcController.handle(IPC_CHANNELS.TASK_SAVE, (params: unknown) => {
-      const { taskId, steps } = params as {
+      const { taskId, name, steps } = params as {
         taskId?: string | null;
+        name?: string;
         steps: TaskFlow['steps'];
       };
-      return this.taskService.saveTaskSteps(taskId, steps);
+      return this.taskService.saveTaskFlow(taskId, { name, steps });
     });
 
     this.ipcController.handle(IPC_CHANNELS.TASK_START, (params: unknown) => {
