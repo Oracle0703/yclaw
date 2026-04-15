@@ -113,6 +113,15 @@ describe('Automation App', () => {
     expect(await screen.findByText('编辑器步骤数:2')).toBeDefined();
   });
 
+  it('loads selected task name into the task name input', async () => {
+    render(<AutomationApp />);
+
+    fireEvent.click(screen.getByRole('button', { name: '选择任务' }));
+
+    const nameInput = await screen.findByPlaceholderText('请输入任务名称');
+    expect((nameInput as HTMLInputElement).value).toBe('采集任务');
+  });
+
   it('saves edited steps for the selected task', async () => {
     render(<AutomationApp />);
 
@@ -127,6 +136,30 @@ describe('Automation App', () => {
         'task:save',
         expect.objectContaining({
           taskId: 'task-1',
+          steps: expect.arrayContaining([
+            expect.objectContaining({ id: 'step-3' }),
+          ]),
+        }),
+      );
+    });
+  });
+
+  it('saves edited task name with selected task steps', async () => {
+    render(<AutomationApp />);
+
+    fireEvent.click(screen.getByRole('button', { name: '选择任务' }));
+    const nameInput = await screen.findByPlaceholderText('请输入任务名称');
+
+    fireEvent.change(nameInput, { target: { value: '价格采集任务' } });
+    fireEvent.click(screen.getByRole('button', { name: '模拟编辑步骤' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存任务' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.invoke).toHaveBeenCalledWith(
+        'task:save',
+        expect.objectContaining({
+          taskId: 'task-1',
+          name: '价格采集任务',
           steps: expect.arrayContaining([
             expect.objectContaining({ id: 'step-3' }),
           ]),
@@ -167,6 +200,27 @@ describe('Automation App', () => {
           steps: expect.arrayContaining([
             expect.objectContaining({ id: 'step-3' }),
           ]),
+        }),
+      );
+    });
+  });
+
+  it('passes task name when creating a new task', async () => {
+    render(<AutomationApp />);
+
+    fireEvent.click(screen.getByRole('button', { name: /新建任务/ }));
+    fireEvent.change(screen.getByPlaceholderText('请输入任务名称'), {
+      target: { value: '新任务名称' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '模拟编辑步骤' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存任务' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.invoke).toHaveBeenCalledWith(
+        'task:save',
+        expect.objectContaining({
+          taskId: null,
+          name: '新任务名称',
         }),
       );
     });

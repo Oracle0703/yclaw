@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Space, Tag } from 'antd';
+import { Button, Input, Space, Tag } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
 import { EVENTS, IPC_CHANNELS } from '@shared/constants';
@@ -19,6 +19,7 @@ export default function App() {
   const { invoke } = useIpc();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTaskSummary, setSelectedTaskSummary] = useState<SelectedTaskSummary | null>(null);
+  const [taskName, setTaskName] = useState('');
   const [steps, setSteps] = useState<TaskStep[]>([]);
   const [execStatus, setExecStatus] = useState('idle');
   const [execStep, setExecStep] = useState(0);
@@ -30,6 +31,7 @@ export default function App() {
     if (task === 'new') {
       setSelectedTaskId(null);
       setSelectedTaskSummary(null);
+      setTaskName('');
       setSteps([]);
       return;
     }
@@ -39,8 +41,10 @@ export default function App() {
 
     try {
       const flow = await invoke<TaskFlow>(IPC_CHANNELS.TASK_GET, { taskId: task.id });
+      setTaskName(flow.name);
       setSteps(flow.steps);
     } catch {
+      setTaskName('');
       setSteps([]);
     }
   };
@@ -48,6 +52,7 @@ export default function App() {
   const handleSaveTask = async () => {
     const saved = await invoke<TaskFlow>(IPC_CHANNELS.TASK_SAVE, {
       taskId: selectedTaskId,
+      name: taskName,
       steps,
     });
 
@@ -56,6 +61,7 @@ export default function App() {
       id: saved.id,
       stepsCount: saved.steps.length,
     });
+    setTaskName(saved.name);
     setSteps(saved.steps);
   };
 
@@ -105,11 +111,19 @@ export default function App() {
       extra={
         <Space wrap className="yclaw-page-actions">
           <Tag color="processing">Automation</Tag>
+          <Input
+            aria-label="任务名称"
+            placeholder="请输入任务名称"
+            value={taskName}
+            onChange={(event) => setTaskName(event.target.value)}
+            style={{ width: 220 }}
+          />
           <Button
             icon={<PlusOutlined />}
             onClick={() => {
               setSelectedTaskId(null);
               setSelectedTaskSummary(null);
+              setTaskName('');
               setSteps([]);
             }}
           >
