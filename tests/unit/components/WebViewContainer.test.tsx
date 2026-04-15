@@ -15,15 +15,45 @@ describe('Regression: WebViewContainer', () => {
   });
 
   it('should render empty state when tabId is null', () => {
-    render(<WebViewContainer tabId={null} url="" />);
+    render(<WebViewContainer tab={null} />);
     expect(screen.getByText(/新建标签页/)).toBeDefined();
   });
 
-  it('should render container with tab info when tabId is provided', () => {
-    const { container } = render(<WebViewContainer tabId={42} url="https://example.com" />);
+  it('should render session console details for the active tab', () => {
+    const { container } = render(
+      <WebViewContainer
+        tab={{
+          id: 42,
+          title: 'Example',
+          url: 'https://example.com',
+          loading: false,
+          canGoBack: true,
+          canGoForward: false,
+          sessionPartition: 'persist:workspace-a',
+        }}
+      />,
+    );
     const el = container.querySelector('[data-tab-id="42"]');
     expect(el).toBeTruthy();
-    expect(screen.getByText(/Tab #42/)).toBeDefined();
-    expect(screen.getByText(/example\.com/)).toBeDefined();
+    expect(screen.getByText(/Example/)).toBeDefined();
+    expect(screen.getByText(/persist:workspace-a/)).toBeDefined();
+    expect(screen.getByText(/可后退/)).toBeDefined();
+  });
+
+  it('should not expose future-placeholder wording', () => {
+    render(
+      <WebViewContainer
+        tab={{
+          id: 7,
+          title: 'Example',
+          url: 'https://example.com',
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+          sessionPartition: 'default',
+        }}
+      />,
+    );
+    expect(screen.queryByText(/后续迭代|后续实现|WebContentsView 容器占位/)).toBeNull();
   });
 });

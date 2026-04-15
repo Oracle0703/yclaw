@@ -14,6 +14,13 @@ const DEFAULT_CONFIG: AppConfig = {
   },
   modules: {},
   plugins: {},
+  ai: {
+    provider: 'openai',
+    model: 'gpt-3.5-turbo',
+    baseUrl: 'https://api.openai.com/v1',
+    temperature: 0.7,
+    maxTokens: 2048,
+  },
 };
 
 /**
@@ -70,8 +77,21 @@ export class ConfigService {
   }
 
   importConfig(jsonString: string): void {
-    const parsed = JSON.parse(jsonString) as AppConfig;
-    this.config = { ...DEFAULT_CONFIG, ...parsed };
+    const parsed = JSON.parse(jsonString);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      throw new Error('Invalid config format: expected a JSON object');
+    }
+    const obj = parsed as Record<string, unknown>;
+    if (obj.general !== undefined && (typeof obj.general !== 'object' || obj.general === null)) {
+      throw new Error('Invalid config format: "general" must be an object');
+    }
+    if (obj.modules !== undefined && (typeof obj.modules !== 'object' || obj.modules === null)) {
+      throw new Error('Invalid config format: "modules" must be an object');
+    }
+    if (obj.plugins !== undefined && (typeof obj.plugins !== 'object' || obj.plugins === null)) {
+      throw new Error('Invalid config format: "plugins" must be an object');
+    }
+    this.config = { ...DEFAULT_CONFIG, ...parsed } as AppConfig;
     this.save();
     this.eventBus.emit(EVENTS.CONFIG_CHANGED, { key: '*', value: this.config });
   }

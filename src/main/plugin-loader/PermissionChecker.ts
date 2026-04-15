@@ -36,4 +36,11 @@ export class PermissionChecker {
   requiresUserConfirmation(manifest: PluginManifest): boolean {
     return manifest.permissionLevel >= PermissionLevel.NETWORK_STORAGE;
   }
+
+  /**
+   * 卸载会移除插件资产，必须由用户显式确认
+   */
+  requiresUninstallConfirmation(_manifest: PluginManifest): boolean {
+    return true;
+  }
 }

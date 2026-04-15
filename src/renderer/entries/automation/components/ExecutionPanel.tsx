@@ -10,6 +10,9 @@ interface ExecutionPanelProps {
   totalSteps: number;
   logs: string[];
   hasBreakpoint: boolean;
+  onStatusChange?: (status: string) => void;
+  onError?: (message: string) => void;
+  onStopped?: () => void;
 }
 
 export function ExecutionPanel({
@@ -19,20 +22,42 @@ export function ExecutionPanel({
   totalSteps,
   logs,
   hasBreakpoint,
+  onStatusChange,
+  onError,
+  onStopped,
 }: ExecutionPanelProps) {
   const { invoke } = useIpc();
 
+  const invokeTask = async (
+    channel: string,
+    nextStatus: string,
+    options: { stopped?: boolean } = {},
+  ) => {
+    if (!taskId) return;
+
+    try {
+      const result = await invoke<{ status?: string }>(channel, { taskId });
+      if (options.stopped) {
+        onStopped?.();
+        return;
+      }
+      onStatusChange?.(result?.status ?? nextStatus);
+    } catch (error) {
+      onError?.(error instanceof Error ? error.message : '任务操作失败');
+    }
+  };
+
   const handleStart = () => {
-    if (taskId) invoke(IPC_CHANNELS.TASK_START, { taskId });
+    void invokeTask(IPC_CHANNELS.TASK_START, 'running');
   };
   const handlePause = () => {
-    if (taskId) invoke(IPC_CHANNELS.TASK_PAUSE, { taskId });
+    void invokeTask(IPC_CHANNELS.TASK_PAUSE, 'paused');
   };
   const handleResume = () => {
-    if (taskId) invoke(IPC_CHANNELS.TASK_RESUME, { taskId });
+    void invokeTask(IPC_CHANNELS.TASK_RESUME, 'running');
   };
   const handleStop = () => {
-    if (taskId) invoke(IPC_CHANNELS.TASK_STOP, { taskId });
+    void invokeTask(IPC_CHANNELS.TASK_STOP, 'idle', { stopped: true });
   };
 
   return (

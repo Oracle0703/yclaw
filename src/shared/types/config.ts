@@ -2,10 +2,13 @@
  * 配置类型定义
  */
 
+import type { AIConfig } from './ai';
+
 export interface AppConfig {
   general: GeneralConfig;
   modules: Record<string, ModuleConfig>;
   plugins: Record<string, PluginConfig>;
+  ai: AIConfig;
 }
 
 export interface GeneralConfig {

@@ -187,6 +187,7 @@ describe('TabManager', () => {
         loading: false,
         canGoBack: true,
         canGoForward: false,
+        sessionPartition: 'default',
       });
     });
 
@@ -211,6 +212,23 @@ describe('TabManager', () => {
       expect(session.fromPartition).toHaveBeenCalled();
       expect(view.webContents.loadURL).toHaveBeenCalledWith('https://isolated.com');
       expect(tabManager.getTabCount()).toBe(1);
+    });
+  });
+
+  describe('session info', () => {
+    it('should expose configured persistent session partition in tab info', () => {
+      const partitionedManager = new TabManager({ sessionPartition: 'workspace-a' });
+      const view = partitionedManager.createTab('https://example.com');
+
+      expect(session.fromPartition).toHaveBeenCalledWith('persist:workspace-a');
+      expect(partitionedManager.getTabInfo(view.webContents.id)).toMatchObject({
+        sessionPartition: 'persist:workspace-a',
+      });
+    });
+
+    it('should mark isolated tabs with a temporary session partition', () => {
+      const view = tabManager.createIsolatedTab('https://isolated.com');
+      expect(tabManager.getTabInfo(view.webContents.id)?.sessionPartition).toMatch(/^temp:/);
     });
   });
 

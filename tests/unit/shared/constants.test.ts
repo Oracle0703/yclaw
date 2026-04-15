@@ -116,6 +116,7 @@ describe('EVENTS', () => {
     expect(EVENTS.TASK_COMPLETED).toBe('task:completed');
     expect(EVENTS.TASK_FAILED).toBe('task:failed');
     expect(EVENTS.TASK_PAUSED).toBe('task:paused');
+    expect(EVENTS.TASK_STATUS_CHANGED).toBe('task:status:changed');
   });
 
   it('should define plugin events', () => {

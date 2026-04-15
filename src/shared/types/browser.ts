@@ -3,4 +3,7 @@ export interface Tab {
   title: string;
   url: string;
   loading: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  sessionPartition: string;
 }

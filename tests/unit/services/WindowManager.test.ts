@@ -17,6 +17,7 @@ vi.mock('electron', () => {
     isMinimized: () => boolean;
     restore: ReturnType<typeof vi.fn>;
     show: ReturnType<typeof vi.fn>;
+    hide: ReturnType<typeof vi.fn>;
     focus: ReturnType<typeof vi.fn>;
     close: ReturnType<typeof vi.fn>;
     getBounds: () => { x: number; y: number; width: number; height: number };
@@ -38,10 +39,19 @@ vi.mock('electron', () => {
       isMinimized: () => false,
       restore: vi.fn(),
       show: vi.fn(),
+      hide: vi.fn(),
       focus: vi.fn(),
       close: vi.fn(() => {
+        let prevented = false;
+        const event = {
+          preventDefault: () => {
+            prevented = true;
+          },
+        };
         const closeListeners = win._listeners.get('close') ?? [];
-        closeListeners.forEach((fn) => fn());
+        closeListeners.forEach((fn) => fn(event));
+        if (prevented) return;
+        win._destroyed = true;
         const closedListeners = win._listeners.get('closed') ?? [];
         closedListeners.forEach((fn) => fn());
       }),
@@ -122,6 +132,22 @@ describe('WindowManager', () => {
     const win2 = manager.openWindow({ module: 'stock' });
     expect(win1).toBe(win2);
     expect(win1.focus).toHaveBeenCalled();
+  });
+
+  it('should create distinct windows for the same module when instanceId differs', () => {
+    const win1 = manager.openWindow({ module: 'stock', instanceId: 'left' });
+    const win2 = manager.openWindow({ module: 'stock', instanceId: 'right' });
+    expect(win1).not.toBe(win2);
+    expect(manager.getWindow('stock', 'left')).toBe(win1);
+    expect(manager.getWindow('stock', 'right')).toBe(win2);
+  });
+
+  it('should hide the workbench instead of closing when closeToTray is enabled', () => {
+    manager = new WindowManager({ shouldCloseToTray: () => true });
+    const win = manager.openWindow({ module: 'workbench' });
+    manager.closeWindow('workbench');
+    expect(win.hide).toHaveBeenCalled();
+    expect(manager.getWindow('workbench')).toBe(win);
   });
 
   it('should track open modules', () => {

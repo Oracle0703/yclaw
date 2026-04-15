@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 // ---- 回归-004: useLoading hook 可从 hooks 路径导入 ----
 describe('Regression: useLoading hook availability', () => {
@@ -26,12 +26,14 @@ describe('Regression: useLoading hook availability', () => {
 
   it('should throw when used outside LoadingProvider', async () => {
     const { useLoading } = await import('@renderer/shared/hooks/useLoading');
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     // React hook 在 provider 外使用应该抛出
     const TestComp = () => {
       useLoading();
       return null;
     };
     expect(() => render(<TestComp />)).toThrow('useLoading must be used within a LoadingProvider');
+    consoleErrorSpy.mockRestore();
   });
 });
 

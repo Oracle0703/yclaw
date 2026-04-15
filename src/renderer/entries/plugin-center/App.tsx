@@ -36,18 +36,32 @@ export default function App() {
     await fetchPlugins();
   };
 
-  const handleUninstall = async (name: string) => {
-    await invoke(IPC_CHANNELS.PLUGIN_UNINSTALL, { name });
-    await fetchPlugins();
+  const handleUninstall = (name: string) => {
+    Modal.confirm({
+      title: '确认卸载插件？',
+      content: `卸载 ${name} 会移除本地插件文件，此操作不可直接撤销。`,
+      okText: '卸载',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        await invoke(IPC_CHANNELS.PLUGIN_UNINSTALL, { name, confirmed: true });
+        await fetchPlugins();
+      },
+    });
   };
 
   const handleInstallLocal = async () => {
     try {
-      const result = await invoke<{ name: string; permissions: string[]; level: number }>(
+      const result = await invoke<{
+        name: string;
+        permissions: string[];
+        level: number;
+        requiresConfirmation?: boolean;
+      } | null>(
         IPC_CHANNELS.PLUGIN_INSTALL,
         { source: 'local' },
       );
-      if (result && result.level >= 2) {
+      if (result?.requiresConfirmation) {
         setDialog(result);
       } else {
         await fetchPlugins();

@@ -16,8 +16,16 @@ import { OpenAIProvider, OllamaProvider } from './LLMProvider';
 import { ToolRegistry } from './ToolRegistry';
 import { taskListTool } from './tools/taskTools';
 import { systemStatusTool } from './tools/systemTools';
-import { navigateTool } from './tools/navigateTools';
+import { navigateTool, createNavigateTool } from './tools/navigateTools';
 import type { LLMProvider } from './types';
+import { DatabaseService } from '../services/DatabaseService';
+
+import crypto from 'crypto';
+
+export interface AIServiceOptions {
+  config?: Partial<AIConfig>;
+  openWindow?: (module: string) => void;
+}
 
 export class AIService {
   private provider: LLMProvider;
@@ -25,14 +33,20 @@ export class AIService {
   private toolRegistry: ToolRegistry;
   private conversations = new Map<string, Conversation>();
   private config: AIConfig;
+  private databaseService = DatabaseService.getInstance();
 
-  constructor(config?: Partial<AIConfig>) {
+  constructor(configOrOptions?: Partial<AIConfig> | AIServiceOptions) {
+    const opts: AIServiceOptions =
+      configOrOptions && ('openWindow' in configOrOptions || 'config' in configOrOptions)
+        ? (configOrOptions as AIServiceOptions)
+        : { config: configOrOptions as Partial<AIConfig> | undefined };
+
     this.config = {
       provider: 'openai',
       model: 'gpt-3.5-turbo',
       temperature: 0.7,
       maxTokens: 2048,
-      ...config,
+      ...opts.config,
     };
 
     this.provider = this.createProvider(this.config);
@@ -42,7 +56,11 @@ export class AIService {
     // Register built-in tools
     this.toolRegistry.register(taskListTool);
     this.toolRegistry.register(systemStatusTool);
-    this.toolRegistry.register(navigateTool);
+    if (opts.openWindow) {
+      this.toolRegistry.register(createNavigateTool(opts.openWindow));
+    } else {
+      this.toolRegistry.register(navigateTool);
+    }
   }
 
   private createProvider(config: AIConfig): LLMProvider {
@@ -102,6 +120,7 @@ export class AIService {
       timestamp: Date.now(),
     };
     conversation.messages.push(userMessage);
+    this.databaseService.saveAIMessage(conversationId, userMessage);
 
     // Collect context and build system prompt
     const context = await this.contextManager.collectContext();
@@ -124,6 +143,8 @@ export class AIService {
     };
     conversation.messages.push(assistantMessage);
     conversation.updatedAt = Date.now();
+    this.databaseService.saveAIConversation(conversation);
+    this.databaseService.saveAIMessage(conversationId, assistantMessage);
 
     return {
       message: assistantMessage,
@@ -136,10 +157,12 @@ export class AIService {
   }
 
   deleteConversation(id: string): boolean {
-    return this.conversations.delete(id);
+    const removed = this.conversations.delete(id);
+    const deletedFromDb = this.databaseService.deleteAIConversation(id);
+    return removed || deletedFromDb;
   }
 
   private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    return crypto.randomUUID();
   }
 }

@@ -8,6 +8,7 @@ export interface TabInfo {
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  sessionPartition: string;
 }
 
 export interface TabManagerOptions {
@@ -23,16 +24,21 @@ export interface TabManagerOptions {
  */
 export class TabManager {
   private tabs = new Map<number, WebContentsView>();
+  private tabSessions = new Map<number, string>();
   private activeTabId: number | null = null;
   private eventBus: EventBus;
   private session: Session;
+  private readonly sessionPartition: string;
   private readonly maxTabs: number;
 
   constructor(options: TabManagerOptions = {}) {
     this.eventBus = EventBus.getInstance();
     this.maxTabs = options.maxTabs ?? 20;
+    this.sessionPartition = options.sessionPartition
+      ? `persist:${options.sessionPartition}`
+      : 'default';
     this.session = options.sessionPartition
-      ? session.fromPartition(`persist:${options.sessionPartition}`)
+      ? session.fromPartition(this.sessionPartition)
       : session.defaultSession;
   }
 
@@ -55,19 +61,20 @@ export class TabManager {
 
     const id = view.webContents.id;
     this.tabs.set(id, view);
+    this.tabSessions.set(id, this.sessionPartition);
 
     // 监听页面事件
     view.webContents.on('did-start-loading', () => {
-      this.eventBus.emit('tab:loading', { id, loading: true });
+      this.eventBus.emit('tab:loading', { ...this.getTabInfo(id), loading: true });
     });
     view.webContents.on('did-stop-loading', () => {
-      this.eventBus.emit('tab:loading', { id, loading: false });
+      this.eventBus.emit('tab:loading', { ...this.getTabInfo(id), loading: false });
     });
     view.webContents.on('page-title-updated', (_e, title) => {
-      this.eventBus.emit('tab:title', { id, title });
+      this.eventBus.emit('tab:title', { ...this.getTabInfo(id), title });
     });
     view.webContents.on('did-navigate', (_e, url) => {
-      this.eventBus.emit('tab:navigate', { id, url });
+      this.eventBus.emit('tab:navigate', { ...this.getTabInfo(id), url });
     });
 
     view.webContents.loadURL(url);
@@ -85,6 +92,7 @@ export class TabManager {
 
     view.webContents.close();
     this.tabs.delete(id);
+    this.tabSessions.delete(id);
 
     if (this.activeTabId === id) {
       const remaining = Array.from(this.tabs.keys());
@@ -150,6 +158,7 @@ export class TabManager {
 
     const id = view.webContents.id;
     this.tabs.set(id, view);
+    this.tabSessions.set(id, `temp:${id}`);
     view.webContents.loadURL(url);
     this.activeTabId = id;
 
@@ -166,6 +175,7 @@ export class TabManager {
       loading: view.webContents.isLoading(),
       canGoBack: view.webContents.canGoBack(),
       canGoForward: view.webContents.canGoForward(),
+      sessionPartition: this.tabSessions.get(id) ?? this.sessionPartition,
     };
   }
 
@@ -189,7 +199,7 @@ export class TabManager {
   }
 
   closeAll(): void {
-    for (const [id] of this.tabs) {
+    for (const id of [...this.tabs.keys()]) {
       this.closeTab(id);
     }
   }

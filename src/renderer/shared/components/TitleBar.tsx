@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Drawer, Descriptions, Tag, Typography, Divider, Space } from 'antd';
-import { MinusOutlined, CloseOutlined, SettingOutlined } from '@ant-design/icons';
+import { MinusOutlined, CloseOutlined, SettingOutlined, BorderOutlined } from '@ant-design/icons';
 import { useIpc } from '../hooks';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { AppConfig } from '@shared/types';
@@ -14,6 +14,10 @@ export function TitleBar() {
 
   const handleMinimize = useCallback(() => {
     void invoke(IPC_CHANNELS.WINDOW_MINIMIZE);
+  }, [invoke]);
+
+  const handleMaximize = useCallback(() => {
+    void invoke(IPC_CHANNELS.WINDOW_MAXIMIZE);
   }, [invoke]);
 
   const handleClose = useCallback(() => {
@@ -41,6 +45,9 @@ export function TitleBar() {
         <div className="yclaw-titlebar-actions">
           <button className="yclaw-titlebar-btn" onClick={handleMinimize} title="最小化">
             <MinusOutlined />
+          </button>
+          <button className="yclaw-titlebar-btn" onClick={handleMaximize} title="最大化">
+            <BorderOutlined />
           </button>
           <button className="yclaw-titlebar-btn" onClick={() => setSettingsOpen(true)} title="设置">
             <SettingOutlined />

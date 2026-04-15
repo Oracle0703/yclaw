@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { getDatabasePath } from '../utils/paths';
+import type { Conversation, ChatMessage, TaskFlow, TaskStep } from '@shared/types';
 
 /**
  * SQLite 数据库服务
@@ -13,7 +14,7 @@ export class DatabaseService {
   private db: Database.Database | null = null;
   private dbDir: string;
   private dbPath: string;
-  private readonly currentVersion = 1;
+  private readonly currentVersion = 2;
 
   constructor(dbName = 'yclaw.sqlite') {
     this.dbDir = getDatabasePath();
@@ -101,6 +102,137 @@ export class DatabaseService {
       ORDER BY updated_at DESC
     `).all() as Array<{ id: string; name: string; status: string; updatedAt: string }>;
     return rows;
+  }
+
+  getTaskFlow(taskId: string): TaskFlow | null {
+    this.ensureOpen();
+    const row = this.db!.prepare(`
+      SELECT id, name, description, flow_json as flowJson, created_at as createdAt, updated_at as updatedAt
+      FROM tasks
+      WHERE id = ?
+    `).get(taskId) as
+      | {
+        id: string;
+        name: string;
+        description?: string;
+        flowJson: string;
+        createdAt: string;
+        updatedAt: string;
+      }
+      | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    const parsed = JSON.parse(row.flowJson) as Partial<TaskFlow> | { steps?: TaskStep[] } | TaskStep[];
+    const flowSteps = Array.isArray(parsed)
+      ? parsed
+      : parsed.steps;
+    const steps = flowSteps && flowSteps.length > 0
+      ? flowSteps
+      : this.getTaskSteps(taskId);
+
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      steps,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  updateTaskStatus(taskId: string, status: string): void {
+    this.ensureOpen();
+    this.db!.prepare(`
+      UPDATE tasks
+      SET status = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(status, taskId);
+  }
+
+  getInstalledPlugins(): Array<{
+    name: string;
+    version: string;
+    enabled: boolean;
+  }> {
+    this.ensureOpen();
+    return this.db!.prepare(`
+      SELECT name, version, status
+      FROM plugins
+      ORDER BY installed_at DESC
+    `).all().map((row) => {
+      const plugin = row as { name: string; version: string; status: string };
+      return {
+        name: plugin.name,
+        version: plugin.version,
+        enabled: plugin.status === 'active',
+      };
+    });
+  }
+
+  saveAIConversation(conversation: Conversation): void {
+    this.ensureOpen();
+    this.db!.prepare(`
+      INSERT INTO ai_conversations (id, title, created_at, updated_at)
+      VALUES (@id, @title, @createdAt, @updatedAt)
+      ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        updated_at = excluded.updated_at
+    `).run({
+      id: conversation.id,
+      title: conversation.title,
+      createdAt: conversation.createdAt,
+      updatedAt: conversation.updatedAt,
+    });
+  }
+
+  saveAIMessage(conversationId: string, message: ChatMessage): void {
+    this.ensureOpen();
+    this.db!.prepare(`
+      INSERT INTO ai_messages (id, conversation_id, role, content, timestamp)
+      VALUES (@id, @conversationId, @role, @content, @timestamp)
+    `).run({
+      id: message.id,
+      conversationId,
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp,
+    });
+  }
+
+  deleteAIConversation(conversationId: string): boolean {
+    this.ensureOpen();
+    const result = this.db!.prepare(`
+      DELETE FROM ai_conversations
+      WHERE id = ?
+    `).run(conversationId);
+    return result.changes > 0;
+  }
+
+  private getTaskSteps(taskId: string): TaskStep[] {
+    return this.db!.prepare(`
+      SELECT id, name, action_json as actionJson, retry_count as retryCount, retry_delay as retryDelay
+      FROM task_steps
+      WHERE task_id = ?
+      ORDER BY step_index ASC
+    `).all(taskId).map((row) => {
+      const step = row as {
+        id: string;
+        name: string;
+        actionJson: string;
+        retryCount: number | null;
+        retryDelay: number | null;
+      };
+      return {
+        id: step.id,
+        name: step.name,
+        action: JSON.parse(step.actionJson),
+        retryCount: step.retryCount ?? undefined,
+        retryDelay: step.retryDelay ?? undefined,
+      };
+    });
   }
 
   private ensureOpen(): void {
@@ -192,6 +324,31 @@ export class DatabaseService {
         CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);
 
         INSERT INTO migrations (version) VALUES (1);
+      `);
+    }
+
+    if (currentDbVersion < 2) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS ai_conversations (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS ai_messages (
+          id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation
+          ON ai_messages(conversation_id, timestamp);
+
+        INSERT INTO migrations (version) VALUES (2);
       `);
     }
   }
