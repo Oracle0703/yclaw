@@ -1,10 +1,11 @@
 import type { WebContents } from 'electron';
-import type { TaskFlow, TaskStatus } from '@shared/types';
+import type { TaskBatch, TaskFlow, TaskStatus } from '@shared/types';
 import { TaskStatus as TaskStatusEnum } from '@shared/types';
 import { EVENTS } from '@shared/constants';
 import { FlowRunner } from '@engines/automation/FlowRunner';
 import { EventBus } from '@main/ipc/EventBus';
 import { DatabaseService } from './DatabaseService';
+import { BatchService } from './BatchService';
 
 export interface TaskSummary {
   id: string;
@@ -38,6 +39,7 @@ export interface TaskServiceOptions {
   databaseService?: Pick<DatabaseService, 'getTasks' | 'getTaskFlow' | 'updateTaskStatus'>;
   createRunner?: () => FlowRunner;
   eventBus?: EventBus;
+  batchService?: Pick<BatchService, 'createBatch' | 'getBatch' | 'listBatchesByTask'>;
 }
 
 interface ActiveTask {
@@ -52,12 +54,14 @@ export class TaskService {
   >;
   private readonly createRunner: () => FlowRunner;
   private readonly eventBus: EventBus;
+  private readonly batchService: Pick<BatchService, 'createBatch' | 'getBatch' | 'listBatchesByTask'>;
   private readonly activeTasks = new Map<string, ActiveTask>();
 
   constructor(options: TaskServiceOptions = {}) {
     this.databaseService = options.databaseService ?? DatabaseService.getInstance();
     this.createRunner = options.createRunner ?? (() => new FlowRunner());
     this.eventBus = options.eventBus ?? EventBus.getInstance();
+    this.batchService = options.batchService ?? new BatchService();
   }
 
   listTasks(): TaskSummary[] {
@@ -142,6 +146,22 @@ export class TaskService {
 
   attachTask(taskId: string, flow: TaskFlow, runner: FlowRunner): void {
     this.activeTasks.set(taskId, { flow, runner });
+  }
+
+  listBatches(taskId: string): TaskBatch[] {
+    return this.batchService.listBatchesByTask(taskId);
+  }
+
+  retryBatch(batchId: string): TaskBatch {
+    const batch = this.batchService.getBatch(batchId);
+    if (!batch) {
+      throw new Error(`Batch "${batchId}" not found`);
+    }
+
+    return this.batchService.createBatch(batch.taskId, {
+      sourceBatchId: batchId,
+      reason: 'retry',
+    });
   }
 
   private getActiveTask(taskId: string): ActiveTask {

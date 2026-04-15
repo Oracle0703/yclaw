@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TaskFlow } from '@shared/types';
+import type { TaskBatch } from '@shared/types';
 
 const mockDb = {
   getTasks: vi.fn(),
   getTaskFlow: vi.fn(),
   updateTaskStatus: vi.fn(),
+};
+
+const mockBatchService = {
+  createBatch: vi.fn(),
+  getBatch: vi.fn(),
+  listBatchesByTask: vi.fn(),
 };
 
 const mockRunner = {
@@ -58,8 +65,16 @@ describe('TaskService', () => {
     ]);
     mockDb.getTaskFlow.mockReturnValue(sampleFlow);
     mockRunner.getStatus.mockReturnValue('running');
+    mockBatchService.createBatch.mockReturnValue({
+      id: 'batch-created',
+      taskId: 'task-1',
+      status: 'pending',
+      createdAt: '2026-04-15T10:00:00.000Z',
+      stepResults: [],
+    } satisfies TaskBatch);
     service = new TaskService({
       createRunner: () => mockRunner as never,
+      batchService: mockBatchService as never,
     });
   });
 
@@ -145,6 +160,32 @@ describe('TaskService', () => {
         id: 'batch-1',
         status: 'running',
       },
+    });
+  });
+
+  it('creates a new batch when retrying a failed batch', async () => {
+    mockBatchService.getBatch.mockReturnValueOnce({
+      id: 'batch-failed',
+      taskId: 'task-1',
+      status: 'failed',
+      createdAt: '2026-04-15T09:00:00.000Z',
+      stepResults: [],
+      error: 'selector not found',
+    } satisfies TaskBatch);
+
+    const retried = await service.retryBatch('batch-failed');
+
+    expect(mockBatchService.getBatch).toHaveBeenCalledWith('batch-failed');
+    expect(mockBatchService.createBatch).toHaveBeenCalledWith('task-1', {
+      sourceBatchId: 'batch-failed',
+      reason: 'retry',
+    });
+    expect(retried).toEqual({
+      id: 'batch-created',
+      taskId: 'task-1',
+      status: 'pending',
+      createdAt: '2026-04-15T10:00:00.000Z',
+      stepResults: [],
     });
   });
 });
