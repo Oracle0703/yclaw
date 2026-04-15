@@ -52,7 +52,9 @@ export class App {
     this.logService = new LogService();
     this.trayService = new TrayService(this.windowManager);
     this.updateService = new UpdateService(this.logService);
-    this.tabManager = new TabManager();
+    this.tabManager = new TabManager({
+      sessionPartition: this.getBrowserSessionPartition(),
+    });
     this.aiService = new AIService(this.configService.get('ai'));
     this.pluginLoader = new PluginLoader();
     this.permissionChecker = new PermissionChecker();
@@ -317,7 +319,11 @@ export class App {
     this.ipcController.handle(IPC_CHANNELS.BROWSER_CREATE_TAB, (params: unknown) => {
       const { url } = (params as { url?: string }) ?? {};
       const view = this.tabManager.createTab(url);
-      return { id: view.webContents.id };
+      const tabInfo = this.tabManager.getTabInfo(view.webContents.id);
+      if (!tabInfo) {
+        throw new Error('Failed to create browser tab');
+      }
+      return tabInfo;
     });
 
     this.ipcController.handle(IPC_CHANNELS.BROWSER_CLOSE_TAB, (params: unknown) => {
@@ -456,6 +462,14 @@ export class App {
     }
 
     return result.filePaths[0];
+  }
+
+  private getBrowserSessionPartition(): string | undefined {
+    const browserConfig = this.configService.get('modules').browser;
+    const configuredPartition = browserConfig?.settings?.sessionPartition;
+    return typeof configuredPartition === 'string' && configuredPartition.trim().length > 0
+      ? configuredPartition.trim()
+      : undefined;
   }
 
   private getTaskWebContents(tabId?: number): WebContents {

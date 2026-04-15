@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd';
+import { Button, Col, Row, Space, Tag, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
@@ -8,6 +8,7 @@ import { useIpc, useIpcEvent } from '../../shared/hooks';
 import { useLoading } from '../../shared/hooks/useLoading';
 import { AddressBar } from './components/AddressBar';
 import { TabBar } from './components/TabBar';
+import { WebViewContainer } from './components/WebViewContainer';
 import type { Tab } from '@shared/types/browser';
 
 export default function App() {
@@ -25,12 +26,11 @@ export default function App() {
 
   const createTab = async () => {
     await withLoading(async () => {
-      const res = await invoke<{ id: number }>(IPC_CHANNELS.BROWSER_CREATE_TAB, {
+      const res = await invoke<Tab>(IPC_CHANNELS.BROWSER_CREATE_TAB, {
         url: 'https://www.google.com',
       });
       if (res) {
-        const newTab: Tab = { id: res.id, title: '新标签页', url: 'about:blank', loading: true };
-        setTabs((prev) => [...prev, newTab]);
+        setTabs((prev) => [...prev, res]);
         setActiveTabId(res.id);
       }
     }, '正在创建标签页...');
@@ -58,25 +58,25 @@ export default function App() {
   };
 
   useIpcEvent('tab:title', (data: unknown) => {
-    const { id, title } = data as { id: number; title: string };
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)));
+    const nextTab = data as Tab;
+    setTabs((prev) => prev.map((t) => (t.id === nextTab.id ? { ...t, ...nextTab } : t)));
   });
 
   useIpcEvent('tab:navigate', (data: unknown) => {
-    const { id, url } = data as { id: number; url: string };
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, url } : t)));
+    const nextTab = data as Tab;
+    setTabs((prev) => prev.map((t) => (t.id === nextTab.id ? { ...t, ...nextTab } : t)));
   });
 
   useIpcEvent('tab:loading', (data: unknown) => {
-    const { id, loading } = data as { id: number; loading: boolean };
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, loading } : t)));
+    const nextTab = data as Tab;
+    setTabs((prev) => prev.map((t) => (t.id === nextTab.id ? { ...t, ...nextTab } : t)));
   });
 
   return (
     <PageShell
       title="内嵌浏览器"
       subTitle="管理会话、标签页和受控导航"
-      content="浏览器模块先以中台工作台形式组织标签、地址栏和当前会话元信息，后续可继续接入真实 WebContentsView 容器。"
+      content="当前版本把浏览器模块收敛为浏览器会话控制台，聚焦标签、导航和会话分区管理。"
       extra={
         <Space wrap className="yclaw-page-actions">
           <Tag color="processing">Browser</Tag>
@@ -120,8 +120,8 @@ export default function App() {
             />
             <AddressBar
               url={activeTab?.url ?? ''}
-              canGoBack={false}
-              canGoForward={false}
+              canGoBack={activeTab?.canGoBack ?? false}
+              canGoForward={activeTab?.canGoForward ?? false}
               onNavigate={(url) => {
                 void navigate(url);
               }}
@@ -134,28 +134,7 @@ export default function App() {
 
         <ProCard className="yclaw-panel-card" title="当前视图">
           <div className="browser-viewport yclaw-browser-frame">
-            {activeTab ? (
-              <Descriptions bordered column={1}>
-                <Descriptions.Item label="标题">{activeTab.title || '新标签页'}</Descriptions.Item>
-                <Descriptions.Item label="URL">{activeTab.url}</Descriptions.Item>
-                <Descriptions.Item label="状态">
-                  <Tag color={activeTab.loading ? 'processing' : 'success'}>
-                    {activeTab.loading ? '加载中' : '已就绪'}
-                  </Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="说明">
-                  <Typography.Text type="secondary">
-                    当前仓库先完成浏览器中台外壳和标签控制区，后续可以继续把真实的 WebContentsView
-                    容器挂入这个区域。
-                  </Typography.Text>
-                </Descriptions.Item>
-              </Descriptions>
-            ) : (
-              <Empty
-                description="点击上方新建标签页，开始创建受控浏览会话"
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-              />
-            )}
+            <WebViewContainer tab={activeTab ?? null} />
           </div>
         </ProCard>
       </Space>
