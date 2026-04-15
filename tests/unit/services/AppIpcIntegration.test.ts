@@ -18,6 +18,7 @@ const mockLogClose = vi.fn();
 const mockTrayCreate = vi.fn();
 const mockTrayDestroy = vi.fn();
 const mockCheckForUpdates = vi.fn();
+const mockShowOpenDialog = vi.hoisted(() => vi.fn());
 const mockCreateTab = vi.fn(() => ({ webContents: { id: 1 } }));
 const mockCloseTab = vi.fn();
 const mockNavigate = vi.fn();
@@ -25,7 +26,56 @@ const mockGoBack = vi.fn();
 const mockGoForward = vi.fn();
 const mockReload = vi.fn();
 const mockPluginLoadAll = vi.fn();
-const mockPluginGetAll = vi.fn(() => []);
+const mockPluginGetAll = vi.fn(() => [
+  {
+    manifest: {
+      name: 'test-plugin',
+      version: '1.0.0',
+      displayName: 'Test Plugin',
+      description: '测试插件',
+      main: 'index.js',
+      permissions: ['ui'],
+      permissionLevel: 1,
+      engines: { yclaw: '>=1.0.0' },
+    },
+    status: 'installed',
+    path: 'C:\\plugins\\test-plugin',
+  },
+]);
+const mockPluginGet = vi.fn(() => ({
+  manifest: {
+    name: 'test-plugin',
+    version: '1.0.0',
+    displayName: 'Test Plugin',
+    description: '测试插件',
+    main: 'index.js',
+    permissions: ['ui'],
+    permissionLevel: 1,
+    engines: { yclaw: '>=1.0.0' },
+  },
+  status: 'installed',
+  path: 'C:\\plugins\\test-plugin',
+}));
+const mockPluginInstallFromPath = vi.fn(async () => ({
+  name: 'danger-plugin',
+  permissions: ['network'],
+  level: 2,
+  requiresConfirmation: true,
+}));
+const mockPluginConfirmPendingInstall = vi.fn(async () => ({
+  manifest: {
+    name: 'danger-plugin',
+    version: '1.0.0',
+    displayName: 'Danger Plugin',
+    description: '高权限测试插件',
+    main: 'index.js',
+    permissions: ['network'],
+    permissionLevel: 2,
+    engines: { yclaw: '>=1.0.0' },
+  },
+  status: 'installed',
+  path: 'C:\\plugins\\danger-plugin',
+}));
 const mockPluginActivate = vi.fn();
 const mockPluginDeactivate = vi.fn();
 const mockPluginUninstall = vi.fn();
@@ -52,6 +102,9 @@ vi.mock('electron', () => ({
   },
   BrowserWindow: {
     getFocusedWindow: vi.fn(() => null),
+  },
+  dialog: {
+    showOpenDialog: mockShowOpenDialog,
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: MockIpcHandler) => {
@@ -142,6 +195,9 @@ vi.mock('@main/plugin-loader/PluginLoader', () => ({
   PluginLoader: vi.fn().mockImplementation(() => ({
     loadAll: mockPluginLoadAll,
     getAll: mockPluginGetAll,
+    get: mockPluginGet,
+    installFromPath: mockPluginInstallFromPath,
+    confirmPendingInstall: mockPluginConfirmPendingInstall,
     activate: mockPluginActivate,
     deactivate: mockPluginDeactivate,
     uninstall: mockPluginUninstall,
@@ -185,6 +241,94 @@ describe('App IPC integration', () => {
         IPC_CHANNELS.STOCK_DATA,
       ]),
     );
+    expect(mockPluginLoadAll).toHaveBeenCalled();
+  });
+
+  it('returns the loaded plugin registry through plugin:list', async () => {
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.PLUGIN_LIST);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({});
+    expect(response).toMatchObject({
+      success: true,
+      data: [
+        {
+          manifest: { name: 'test-plugin' },
+          status: 'installed',
+        },
+      ],
+    });
+  });
+
+  it('opens local picker and returns pending confirmation for high-permission plugin install', async () => {
+    mockShowOpenDialog.mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ['C:\\local-plugins\\danger-plugin'],
+    });
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.PLUGIN_INSTALL);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, { source: 'local' });
+    expect(mockShowOpenDialog).toHaveBeenCalled();
+    expect(mockPluginInstallFromPath).toHaveBeenCalledWith('C:\\local-plugins\\danger-plugin');
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        name: 'danger-plugin',
+        requiresConfirmation: true,
+      },
+    });
+  });
+
+  it('confirms a pending high-permission plugin install', async () => {
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.PLUGIN_PERMISSION_CHECK);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, { name: 'danger-plugin', confirmed: true });
+    expect(mockPluginConfirmPendingInstall).toHaveBeenCalledWith('danger-plugin', true);
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        manifest: { name: 'danger-plugin' },
+      },
+    });
+  });
+
+  it('requires explicit confirmation before uninstalling a plugin', async () => {
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.PLUGIN_UNINSTALL);
+    expect(handler).toBeDefined();
+
+    const rejected = await handler!({}, { name: 'test-plugin' });
+    expect(rejected).toMatchObject({
+      success: false,
+      error: {
+        code: 'HANDLER_ERROR',
+      },
+    });
+    expect(mockPluginUninstall).not.toHaveBeenCalled();
+
+    const accepted = await handler!({}, { name: 'test-plugin', confirmed: true });
+    expect(mockPluginUninstall).toHaveBeenCalledWith('test-plugin');
+    expect(accepted).toMatchObject({
+      success: true,
+      data: { name: 'test-plugin', status: 'uninstalled' },
+    });
   });
 
   it('returns a structured ai:chat response through ipcMain handler', async () => {

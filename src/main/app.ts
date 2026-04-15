@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import type { WebContents } from 'electron';
 import { WindowManager } from './windows/WindowManager';
 import { IpcController } from './ipc/IpcController';
@@ -12,6 +12,7 @@ import { TabManager } from './browser/TabManager';
 import { IPC_CHANNELS } from '@shared/constants';
 import { AIService } from './ai/AIService';
 import { PluginLoader } from './plugin-loader/PluginLoader';
+import { PermissionChecker } from './plugin-loader/PermissionChecker';
 import { TaskService } from './services/TaskService';
 import { DataSourceManager } from '@engines/analytics/DataSourceManager';
 import { IndicatorLibrary } from '@engines/analytics/IndicatorLibrary';
@@ -33,6 +34,7 @@ export class App {
   private tabManager: TabManager;
   private aiService: AIService;
   private pluginLoader: PluginLoader;
+  private permissionChecker: PermissionChecker;
   private taskService: TaskService;
   private dataSourceManager: DataSourceManager;
   private indicatorLibrary: IndicatorLibrary;
@@ -51,6 +53,7 @@ export class App {
     this.tabManager = new TabManager();
     this.aiService = new AIService(this.configService.get('ai'));
     this.pluginLoader = new PluginLoader();
+    this.permissionChecker = new PermissionChecker();
     this.taskService = new TaskService({ databaseService: this.databaseService });
     this.dataSourceManager = new DataSourceManager();
     this.indicatorLibrary = new IndicatorLibrary();
@@ -210,6 +213,29 @@ export class App {
       return this.pluginLoader.getAll();
     });
 
+    this.ipcController.handle(IPC_CHANNELS.PLUGIN_INSTALL, async (params: unknown) => {
+      const { source, path: pluginPath } = (params as {
+        source?: 'local';
+        path?: string;
+      }) ?? {};
+
+      if (source !== 'local') {
+        throw new Error('Only local plugin installation is supported in this version');
+      }
+
+      const selectedPath = pluginPath ?? await this.pickLocalPluginPath();
+      if (!selectedPath) {
+        return null;
+      }
+
+      return this.pluginLoader.installFromPath(selectedPath);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.PLUGIN_PERMISSION_CHECK, (params: unknown) => {
+      const { name, confirmed } = params as { name: string; confirmed: boolean };
+      return this.pluginLoader.confirmPendingInstall(name, confirmed);
+    });
+
     this.ipcController.handle(IPC_CHANNELS.PLUGIN_ENABLE, (params: unknown) => {
       const { name } = params as { name: string };
       this.pluginLoader.activate(name);
@@ -223,7 +249,14 @@ export class App {
     });
 
     this.ipcController.handle(IPC_CHANNELS.PLUGIN_UNINSTALL, (params: unknown) => {
-      const { name } = params as { name: string };
+      const { name, confirmed } = params as { name: string; confirmed?: boolean };
+      const plugin = this.pluginLoader.get(name);
+      if (!plugin) {
+        throw new Error(`Plugin "${name}" not found`);
+      }
+      if (this.permissionChecker.requiresUninstallConfirmation(plugin.manifest) && !confirmed) {
+        throw new Error(`Uninstalling plugin "${name}" requires confirmation`);
+      }
       this.pluginLoader.uninstall(name);
       return { name, status: 'uninstalled' };
     });
@@ -407,6 +440,20 @@ export class App {
     });
 
     return data;
+  }
+
+  private async pickLocalPluginPath(): Promise<string | null> {
+    const result = await dialog.showOpenDialog({
+      title: '选择本地插件目录',
+      buttonLabel: '安装插件',
+      properties: ['openDirectory'],
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+
+    return result.filePaths[0];
   }
 
   private getTaskWebContents(tabId?: number): WebContents {
