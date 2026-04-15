@@ -45,7 +45,8 @@ export class PluginLoader {
   async loadAll(): Promise<void> {
     if (!fs.existsSync(this.pluginsDir)) return;
 
-    const dirs = fs.readdirSync(this.pluginsDir, { withFileTypes: true })
+    const dirs = fs
+      .readdirSync(this.pluginsDir, { withFileTypes: true })
       .filter((d) => d.isDirectory() && !d.name.startsWith('_'))
       .map((d) => d.name);
 
@@ -162,7 +163,10 @@ export class PluginLoader {
     // 防止路径遍历：确保目标路径在 pluginsDir 内
     const resolvedPath = path.resolve(entry.path);
     const resolvedPluginsDir = path.resolve(this.pluginsDir);
-    if (!resolvedPath.startsWith(resolvedPluginsDir + path.sep) && resolvedPath !== resolvedPluginsDir) {
+    if (
+      !resolvedPath.startsWith(resolvedPluginsDir + path.sep) &&
+      resolvedPath !== resolvedPluginsDir
+    ) {
       throw new Error(`Refusing to delete path outside plugins directory: ${resolvedPath}`);
     }
 

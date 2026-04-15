@@ -22,11 +22,14 @@ export class ContextManager {
     const cpus = os.cpus();
     const totalMemory = os.totalmem();
     const freeMemory = os.freemem();
-    const recentTasks = this.databaseService.getTasks().slice(0, 5).map((task) => ({
-      name: task.name,
-      status: task.status,
-      updatedAt: task.updatedAt,
-    }));
+    const recentTasks = this.databaseService
+      .getTasks()
+      .slice(0, 5)
+      .map((task) => ({
+        name: task.name,
+        status: task.status,
+        updatedAt: task.updatedAt,
+      }));
     const installedPlugins = this.databaseService.getInstalledPlugins().slice(0, 5);
 
     return {

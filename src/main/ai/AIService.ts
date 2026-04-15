@@ -36,9 +36,10 @@ export class AIService {
   private databaseService = DatabaseService.getInstance();
 
   constructor(configOrOptions?: Partial<AIConfig> | AIServiceOptions) {
-    const opts: AIServiceOptions = configOrOptions && ('openWindow' in configOrOptions || 'config' in configOrOptions)
-      ? configOrOptions as AIServiceOptions
-      : { config: configOrOptions as Partial<AIConfig> | undefined };
+    const opts: AIServiceOptions =
+      configOrOptions && ('openWindow' in configOrOptions || 'config' in configOrOptions)
+        ? (configOrOptions as AIServiceOptions)
+        : { config: configOrOptions as Partial<AIConfig> | undefined };
 
     this.config = {
       provider: 'openai',

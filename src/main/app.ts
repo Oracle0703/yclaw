@@ -17,7 +17,13 @@ import { TaskService } from './services/TaskService';
 import { DataSourceManager } from '@engines/analytics/DataSourceManager';
 import { IndicatorLibrary } from '@engines/analytics/IndicatorLibrary';
 import { EVENTS } from '@shared/constants';
-import type { AIChatRequest, AIConfig, OHLCVData, IndicatorType, DataSourceConfig } from '@shared/types';
+import type {
+  AIChatRequest,
+  AIConfig,
+  OHLCVData,
+  IndicatorType,
+  DataSourceConfig,
+} from '@shared/types';
 
 /**
  * 应用生命周期管理
@@ -133,8 +139,10 @@ export class App {
     // 配置
     this.ipcController.handle(IPC_CHANNELS.CONFIG_GET, (key: unknown) => {
       const validKeys = ['general', 'modules', 'plugins', 'ai'] as const;
-      if (typeof key !== 'string' || !validKeys.includes(key as typeof validKeys[number])) {
-        throw new Error(`Invalid config key: ${String(key)}. Expected one of: ${validKeys.join(', ')}`);
+      if (typeof key !== 'string' || !validKeys.includes(key as (typeof validKeys)[number])) {
+        throw new Error(
+          `Invalid config key: ${String(key)}. Expected one of: ${validKeys.join(', ')}`,
+        );
       }
       return this.configService.get(key as keyof ReturnType<ConfigService['getAll']>);
     });
@@ -225,16 +233,17 @@ export class App {
     });
 
     this.ipcController.handle(IPC_CHANNELS.PLUGIN_INSTALL, async (params: unknown) => {
-      const { source, path: pluginPath } = (params as {
-        source?: 'local';
-        path?: string;
-      }) ?? {};
+      const { source, path: pluginPath } =
+        (params as {
+          source?: 'local';
+          path?: string;
+        }) ?? {};
 
       if (source !== 'local') {
         throw new Error('Only local plugin installation is supported in this version');
       }
 
-      const selectedPath = pluginPath ?? await this.pickLocalPluginPath();
+      const selectedPath = pluginPath ?? (await this.pickLocalPluginPath());
       if (!selectedPath) {
         return null;
       }
@@ -301,11 +310,12 @@ export class App {
 
     // 股票
     this.ipcController.handle(IPC_CHANNELS.STOCK_DATA, (params: unknown) => {
-      const { symbol, timeframe, sourceConfig } = (params as {
-        symbol?: string;
-        timeframe?: string;
-        sourceConfig?: DataSourceConfig;
-      }) ?? {};
+      const { symbol, timeframe, sourceConfig } =
+        (params as {
+          symbol?: string;
+          timeframe?: string;
+          sourceConfig?: DataSourceConfig;
+        }) ?? {};
       return this.getStockHistory({
         symbol: symbol ?? 'AAPL',
         timeframe: timeframe ?? '1D',

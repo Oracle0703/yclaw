@@ -23,20 +23,23 @@ contextBridge.exposeInMainWorld('yclawPlugin', {
       invokePluginChannel('plugin:storage:set', key, value),
   },
   log: {
-    info: (message: string) => void ipcRenderer.invoke('log:write', {
-      level: 'info',
-      source: 'plugin',
-      message,
-    }),
-    warn: (message: string) => void ipcRenderer.invoke('log:write', {
-      level: 'warn',
-      source: 'plugin',
-      message,
-    }),
-    error: (message: string) => void ipcRenderer.invoke('log:write', {
-      level: 'error',
-      source: 'plugin',
-      message,
-    }),
+    info: (message: string) =>
+      void ipcRenderer.invoke('log:write', {
+        level: 'info',
+        source: 'plugin',
+        message,
+      }),
+    warn: (message: string) =>
+      void ipcRenderer.invoke('log:write', {
+        level: 'warn',
+        source: 'plugin',
+        message,
+      }),
+    error: (message: string) =>
+      void ipcRenderer.invoke('log:write', {
+        level: 'error',
+        source: 'plugin',
+        message,
+      }),
   },
 });

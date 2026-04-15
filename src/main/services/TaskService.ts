@@ -30,7 +30,10 @@ interface ActiveTask {
 }
 
 export class TaskService {
-  private readonly databaseService: Pick<DatabaseService, 'getTasks' | 'getTaskFlow' | 'updateTaskStatus'>;
+  private readonly databaseService: Pick<
+    DatabaseService,
+    'getTasks' | 'getTaskFlow' | 'updateTaskStatus'
+  >;
   private readonly createRunner: () => FlowRunner;
   private readonly eventBus: EventBus;
   private readonly activeTasks = new Map<string, ActiveTask>();
