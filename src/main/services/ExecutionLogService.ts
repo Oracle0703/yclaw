@@ -17,6 +17,7 @@ export interface ExecutionLogQuery {
   batchId?: string;
   stepIndex?: number;
   level?: 'info' | 'warn' | 'error';
+  since?: string;
 }
 
 export interface ExecutionLogServiceOptions {
@@ -66,6 +67,10 @@ export class ExecutionLogService {
     if (query.level) {
       conditions.push('level = ?');
       params.push(query.level);
+    }
+    if (query.since) {
+      conditions.push('created_at >= ?');
+      params.push(query.since);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

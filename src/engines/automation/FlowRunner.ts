@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron';
-import type { TaskFlow, TaskStep, TaskStatus, TaskExecutionResult, StepResult } from '@shared/types';
+import type { TaskFlow, TaskStep, TaskExecutionResult, StepResult } from '@shared/types';
+import { TaskStatus } from '@shared/types';
 import type { ActionDefinition } from './types';
 import { AutomationEngine } from './AutomationEngine';
 import { withRetry, createBreakpoint, type Breakpoint } from './RetryPolicy';
@@ -22,7 +23,7 @@ export interface FlowRunnerOptions {
 export class FlowRunner {
   private engine: AutomationEngine;
   private eventBus: EventBus;
-  private status: TaskStatus = 'idle' as TaskStatus;
+  private status: TaskStatus = TaskStatus.IDLE;
   private currentStepIndex = 0;
   private breakpoint: Breakpoint | null = null;
   private aborted = false;
@@ -31,6 +32,8 @@ export class FlowRunner {
   private readonly defaultRetryCount: number;
   private readonly defaultRetryDelay: number;
   private readonly executionLogService?: Pick<ExecutionLogService, 'append'>;
+  private flowId = '';
+  private batchId = '';
 
   constructor(options: FlowRunnerOptions = {}) {
     this.engine = new AutomationEngine();
@@ -43,19 +46,26 @@ export class FlowRunner {
   /**
    * 执行整个任务流
    */
-  async run(flow: TaskFlow, webContents: WebContents, fromStep = 0): Promise<TaskExecutionResult> {
-    this.status = 'running' as TaskStatus;
+  async run(
+    flow: TaskFlow,
+    webContents: WebContents,
+    fromStep = 0,
+    batchId?: string,
+  ): Promise<TaskExecutionResult> {
+    this.status = TaskStatus.RUNNING;
     this.aborted = false;
     this.paused = false;
     this.currentStepIndex = fromStep;
     this.breakpoint = null;
+    this.flowId = flow.id;
+    this.batchId = batchId ?? `batch:${flow.id}`;
 
     const stepResults: StepResult[] = [];
     this.eventBus.emit(EVENTS.TASK_STARTED, { flowId: flow.id });
 
     for (let i = fromStep; i < flow.steps.length; i++) {
       if (this.aborted) {
-        this.status = 'idle' as TaskStatus;
+        this.status = TaskStatus.IDLE;
         return { success: false, stepResults, error: 'Task aborted' };
       }
 
@@ -81,7 +91,7 @@ export class FlowRunner {
         if (!result.success) {
           // 步骤失败，保存断点
           this.breakpoint = createBreakpoint(flow.id, i, result.error);
-          this.status = 'failed' as TaskStatus;
+          this.status = TaskStatus.FAILED;
           this.eventBus.emit(EVENTS.TASK_FAILED, {
             flowId: flow.id,
             stepIndex: i,
@@ -97,7 +107,7 @@ export class FlowRunner {
       } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
         this.breakpoint = createBreakpoint(flow.id, i, error);
-        this.status = 'failed' as TaskStatus;
+        this.status = TaskStatus.FAILED;
         this.eventBus.emit(EVENTS.TASK_FAILED, {
           flowId: flow.id,
           stepIndex: i,
@@ -112,7 +122,7 @@ export class FlowRunner {
       }
     }
 
-    this.status = 'completed' as TaskStatus;
+    this.status = TaskStatus.COMPLETED;
     this.eventBus.emit(EVENTS.TASK_COMPLETED, { flowId: flow.id });
     return { success: true, stepResults };
   }
@@ -120,12 +130,14 @@ export class FlowRunner {
   /**
    * 从断点恢复执行
    */
-  async resume(flow: TaskFlow, webContents: WebContents): Promise<TaskExecutionResult> {
-    const fromStep = this.breakpoint
-      ? this.breakpoint.stepIndex
-      : this.currentStepIndex;
+  async resume(
+    flow: TaskFlow,
+    webContents: WebContents,
+    batchId?: string,
+  ): Promise<TaskExecutionResult> {
+    const fromStep = this.breakpoint ? this.breakpoint.stepIndex : this.currentStepIndex;
     this.breakpoint = null;
-    return this.run(flow, webContents, fromStep);
+    return this.run(flow, webContents, fromStep, batchId);
   }
 
   /**
@@ -133,7 +145,7 @@ export class FlowRunner {
    */
   pause(): void {
     this.paused = true;
-    this.status = 'paused' as TaskStatus;
+    this.status = TaskStatus.PAUSED;
   }
 
   /**
@@ -141,7 +153,7 @@ export class FlowRunner {
    */
   unpause(): void {
     this.paused = false;
-    this.status = 'running' as TaskStatus;
+    this.status = TaskStatus.RUNNING;
     if (this.pauseResolve) {
       this.pauseResolve();
       this.pauseResolve = null;
@@ -183,12 +195,11 @@ export class FlowRunner {
     };
 
     const startTime = Date.now();
-    const batchId = 'batch:flow-1';
 
     try {
       this.executionLogService?.append({
-        taskId: 'flow-1',
-        batchId,
+        taskId: this.flowId,
+        batchId: this.batchId,
         stepIndex: this.currentStepIndex,
         level: 'info',
         message: `Starting step ${step.id}`,
@@ -211,8 +222,8 @@ export class FlowRunner {
       };
     } catch (err) {
       this.executionLogService?.append({
-        taskId: 'flow-1',
-        batchId,
+        taskId: this.flowId,
+        batchId: this.batchId,
         stepIndex: this.currentStepIndex,
         level: 'error',
         message: err instanceof Error ? err.message : String(err),

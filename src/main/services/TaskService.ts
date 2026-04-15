@@ -6,6 +6,7 @@ import { FlowRunner } from '@engines/automation/FlowRunner';
 import { EventBus } from '@main/ipc/EventBus';
 import { DatabaseService } from './DatabaseService';
 import { BatchService } from './BatchService';
+import { randomUUID } from 'crypto';
 
 export interface TaskSummary {
   id: string;
@@ -36,7 +37,10 @@ export interface TaskState {
 }
 
 export interface TaskServiceOptions {
-  databaseService?: Pick<DatabaseService, 'getTasks' | 'getTaskFlow' | 'updateTaskStatus'>;
+  databaseService?: Pick<
+    DatabaseService,
+    'getTasks' | 'getTaskFlow' | 'updateTaskStatus' | 'createTask' | 'updateTask' | 'deleteTask'
+  >;
   createRunner?: () => FlowRunner;
   eventBus?: EventBus;
   batchService?: Pick<BatchService, 'createBatch' | 'getBatch' | 'listBatchesByTask'>;
@@ -50,7 +54,7 @@ interface ActiveTask {
 export class TaskService {
   private readonly databaseService: Pick<
     DatabaseService,
-    'getTasks' | 'getTaskFlow' | 'updateTaskStatus'
+    'getTasks' | 'getTaskFlow' | 'updateTaskStatus' | 'createTask' | 'updateTask' | 'deleteTask'
   >;
   private readonly createRunner: () => FlowRunner;
   private readonly eventBus: EventBus;
@@ -165,6 +169,96 @@ export class TaskService {
     return this.getBatchService().createBatch(batch.taskId, {
       sourceBatchId: batchId,
       reason: 'retry',
+    });
+  }
+
+  createTask(payload: {
+    name: string;
+    description?: string;
+    steps?: unknown[];
+    entryUrl?: string;
+    schedule?: unknown;
+    sessionId?: string | null;
+    templateId?: string | null;
+  }): TaskFlow {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const flow: TaskFlow = {
+      id,
+      name: payload.name,
+      description: payload.description,
+      steps: (payload.steps ?? []) as TaskFlow['steps'],
+      entryUrl: payload.entryUrl,
+      schedule: payload.schedule as TaskFlow['schedule'],
+      sessionId: payload.sessionId ?? null,
+      templateId: payload.templateId ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.databaseService.createTask({
+      id,
+      name: payload.name,
+      description: payload.description,
+      flowJson: JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl }),
+      scheduleJson: payload.schedule ? JSON.stringify(payload.schedule) : null,
+      sessionId: payload.sessionId ?? null,
+      templateId: payload.templateId ?? null,
+    });
+    return flow;
+  }
+
+  updateTaskFlow(
+    taskId: string,
+    payload: {
+      name?: string;
+      description?: string;
+      steps?: unknown[];
+      entryUrl?: string;
+      schedule?: unknown;
+      sessionId?: string | null;
+      templateId?: string | null;
+    },
+  ): TaskFlow | null {
+    const existing = this.databaseService.getTaskFlow(taskId);
+    if (!existing) throw new Error(`Task "${taskId}" not found`);
+    const flowJson =
+      payload.steps || payload.entryUrl !== undefined
+        ? JSON.stringify({
+            steps: payload.steps ?? existing.steps,
+            entryUrl: payload.entryUrl ?? existing.entryUrl,
+          })
+        : undefined;
+    this.databaseService.updateTask(taskId, {
+      name: payload.name,
+      description: payload.description,
+      flowJson,
+      scheduleJson: payload.schedule !== undefined ? JSON.stringify(payload.schedule) : undefined,
+      sessionId: payload.sessionId,
+      templateId: payload.templateId,
+    });
+    return this.databaseService.getTaskFlow(taskId);
+  }
+
+  deleteTask(taskId: string): void {
+    this.activeTasks.delete(taskId);
+    this.databaseService.deleteTask(taskId);
+  }
+
+  getTaskDetail(taskId: string): TaskFlow | null {
+    return this.databaseService.getTaskFlow(taskId);
+  }
+
+  cloneTask(taskId: string): TaskFlow {
+    const source = this.databaseService.getTaskFlow(taskId);
+    if (!source) throw new Error(`Task "${taskId}" not found`);
+    return this.createTask({
+      name: `${source.name} (副本)`,
+      description: source.description,
+      steps: source.steps,
+      entryUrl: source.entryUrl,
+      schedule: source.schedule,
+      sessionId: source.sessionId ?? null,
+      templateId: source.templateId ?? null,
     });
   }
 

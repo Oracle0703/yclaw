@@ -28,17 +28,19 @@ export function ResultTable({ taskId, batchId }: ResultTableProps) {
     <ProCard
       className="yclaw-panel-card"
       title="采集结果"
-      extra={(
+      extra={
         <Space>
           <Button
             size="small"
             disabled={!taskId}
-            onClick={() => taskId && void automation.exportResults(taskId, batchId ?? undefined, 'csv')}
+            onClick={() =>
+              taskId && void automation.exportResults(taskId, batchId ?? undefined, 'csv')
+            }
           >
             导出 CSV
           </Button>
         </Space>
-      )}
+      }
     >
       <Table
         rowKey="id"
@@ -58,7 +60,12 @@ export function ResultTable({ taskId, batchId }: ResultTableProps) {
             title: '数据',
             key: 'data',
             render: (_, record: ExtractionResult) => (
-              <Typography.Text>{JSON.stringify(record.data)}</Typography.Text>
+              <Typography.Paragraph
+                ellipsis={{ rows: 2, expandable: true }}
+                style={{ marginBottom: 0 }}
+              >
+                {JSON.stringify(record.data)}
+              </Typography.Paragraph>
             ),
           },
         ]}

@@ -13,6 +13,7 @@ import { SessionRegistry } from './services/SessionRegistry';
 import { TemplateService } from './services/TemplateService';
 import { AlertService } from './services/AlertService';
 import { ExecutionLogService } from './services/ExecutionLogService';
+import { ResultService } from './services/ResultService';
 import { TabManager } from './browser/TabManager';
 import { IPC_CHANNELS } from '@shared/constants';
 import { AIService } from './ai/AIService';
@@ -28,6 +29,7 @@ import type {
   OHLCVData,
   IndicatorType,
   DataSourceConfig,
+  InterventionState,
 } from '@shared/types';
 
 /**
@@ -52,9 +54,11 @@ export class App {
   private templateService: TemplateService;
   private executionLogService: ExecutionLogService;
   private alertService: AlertService;
+  private resultService: ResultService;
   private dataSourceManager: DataSourceManager;
   private indicatorLibrary: IndicatorLibrary;
   private eventForwarders: Array<{ event: string; listener: (...args: unknown[]) => void }> = [];
+  private interventionState: InterventionState | null = null;
   private started = false;
 
   constructor() {
@@ -86,6 +90,7 @@ export class App {
       databaseService: this.databaseService,
       executionLogService: this.executionLogService,
     });
+    this.resultService = new ResultService({ databaseService: this.databaseService });
     this.dataSourceManager = new DataSourceManager();
     this.indicatorLibrary = new IndicatorLibrary();
   }
@@ -478,6 +483,113 @@ export class App {
     this.ipcController.handle(IPC_CHANNELS.BROWSER_RELOAD, (params: unknown) => {
       const { tabId } = params as { tabId?: number };
       this.tabManager.reload(tabId);
+    });
+
+    // 任务 CRUD
+    this.ipcController.handle(IPC_CHANNELS.TASK_CREATE, (params: unknown) => {
+      const payload = params as {
+        name: string;
+        description?: string;
+        steps?: unknown[];
+        entryUrl?: string;
+        schedule?: unknown;
+        sessionId?: string | null;
+        templateId?: string | null;
+      };
+      return this.taskService.createTask(payload);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_UPDATE, (params: unknown) => {
+      const { taskId, ...payload } = params as { taskId: string; [key: string]: unknown };
+      return this.taskService.updateTaskFlow(
+        taskId,
+        payload as Parameters<TaskService['updateTaskFlow']>[1],
+      );
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_DELETE, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      this.taskService.deleteTask(taskId);
+      return { taskId };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_DETAIL, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      return this.taskService.getTaskDetail(taskId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_CLONE, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      return this.taskService.cloneTask(taskId);
+    });
+
+    // 采集结果
+    this.ipcController.handle(IPC_CHANNELS.RESULT_LIST, (params: unknown) => {
+      const { taskId, batchId } = (params as { taskId?: string; batchId?: string }) ?? {};
+      return this.resultService.listResults({ taskId, batchId });
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.RESULT_DETAIL, (params: unknown) => {
+      const { resultId } = params as { resultId: string };
+      return this.resultService.getResult(resultId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.RESULT_EXPORT, (params: unknown) => {
+      const { taskId, batchId, format } = params as {
+        taskId?: string;
+        batchId?: string;
+        format: 'csv' | 'json';
+      };
+      return this.resultService.exportResults({ taskId, batchId }, format);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.RESULT_MARK_SUSPICIOUS, (params: unknown) => {
+      const { resultId } = params as { resultId: string };
+      this.resultService.markSuspicious(resultId);
+      return { resultId };
+    });
+
+    // 执行日志
+    this.ipcController.handle(IPC_CHANNELS.EXEC_LOG_QUERY, (params: unknown) => {
+      const query =
+        (params as { taskId?: string; batchId?: string; level?: 'info' | 'warn' | 'error' }) ?? {};
+      return this.executionLogService.query(query);
+    });
+
+    // 介入管理
+    this.ipcController.handle(IPC_CHANNELS.INTERVENTION_STATUS, () => {
+      return this.interventionState;
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.INTERVENTION_TAKEOVER, (params: unknown) => {
+      const { taskId, batchId } = params as { taskId: string; batchId: string };
+      this.interventionState = {
+        taskId,
+        batchId,
+        flowRunnerStatus: 'intervention',
+        webContentsId: this.tabManager.getActiveTabId() ?? 0,
+        sessionPartition: 'default',
+      };
+      this.eventBus.emit(IPC_CHANNELS.INTERVENTION_STEP_INFO, this.interventionState);
+      return this.interventionState;
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.INTERVENTION_RESUME, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      this.interventionState = null;
+      const webContents = this.tabManager.getView()?.webContents;
+      if (webContents) {
+        this.taskService.resumeTask(taskId, webContents);
+      }
+      return { taskId, resumed: true };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.INTERVENTION_SCREENSHOT, async (params: unknown) => {
+      const { tabId } = (params as { tabId?: number }) ?? {};
+      const view = this.tabManager.getView(tabId);
+      if (!view) throw new Error('No active tab for screenshot');
+      const image = await view.webContents.capturePage();
+      return image.toDataURL();
     });
   }
 

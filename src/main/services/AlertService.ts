@@ -64,7 +64,9 @@ export class AlertService {
       .filter((alert) => !query.unreadOnly || !alert.read);
   }
 
-  pushAlert(alert: Omit<AlertRecord, 'id' | 'createdAt' | 'read'> & Partial<AlertRecord>): AlertRecord {
+  pushAlert(
+    alert: Omit<AlertRecord, 'id' | 'createdAt' | 'read'> & Partial<AlertRecord>,
+  ): AlertRecord {
     const record: AlertRecord = {
       id: alert.id ?? randomUUID(),
       taskId: alert.taskId,
@@ -95,12 +97,10 @@ export class AlertService {
   }
 
   aggregateFromExecutionLogs(minutes = 10): AlertRecord[] {
-    const cutoff = Date.now() - minutes * 60 * 1000;
+    const cutoff = new Date(Date.now() - minutes * 60 * 1000).toISOString();
     const unreadAlerts = this.listAlerts({ unreadOnly: true });
     const existingTaskIds = new Set(unreadAlerts.map((alert) => alert.taskId));
-    const errorLogs = this.executionLogService
-      .query({ level: 'error' })
-      .filter((record) => Date.parse(record.createdAt ?? '') >= cutoff);
+    const errorLogs = this.executionLogService.query({ level: 'error', since: cutoff });
 
     const grouped = new Map<string, { count: number; batchId?: string; latestMessage: string }>();
 

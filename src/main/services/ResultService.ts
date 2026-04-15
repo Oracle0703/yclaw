@@ -136,10 +136,10 @@ export class ResultService {
   }
 
   markSuspicious(resultId: string): void {
-    this.databaseService.run(
-      'UPDATE extraction_results SET status = ? WHERE id = ?',
-      ['suspicious', resultId],
-    );
+    this.databaseService.run('UPDATE extraction_results SET status = ? WHERE id = ?', [
+      'suspicious',
+      resultId,
+    ]);
   }
 
   exportResults(query: ResultQuery, format: 'csv' | 'json'): string {
@@ -152,9 +152,18 @@ export class ResultService {
     }
 
     const fieldNames = Array.from(new Set(results.flatMap((item) => Object.keys(item.data))));
-    const header = ['id', 'taskId', 'batchId', ...fieldNames].join(',');
+    const escapeCsvCell = (value: unknown): string => {
+      const str = value == null ? '' : String(value);
+      // Strip leading formula characters to prevent CSV injection
+      const sanitized = str.replace(/^[=+\-@\t\r]/, "'$&");
+      // Always quote and escape internal double-quotes
+      return `"${sanitized.replace(/"/g, '""')}"`;
+    };
+    const header = ['id', 'taskId', 'batchId', ...fieldNames].map(escapeCsvCell).join(',');
     const lines = results.map((item) =>
-      [item.id, item.taskId, item.batchId, ...fieldNames.map((field) => JSON.stringify(item.data[field] ?? ''))].join(','),
+      [item.id, item.taskId, item.batchId, ...fieldNames.map((field) => item.data[field] ?? '')]
+        .map(escapeCsvCell)
+        .join(','),
     );
     fs.writeFileSync(outputPath, [header, ...lines].join('\n'), 'utf8');
     return outputPath;

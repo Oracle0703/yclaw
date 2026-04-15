@@ -37,8 +37,13 @@ export class BatchService {
         batch.taskId,
         batch.status,
         JSON.stringify(batch.stepResults),
-        options.reason ?? null,
-        options.sourceBatchId ? JSON.stringify({ sourceBatchId: options.sourceBatchId }) : null,
+        null,
+        options.reason || options.sourceBatchId
+          ? JSON.stringify({
+              reason: options.reason ?? null,
+              sourceBatchId: options.sourceBatchId ?? null,
+            })
+          : null,
         batch.createdAt,
       ],
     );
@@ -47,10 +52,11 @@ export class BatchService {
   }
 
   startBatch(batchId: string): void {
-    this.databaseService.run(
-      'UPDATE task_batches SET status = ?, started_at = ? WHERE id = ?',
-      ['running', new Date().toISOString(), batchId],
-    );
+    this.databaseService.run('UPDATE task_batches SET status = ?, started_at = ? WHERE id = ?', [
+      'running',
+      new Date().toISOString(),
+      batchId,
+    ]);
   }
 
   finishBatch(batchId: string, stepResults: StepResult[]): void {
@@ -63,7 +69,13 @@ export class BatchService {
   failBatch(batchId: string, error: string, breakpoint?: TaskBreakpoint): void {
     this.databaseService.run(
       'UPDATE task_batches SET status = ?, finished_at = ?, error = ?, breakpoint_json = ? WHERE id = ?',
-      ['failed', new Date().toISOString(), error, breakpoint ? JSON.stringify(breakpoint) : null, batchId],
+      [
+        'failed',
+        new Date().toISOString(),
+        error,
+        breakpoint ? JSON.stringify(breakpoint) : null,
+        batchId,
+      ],
     );
   }
 
@@ -106,9 +118,7 @@ export class BatchService {
       finishedAt: row.finished_at ?? null,
       stepResults: JSON.parse(row.step_results) as StepResult[],
       error: row.error ?? null,
-      breakpoint: row.breakpoint_json
-        ? (JSON.parse(row.breakpoint_json) as TaskBreakpoint)
-        : null,
+      breakpoint: row.breakpoint_json ? (JSON.parse(row.breakpoint_json) as TaskBreakpoint) : null,
       createdAt: row.created_at,
     };
   }
@@ -149,9 +159,7 @@ export class BatchService {
       finishedAt: row.finished_at ?? null,
       stepResults: JSON.parse(row.step_results) as StepResult[],
       error: row.error ?? null,
-      breakpoint: row.breakpoint_json
-        ? (JSON.parse(row.breakpoint_json) as TaskBreakpoint)
-        : null,
+      breakpoint: row.breakpoint_json ? (JSON.parse(row.breakpoint_json) as TaskBreakpoint) : null,
       createdAt: row.created_at,
     }));
   }

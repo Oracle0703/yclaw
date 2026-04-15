@@ -4,6 +4,7 @@ const mockDb = {
   run: vi.fn(),
   get: vi.fn(),
   all: vi.fn(),
+  transaction: vi.fn((fn: () => void) => fn()),
 };
 
 vi.mock('@main/services/DatabaseService', () => ({
@@ -48,10 +49,10 @@ describe('TemplateService', () => {
   it('attaches a template to a task', () => {
     service.attachTemplateToTask('task-1', 'template-1');
 
-    expect(mockDb.run).toHaveBeenCalledWith(
-      expect.stringContaining('UPDATE tasks'),
-      ['template-1', 'task-1'],
-    );
+    expect(mockDb.run).toHaveBeenCalledWith(expect.stringContaining('UPDATE tasks'), [
+      'template-1',
+      'task-1',
+    ]);
   });
 
   it('preserves createdAt when updating an existing template', () => {

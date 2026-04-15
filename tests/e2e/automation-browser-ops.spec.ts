@@ -116,7 +116,7 @@ test.describe('automation-browser-ops', () => {
     const startButton = page
       .locator('tr', { hasText: '价格监控' })
       .getByRole('button', { name: '启动' });
-    await startButton.evaluate((element: HTMLButtonElement) => element.click());
+    await startButton.click();
 
     const calls = await page.evaluate(() => (window as never).__yclawTest.calls);
     expect(calls.some((item: { channel: string }) => item.channel === 'task:start')).toBeTruthy();
@@ -132,7 +132,9 @@ test.describe('automation-browser-ops', () => {
     await page.getByRole('button', { name: '导出 CSV' }).click();
 
     const calls = await page.evaluate(() => (window as never).__yclawTest.calls);
-    expect(calls.some((item: { channel: string }) => item.channel === 'result:export')).toBeTruthy();
+    expect(
+      calls.some((item: { channel: string }) => item.channel === 'result:export'),
+    ).toBeTruthy();
   });
 
   test('enters intervention mode and resumes automation on the browser page', async ({ page }) => {
@@ -157,6 +159,8 @@ test.describe('automation-browser-ops', () => {
     await page.getByRole('button', { name: '恢复自动执行' }).click();
 
     const calls = await page.evaluate(() => (window as never).__yclawTest.calls);
-    expect(calls.some((item: { channel: string }) => item.channel === 'intervention:resume')).toBeTruthy();
+    expect(
+      calls.some((item: { channel: string }) => item.channel === 'intervention:resume'),
+    ).toBeTruthy();
   });
 });

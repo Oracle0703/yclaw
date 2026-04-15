@@ -4,11 +4,11 @@ import type { ExtractionTemplate } from '@shared/types';
 import { DatabaseService as DatabaseServiceSingleton } from './DatabaseService';
 
 export interface TemplateServiceOptions {
-  databaseService?: Pick<DatabaseService, 'run' | 'all' | 'get'>;
+  databaseService?: Pick<DatabaseService, 'run' | 'all' | 'get' | 'transaction'>;
 }
 
 export class TemplateService {
-  private readonly databaseService: Pick<DatabaseService, 'run' | 'all' | 'get'>;
+  private readonly databaseService: Pick<DatabaseService, 'run' | 'all' | 'get' | 'transaction'>;
 
   constructor(options: TemplateServiceOptions = {}) {
     this.databaseService = options.databaseService ?? DatabaseServiceSingleton.getInstance();
@@ -68,13 +68,17 @@ export class TemplateService {
   }
 
   deleteTemplate(templateId: string): void {
-    this.databaseService.run('UPDATE tasks SET template_id = NULL WHERE template_id = ?', [templateId]);
-    this.databaseService.run('DELETE FROM extraction_templates WHERE id = ?', [templateId]);
+    this.databaseService.transaction(() => {
+      this.databaseService.run('UPDATE tasks SET template_id = NULL WHERE template_id = ?', [
+        templateId,
+      ]);
+      this.databaseService.run('DELETE FROM extraction_templates WHERE id = ?', [templateId]);
+    });
   }
 
   attachTemplateToTask(taskId: string, templateId: string): void {
     this.databaseService.run(
-      'UPDATE tasks SET template_id = ?, updated_at = datetime(\'now\') WHERE id = ?',
+      "UPDATE tasks SET template_id = ?, updated_at = datetime('now') WHERE id = ?",
       [templateId, taskId],
     );
   }

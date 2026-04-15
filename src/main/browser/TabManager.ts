@@ -1,16 +1,9 @@
 import { WebContentsView, Session, session } from 'electron';
 import { EventBus } from '../ipc/EventBus';
 import type { TaskStep } from '@shared/types';
+import type { Tab } from '@shared/types/browser';
 
-export interface TabInfo {
-  id: number;
-  title: string;
-  url: string;
-  loading: boolean;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  sessionPartition: string;
-}
+export type TabInfo = Tab;
 
 export interface TabManagerOptions {
   /** 隔离会话名（默认 default） */
@@ -50,11 +43,7 @@ export class TabManager {
     return this.createView(url, this.session, this.sessionPartition);
   }
 
-  private createView(
-    url: string,
-    targetSession: Session,
-    partitionLabel: string,
-  ): WebContentsView {
+  private createView(url: string, targetSession: Session, partitionLabel: string): WebContentsView {
     if (this.tabs.size >= this.maxTabs) {
       throw new Error(`Maximum tab limit (${this.maxTabs}) reached`);
     }
@@ -243,14 +232,19 @@ export class TabManager {
           );
         };
 
+        let scrollTimer = null;
         const scrollHandler = () => {
-          pushStep(
-            toStep('页面滚动', {
-              type: 'scroll',
-              selector: 'body',
-              params: { x: window.scrollX, y: window.scrollY },
-            }),
-          );
+          if (scrollTimer) clearTimeout(scrollTimer);
+          scrollTimer = setTimeout(() => {
+            pushStep(
+              toStep('页面滚动', {
+                type: 'scroll',
+                selector: 'body',
+                params: { x: window.scrollX, y: window.scrollY },
+              }),
+            );
+            scrollTimer = null;
+          }, 300);
         };
 
         document.addEventListener('click', clickHandler, true);

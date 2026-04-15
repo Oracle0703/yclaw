@@ -112,7 +112,8 @@ export class DatabaseService {
     } | null;
   }> {
     this.ensureOpen();
-    const rows = this.db!.prepare(`
+    const rows = this.db!.prepare(
+      `
       SELECT
         t.id,
         t.name,
@@ -136,7 +137,8 @@ export class DatabaseService {
         ) as latestBatchJson
       FROM tasks
       ORDER BY t.updated_at DESC
-    `).all() as Array<{
+    `,
+    ).all() as Array<{
       id: string;
       name: string;
       status: string;
@@ -161,32 +163,33 @@ export class DatabaseService {
 
   getTaskFlow(taskId: string): TaskFlow | null {
     this.ensureOpen();
-    const row = this.db!.prepare(`
+    const row = this.db!.prepare(
+      `
       SELECT id, name, description, flow_json as flowJson, created_at as createdAt, updated_at as updatedAt
       FROM tasks
       WHERE id = ?
-    `).get(taskId) as
+    `,
+    ).get(taskId) as
       | {
-        id: string;
-        name: string;
-        description?: string;
-        flowJson: string;
-        createdAt: string;
-        updatedAt: string;
-      }
+          id: string;
+          name: string;
+          description?: string;
+          flowJson: string;
+          createdAt: string;
+          updatedAt: string;
+        }
       | undefined;
 
     if (!row) {
       return null;
     }
 
-    const parsed = JSON.parse(row.flowJson) as Partial<TaskFlow> | { steps?: TaskStep[] } | TaskStep[];
-    const flowSteps = Array.isArray(parsed)
-      ? parsed
-      : parsed.steps;
-    const steps = flowSteps && flowSteps.length > 0
-      ? flowSteps
-      : this.getTaskSteps(taskId);
+    const parsed = JSON.parse(row.flowJson) as
+      | Partial<TaskFlow>
+      | { steps?: TaskStep[] }
+      | TaskStep[];
+    const flowSteps = Array.isArray(parsed) ? parsed : parsed.steps;
+    const steps = flowSteps && flowSteps.length > 0 ? flowSteps : this.getTaskSteps(taskId);
 
     return {
       id: row.id,
@@ -200,11 +203,88 @@ export class DatabaseService {
 
   updateTaskStatus(taskId: string, status: string): void {
     this.ensureOpen();
-    this.db!.prepare(`
+    this.db!.prepare(
+      `
       UPDATE tasks
       SET status = ?, updated_at = datetime('now')
       WHERE id = ?
-    `).run(status, taskId);
+    `,
+    ).run(status, taskId);
+  }
+
+  createTask(task: {
+    id: string;
+    name: string;
+    description?: string;
+    flowJson: string;
+    scheduleJson?: string | null;
+    sessionId?: string | null;
+    templateId?: string | null;
+  }): void {
+    this.ensureOpen();
+    this.db!.prepare(
+      `
+      INSERT INTO tasks (id, name, description, flow_json, status, schedule_json, session_id, template_id)
+      VALUES (?, ?, ?, ?, 'idle', ?, ?, ?)
+    `,
+    ).run(
+      task.id,
+      task.name,
+      task.description ?? null,
+      task.flowJson,
+      task.scheduleJson ?? null,
+      task.sessionId ?? null,
+      task.templateId ?? null,
+    );
+  }
+
+  updateTask(
+    taskId: string,
+    updates: {
+      name?: string;
+      description?: string;
+      flowJson?: string;
+      scheduleJson?: string | null;
+      sessionId?: string | null;
+      templateId?: string | null;
+    },
+  ): void {
+    this.ensureOpen();
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    if (updates.name !== undefined) {
+      sets.push('name = ?');
+      params.push(updates.name);
+    }
+    if (updates.description !== undefined) {
+      sets.push('description = ?');
+      params.push(updates.description);
+    }
+    if (updates.flowJson !== undefined) {
+      sets.push('flow_json = ?');
+      params.push(updates.flowJson);
+    }
+    if (updates.scheduleJson !== undefined) {
+      sets.push('schedule_json = ?');
+      params.push(updates.scheduleJson);
+    }
+    if (updates.sessionId !== undefined) {
+      sets.push('session_id = ?');
+      params.push(updates.sessionId);
+    }
+    if (updates.templateId !== undefined) {
+      sets.push('template_id = ?');
+      params.push(updates.templateId);
+    }
+    if (sets.length === 0) return;
+    sets.push("updated_at = datetime('now')");
+    params.push(taskId);
+    this.db!.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+  }
+
+  deleteTask(taskId: string): void {
+    this.ensureOpen();
+    this.db!.prepare('DELETE FROM tasks WHERE id = ?').run(taskId);
   }
 
   getInstalledPlugins(): Array<{
@@ -213,29 +293,35 @@ export class DatabaseService {
     enabled: boolean;
   }> {
     this.ensureOpen();
-    return this.db!.prepare(`
+    return this.db!.prepare(
+      `
       SELECT name, version, status
       FROM plugins
       ORDER BY installed_at DESC
-    `).all().map((row) => {
-      const plugin = row as { name: string; version: string; status: string };
-      return {
-        name: plugin.name,
-        version: plugin.version,
-        enabled: plugin.status === 'active',
-      };
-    });
+    `,
+    )
+      .all()
+      .map((row) => {
+        const plugin = row as { name: string; version: string; status: string };
+        return {
+          name: plugin.name,
+          version: plugin.version,
+          enabled: plugin.status === 'active',
+        };
+      });
   }
 
   saveAIConversation(conversation: Conversation): void {
     this.ensureOpen();
-    this.db!.prepare(`
+    this.db!.prepare(
+      `
       INSERT INTO ai_conversations (id, title, created_at, updated_at)
       VALUES (@id, @title, @createdAt, @updatedAt)
       ON CONFLICT(id) DO UPDATE SET
         title = excluded.title,
         updated_at = excluded.updated_at
-    `).run({
+    `,
+    ).run({
       id: conversation.id,
       title: conversation.title,
       createdAt: conversation.createdAt,
@@ -245,10 +331,12 @@ export class DatabaseService {
 
   saveAIMessage(conversationId: string, message: ChatMessage): void {
     this.ensureOpen();
-    this.db!.prepare(`
+    this.db!.prepare(
+      `
       INSERT INTO ai_messages (id, conversation_id, role, content, timestamp)
       VALUES (@id, @conversationId, @role, @content, @timestamp)
-    `).run({
+    `,
+    ).run({
       id: message.id,
       conversationId,
       role: message.role,
@@ -259,35 +347,41 @@ export class DatabaseService {
 
   deleteAIConversation(conversationId: string): boolean {
     this.ensureOpen();
-    const result = this.db!.prepare(`
+    const result = this.db!.prepare(
+      `
       DELETE FROM ai_conversations
       WHERE id = ?
-    `).run(conversationId);
+    `,
+    ).run(conversationId);
     return result.changes > 0;
   }
 
   private getTaskSteps(taskId: string): TaskStep[] {
-    return this.db!.prepare(`
+    return this.db!.prepare(
+      `
       SELECT id, name, action_json as actionJson, retry_count as retryCount, retry_delay as retryDelay
       FROM task_steps
       WHERE task_id = ?
       ORDER BY step_index ASC
-    `).all(taskId).map((row) => {
-      const step = row as {
-        id: string;
-        name: string;
-        actionJson: string;
-        retryCount: number | null;
-        retryDelay: number | null;
-      };
-      return {
-        id: step.id,
-        name: step.name,
-        action: JSON.parse(step.actionJson),
-        retryCount: step.retryCount ?? undefined,
-        retryDelay: step.retryDelay ?? undefined,
-      };
-    });
+    `,
+    )
+      .all(taskId)
+      .map((row) => {
+        const step = row as {
+          id: string;
+          name: string;
+          actionJson: string;
+          retryCount: number | null;
+          retryDelay: number | null;
+        };
+        return {
+          id: step.id,
+          name: step.name,
+          action: JSON.parse(step.actionJson),
+          retryCount: step.retryCount ?? undefined,
+          retryDelay: step.retryDelay ?? undefined,
+        };
+      });
   }
 
   private ensureOpen(): void {
@@ -409,6 +503,8 @@ export class DatabaseService {
 
     if (currentDbVersion < 3) {
       this.db!.exec(`
+        BEGIN TRANSACTION;
+
         ALTER TABLE tasks ADD COLUMN schedule_json TEXT;
         ALTER TABLE tasks ADD COLUMN session_id TEXT;
         ALTER TABLE tasks ADD COLUMN template_id TEXT;
@@ -480,6 +576,8 @@ export class DatabaseService {
         CREATE INDEX IF NOT EXISTS idx_execution_logs_task_batch ON execution_logs(task_id, batch_id, created_at DESC);
 
         INSERT INTO migrations (version) VALUES (3);
+
+        COMMIT;
       `);
     }
 

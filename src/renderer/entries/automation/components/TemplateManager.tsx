@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button, Empty, Input, List, Popconfirm, Space, Tag, Typography, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import { useIpc } from '../../../shared/hooks';
@@ -9,15 +9,12 @@ interface TemplateManagerProps {
   draftFields?: ExtractionField[];
 }
 
-export function TemplateManager({
-  onSelectTemplate,
-  draftFields = [],
-}: TemplateManagerProps) {
+export function TemplateManager({ onSelectTemplate, draftFields = [] }: TemplateManagerProps) {
   const { automation } = useIpc();
   const [templates, setTemplates] = useState<ExtractionTemplate[]>([]);
   const [templateName, setTemplateName] = useState('');
   const [loading, setLoading] = useState(false);
-  const hasDraftFields = useMemo(() => draftFields.length > 0, [draftFields]);
+  const hasDraftFields = draftFields.length > 0;
 
   const loadTemplates = useCallback(async () => {
     setLoading(true);
@@ -86,9 +83,7 @@ export function TemplateManager({
           </Button>
         </Space.Compact>
 
-        <Typography.Text type="secondary">
-          当前可保存字段数：{draftFields.length}
-        </Typography.Text>
+        <Typography.Text type="secondary">当前可保存字段数：{draftFields.length}</Typography.Text>
 
         <List
           loading={loading}

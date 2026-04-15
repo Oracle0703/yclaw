@@ -20,6 +20,12 @@ type SchedulableTask = {
   } | null;
 };
 
+/**
+ * 调度服务 — 当前为 placeholder 实现
+ *
+ * start() 仅标记可调度的 task ID，不创建实际 timer/cron job。
+ * TODO: 对 type:'once' 使用 setTimeout，对 type:'cron' 引入 node-cron。
+ */
 export class SchedulerService {
   private readonly taskService: Pick<TaskService, 'listTasks'>;
   private readonly executeTask: (taskId: string) => Promise<void>;

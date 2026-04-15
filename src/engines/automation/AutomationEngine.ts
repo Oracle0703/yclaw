@@ -87,18 +87,19 @@ export class AutomationEngine {
     action: ActionDefinition,
     timeout: number,
   ): Promise<unknown> {
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Action "${action.type}" timed out after ${timeout}ms`)), timeout),
-    );
+    let timer: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`Action "${action.type}" timed out after ${timeout}ms`)),
+        timeout,
+      );
+    });
 
     const actionPromise = this.dispatchAction(wc, action);
-    return Promise.race([actionPromise, timeoutPromise]);
+    return Promise.race([actionPromise, timeoutPromise]).finally(() => clearTimeout(timer));
   }
 
-  private async dispatchAction(
-    wc: WebContents,
-    action: ActionDefinition,
-  ): Promise<unknown> {
+  private async dispatchAction(wc: WebContents, action: ActionDefinition): Promise<unknown> {
     switch (action.type) {
       case 'click':
         return this.clickAction(wc, action);
