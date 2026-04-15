@@ -54,27 +54,32 @@ export class TaskService {
     const runner = this.createRunner();
     this.activeTasks.set(taskId, { flow, runner });
     this.updateStatus(taskId, TaskStatusEnum.RUNNING, flow.id);
-    void runner.run(flow, webContents, 0).then((result) => {
-      this.activeTasks.delete(taskId);
-      this.updateStatus(
-        taskId,
-        result.success ? TaskStatusEnum.COMPLETED : TaskStatusEnum.FAILED,
-        flow.id,
-      );
-      if (!result.success) {
+
+    const runTask = async () => {
+      try {
+        const result = await runner.run(flow, webContents, 0);
+        this.activeTasks.delete(taskId);
+        this.updateStatus(
+          taskId,
+          result.success ? TaskStatusEnum.COMPLETED : TaskStatusEnum.FAILED,
+          flow.id,
+        );
+        if (!result.success) {
+          this.eventBus.emit(EVENTS.TASK_FAILED, {
+            flowId: flow.id,
+            error: result.error ?? 'Task failed',
+          });
+        }
+      } catch (error) {
         this.eventBus.emit(EVENTS.TASK_FAILED, {
           flowId: flow.id,
-          error: result.error ?? 'Task failed',
+          error: error instanceof Error ? error.message : String(error),
         });
+        this.activeTasks.delete(taskId);
+        this.updateStatus(taskId, TaskStatusEnum.FAILED, flow.id);
       }
-    }).catch((error) => {
-      this.eventBus.emit(EVENTS.TASK_FAILED, {
-        flowId: flow.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      this.activeTasks.delete(taskId);
-      this.updateStatus(taskId, TaskStatusEnum.FAILED, flow.id);
-    });
+    };
+    void runTask();
 
     return { taskId, status: TaskStatusEnum.RUNNING };
   }

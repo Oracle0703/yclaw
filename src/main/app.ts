@@ -55,7 +55,10 @@ export class App {
     this.tabManager = new TabManager({
       sessionPartition: this.getBrowserSessionPartition(),
     });
-    this.aiService = new AIService(this.configService.get('ai'));
+    this.aiService = new AIService({
+      config: this.configService.get('ai'),
+      openWindow: (module: string) => this.windowManager.openWindow({ module }),
+    });
     this.pluginLoader = new PluginLoader();
     this.permissionChecker = new PermissionChecker();
     this.taskService = new TaskService({ databaseService: this.databaseService });
@@ -129,6 +132,10 @@ export class App {
 
     // 配置
     this.ipcController.handle(IPC_CHANNELS.CONFIG_GET, (key: unknown) => {
+      const validKeys = ['general', 'modules', 'plugins', 'ai'] as const;
+      if (typeof key !== 'string' || !validKeys.includes(key as typeof validKeys[number])) {
+        throw new Error(`Invalid config key: ${String(key)}. Expected one of: ${validKeys.join(', ')}`);
+      }
       return this.configService.get(key as keyof ReturnType<ConfigService['getAll']>);
     });
 
@@ -329,6 +336,10 @@ export class App {
     this.ipcController.handle(IPC_CHANNELS.BROWSER_CLOSE_TAB, (params: unknown) => {
       const { id } = params as { id: number };
       this.tabManager.closeTab(id);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BROWSER_LIST_TABS, () => {
+      return this.tabManager.getAllTabs();
     });
 
     this.ipcController.handle(IPC_CHANNELS.BROWSER_NAVIGATE, (params: unknown) => {

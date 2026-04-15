@@ -158,6 +158,14 @@ export class PluginLoader {
   uninstall(name: string): void {
     const entry = this.registry.get(name);
     if (!entry) throw new Error(`Plugin "${name}" not found`);
+
+    // 防止路径遍历：确保目标路径在 pluginsDir 内
+    const resolvedPath = path.resolve(entry.path);
+    const resolvedPluginsDir = path.resolve(this.pluginsDir);
+    if (!resolvedPath.startsWith(resolvedPluginsDir + path.sep) && resolvedPath !== resolvedPluginsDir) {
+      throw new Error(`Refusing to delete path outside plugins directory: ${resolvedPath}`);
+    }
+
     this.registry.delete(name);
     fs.rmSync(entry.path, { recursive: true, force: true });
     this.eventBus.emit(EVENTS.PLUGIN_UNINSTALLED, { name });

@@ -16,9 +16,16 @@ import { OpenAIProvider, OllamaProvider } from './LLMProvider';
 import { ToolRegistry } from './ToolRegistry';
 import { taskListTool } from './tools/taskTools';
 import { systemStatusTool } from './tools/systemTools';
-import { navigateTool } from './tools/navigateTools';
+import { navigateTool, createNavigateTool } from './tools/navigateTools';
 import type { LLMProvider } from './types';
 import { DatabaseService } from '../services/DatabaseService';
+
+import crypto from 'crypto';
+
+export interface AIServiceOptions {
+  config?: Partial<AIConfig>;
+  openWindow?: (module: string) => void;
+}
 
 export class AIService {
   private provider: LLMProvider;
@@ -28,13 +35,17 @@ export class AIService {
   private config: AIConfig;
   private databaseService = DatabaseService.getInstance();
 
-  constructor(config?: Partial<AIConfig>) {
+  constructor(configOrOptions?: Partial<AIConfig> | AIServiceOptions) {
+    const opts: AIServiceOptions = configOrOptions && ('openWindow' in configOrOptions || 'config' in configOrOptions)
+      ? configOrOptions as AIServiceOptions
+      : { config: configOrOptions as Partial<AIConfig> | undefined };
+
     this.config = {
       provider: 'openai',
       model: 'gpt-3.5-turbo',
       temperature: 0.7,
       maxTokens: 2048,
-      ...config,
+      ...opts.config,
     };
 
     this.provider = this.createProvider(this.config);
@@ -44,7 +55,11 @@ export class AIService {
     // Register built-in tools
     this.toolRegistry.register(taskListTool);
     this.toolRegistry.register(systemStatusTool);
-    this.toolRegistry.register(navigateTool);
+    if (opts.openWindow) {
+      this.toolRegistry.register(createNavigateTool(opts.openWindow));
+    } else {
+      this.toolRegistry.register(navigateTool);
+    }
   }
 
   private createProvider(config: AIConfig): LLMProvider {
@@ -147,6 +162,6 @@ export class AIService {
   }
 
   private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    return crypto.randomUUID();
   }
 }

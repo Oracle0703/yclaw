@@ -54,30 +54,38 @@ export class OpenAIProvider implements LLMProvider {
 
     const url = `${this.config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: this.config.model,
-        messages: apiMessages,
-        temperature: this.config.temperature,
-        max_tokens: this.config.maxTokens,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`LLM API error (${response.status}): ${errorText}`);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.config.model,
+          messages: apiMessages,
+          temperature: this.config.temperature,
+          max_tokens: this.config.maxTokens,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`LLM API error (${response.status}): ${errorText}`);
+      }
+
+      const data = (await response.json()) as {
+        choices: Array<{ message: { content: string } }>;
+      };
+
+      return data.choices?.[0]?.message?.content ?? '';
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const data = (await response.json()) as {
-      choices: Array<{ message: { content: string } }>;
-    };
-
-    return data.choices?.[0]?.message?.content ?? '';
   }
 }
 
@@ -105,21 +113,29 @@ export class OllamaProvider implements LLMProvider {
       apiMessages.push({ role: msg.role, content: msg.content });
     }
 
-    const response = await fetch(`${this.baseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: this.model,
-        messages: apiMessages,
-        stream: false,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
-    if (!response.ok) {
-      throw new Error(`Ollama API error (${response.status})`);
+    try {
+      const response = await fetch(`${this.baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.model,
+          messages: apiMessages,
+          stream: false,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error (${response.status})`);
+      }
+
+      const data = (await response.json()) as { message: { content: string } };
+      return data.message?.content ?? '';
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const data = (await response.json()) as { message: { content: string } };
-    return data.message?.content ?? '';
   }
 }

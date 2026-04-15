@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Col, Row, Space, Tag, Typography } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
@@ -16,6 +16,16 @@ export default function App() {
   const { withLoading } = useLoading();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
+
+  // 初始化：从主进程同步当前标签列表
+  useEffect(() => {
+    void invoke<Tab[]>(IPC_CHANNELS.BROWSER_LIST_TABS).then((existingTabs) => {
+      if (existingTabs && existingTabs.length > 0) {
+        setTabs(existingTabs);
+        setActiveTabId(existingTabs[existingTabs.length - 1].id);
+      }
+    });
+  }, [invoke]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const browserKpis = [

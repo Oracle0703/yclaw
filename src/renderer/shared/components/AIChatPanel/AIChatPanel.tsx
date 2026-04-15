@@ -6,7 +6,7 @@ import { useAIChatStore } from './store';
 
 const { TextArea } = Input;
 
-/** 简易 Markdown 渲染 */
+/** 简易 Markdown 渲染（安全：不使用 dangerouslySetInnerHTML） */
 function renderMarkdown(text: string): React.ReactNode {
   // Split by code blocks
   const parts = text.split(/(```[\s\S]*?```)/g);
@@ -29,9 +29,18 @@ function renderMarkdown(text: string): React.ReactNode {
         </pre>
       );
     }
-    // Bold
-    const withBold = part.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    return <span key={i} dangerouslySetInnerHTML={{ __html: withBold }} />;
+    // Bold — split on **...** and render as React elements (no innerHTML)
+    const segments = part.split(/(\*\*.+?\*\*)/g);
+    return (
+      <span key={i}>
+        {segments.map((seg, j) => {
+          if (seg.startsWith('**') && seg.endsWith('**')) {
+            return <strong key={j}>{seg.slice(2, -2)}</strong>;
+          }
+          return <span key={j}>{seg}</span>;
+        })}
+      </span>
+    );
   });
 }
 

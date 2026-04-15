@@ -8,7 +8,11 @@ import { DatabaseService } from '../services/DatabaseService';
 
 export class ContextManager {
   private currentModule = 'workbench';
-  private databaseService = DatabaseService.getInstance();
+  private databaseService: Pick<DatabaseService, 'getTasks' | 'getInstalledPlugins'>;
+
+  constructor(databaseService?: Pick<DatabaseService, 'getTasks' | 'getInstalledPlugins'>) {
+    this.databaseService = databaseService ?? DatabaseService.getInstance();
+  }
 
   setCurrentModule(module: string): void {
     this.currentModule = module;
@@ -28,6 +32,7 @@ export class ContextManager {
     return {
       currentModule: this.currentModule,
       systemMetrics: {
+        // 注意：此为累计时间比（近似值），非瞬时使用率，仅取 core 0
         cpu:
           cpus.length > 0
             ? Math.round((cpus[0].times.user / (cpus[0].times.user + cpus[0].times.idle)) * 100)

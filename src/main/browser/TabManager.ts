@@ -199,7 +199,7 @@ export class TabManager {
   }
 
   closeAll(): void {
-    for (const [id] of this.tabs) {
+    for (const id of [...this.tabs.keys()]) {
       this.closeTab(id);
     }
   }
