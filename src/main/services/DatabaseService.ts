@@ -152,6 +152,65 @@ export class DatabaseService {
     `).run(status, taskId);
   }
 
+  saveTaskFlow(flow: TaskFlow): void {
+    this.ensureOpen();
+
+    this.transaction(() => {
+      const updateTask = this.db!.prepare(`
+        UPDATE tasks
+        SET
+          name = ?,
+          description = ?,
+          flow_json = ?,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `);
+      const insertTask = this.db!.prepare(`
+        INSERT INTO tasks (id, name, description, flow_json, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'idle', ?, ?)
+      `);
+      const deleteSteps = this.db!.prepare(`
+        DELETE FROM task_steps
+        WHERE task_id = ?
+      `);
+      const insertStep = this.db!.prepare(`
+        INSERT INTO task_steps (id, task_id, step_index, name, action_json, retry_count, retry_delay)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const result = updateTask.run(
+        flow.name,
+        flow.description ?? null,
+        JSON.stringify({ steps: flow.steps }),
+        flow.id,
+      );
+
+      if (result.changes === 0) {
+        insertTask.run(
+          flow.id,
+          flow.name,
+          flow.description ?? null,
+          JSON.stringify({ steps: flow.steps }),
+          flow.createdAt,
+          flow.updatedAt,
+        );
+      }
+
+      deleteSteps.run(flow.id);
+      flow.steps.forEach((step, index) => {
+        insertStep.run(
+          step.id,
+          flow.id,
+          index,
+          step.name,
+          JSON.stringify(step.action),
+          step.retryCount ?? null,
+          step.retryDelay ?? null,
+        );
+      });
+    });
+  }
+
   getInstalledPlugins(): Array<{
     name: string;
     version: string;

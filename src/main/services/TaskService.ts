@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import type { WebContents } from 'electron';
 import type { TaskFlow, TaskStatus } from '@shared/types';
 import { TaskStatus as TaskStatusEnum } from '@shared/types';
@@ -19,7 +20,10 @@ export interface TaskState {
 }
 
 export interface TaskServiceOptions {
-  databaseService?: Pick<DatabaseService, 'getTasks' | 'getTaskFlow' | 'updateTaskStatus'>;
+  databaseService?: Pick<
+    DatabaseService,
+    'getTasks' | 'getTaskFlow' | 'saveTaskFlow' | 'updateTaskStatus'
+  >;
   createRunner?: () => FlowRunner;
   eventBus?: EventBus;
 }
@@ -32,7 +36,7 @@ interface ActiveTask {
 export class TaskService {
   private readonly databaseService: Pick<
     DatabaseService,
-    'getTasks' | 'getTaskFlow' | 'updateTaskStatus'
+    'getTasks' | 'getTaskFlow' | 'saveTaskFlow' | 'updateTaskStatus'
   >;
   private readonly createRunner: () => FlowRunner;
   private readonly eventBus: EventBus;
@@ -48,11 +52,36 @@ export class TaskService {
     return this.databaseService.getTasks();
   }
 
-  startTask(taskId: string, webContents: WebContents): TaskState {
+  getTaskFlow(taskId: string): TaskFlow {
     const flow = this.databaseService.getTaskFlow(taskId);
     if (!flow) {
       throw new Error(`Task "${taskId}" not found`);
     }
+    return flow;
+  }
+
+  saveTaskSteps(taskId: string | null | undefined, steps: TaskFlow['steps']): TaskFlow {
+    const now = new Date().toISOString();
+    const currentFlow = taskId
+      ? this.getTaskFlow(taskId)
+      : {
+          id: crypto.randomUUID(),
+          name: '未命名任务',
+          steps: [],
+          createdAt: now,
+          updatedAt: now,
+        };
+    const nextFlow: TaskFlow = {
+      ...currentFlow,
+      steps,
+      updatedAt: now,
+    };
+    this.databaseService.saveTaskFlow(nextFlow);
+    return nextFlow;
+  }
+
+  startTask(taskId: string, webContents: WebContents): TaskState {
+    const flow = this.getTaskFlow(taskId);
 
     const runner = this.createRunner();
     this.activeTasks.set(taskId, { flow, runner });

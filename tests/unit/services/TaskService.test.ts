@@ -4,6 +4,7 @@ import type { TaskFlow } from '@shared/types';
 const mockDb = {
   getTasks: vi.fn(),
   getTaskFlow: vi.fn(),
+  saveTaskFlow: vi.fn(),
   updateTaskStatus: vi.fn(),
 };
 
@@ -72,6 +73,70 @@ describe('TaskService', () => {
         updatedAt: '2026-04-15 10:00:00',
       },
     ]);
+  });
+
+  it('returns persisted task flow details by id', () => {
+    expect(service.getTaskFlow('task-1')).toEqual(sampleFlow);
+    expect(mockDb.getTaskFlow).toHaveBeenCalledWith('task-1');
+  });
+
+  it('saves updated task steps back to persistence', () => {
+    const nextSteps = [
+      ...sampleFlow.steps,
+      {
+        id: 'step-2',
+        name: '采集价格',
+        action: {
+          type: 'extract' as const,
+          selector: '.price',
+        },
+      },
+    ];
+
+    const result = service.saveTaskSteps('task-1', nextSteps);
+
+    expect(mockDb.saveTaskFlow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'task-1',
+        steps: nextSteps,
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 'task-1',
+        steps: nextSteps,
+      }),
+    );
+  });
+
+  it('creates a new task flow when saving without task id', () => {
+    const newSteps = [
+      {
+        id: 'step-new-1',
+        name: '打开首页',
+        action: {
+          type: 'click' as const,
+          selector: '#home',
+        },
+      },
+    ];
+
+    const result = service.saveTaskSteps(null, newSteps);
+
+    expect(mockDb.saveTaskFlow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.any(String),
+        name: '未命名任务',
+        steps: newSteps,
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: expect.any(String),
+        name: '未命名任务',
+        steps: newSteps,
+      }),
+    );
   });
 
   it('starts a task with persisted flow and active webContents', async () => {

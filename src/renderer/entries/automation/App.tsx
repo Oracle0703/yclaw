@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { Button, Space, Tag } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
-import { EVENTS } from '@shared/constants';
+import { EVENTS, IPC_CHANNELS } from '@shared/constants';
 import { PageShell } from '../../shared/components/PageShell';
-import { useIpcEvent } from '../../shared/hooks';
-import type { TaskStep } from '@shared/types';
+import { useIpc, useIpcEvent } from '../../shared/hooks';
+import type { TaskFlow, TaskStep } from '@shared/types';
 import { ExecutionPanel } from './components/ExecutionPanel';
 import { StepEditor } from './components/StepEditor';
 import { TaskList } from './components/TaskList';
@@ -16,6 +16,7 @@ interface SelectedTaskSummary {
 }
 
 export default function App() {
+  const { invoke } = useIpc();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTaskSummary, setSelectedTaskSummary] = useState<SelectedTaskSummary | null>(null);
   const [steps, setSteps] = useState<TaskStep[]>([]);
@@ -25,15 +26,37 @@ export default function App() {
   const [hasBreakpoint, setHasBreakpoint] = useState(false);
   const [showExecution, setShowExecution] = useState(false);
 
-  const handleSelectTask = (task: SelectedTaskSummary | 'new') => {
+  const handleSelectTask = async (task: SelectedTaskSummary | 'new') => {
     if (task === 'new') {
       setSelectedTaskId(null);
       setSelectedTaskSummary(null);
+      setSteps([]);
       return;
     }
 
     setSelectedTaskId(task.id);
     setSelectedTaskSummary(task);
+
+    try {
+      const flow = await invoke<TaskFlow>(IPC_CHANNELS.TASK_GET, { taskId: task.id });
+      setSteps(flow.steps);
+    } catch {
+      setSteps([]);
+    }
+  };
+
+  const handleSaveTask = async () => {
+    const saved = await invoke<TaskFlow>(IPC_CHANNELS.TASK_SAVE, {
+      taskId: selectedTaskId,
+      steps,
+    });
+
+    setSelectedTaskId(saved.id);
+    setSelectedTaskSummary({
+      id: saved.id,
+      stepsCount: saved.steps.length,
+    });
+    setSteps(saved.steps);
   };
 
   const totalSteps = steps.length > 0 ? steps.length : (selectedTaskSummary?.stepsCount ?? 0);
@@ -91,6 +114,9 @@ export default function App() {
             }}
           >
             新建任务
+          </Button>
+          <Button onClick={() => void handleSaveTask()} disabled={steps.length === 0}>
+            保存任务
           </Button>
           <Button
             type="primary"

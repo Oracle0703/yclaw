@@ -32,9 +32,10 @@ export const IPC_CHANNELS = {
   TASK_RESUME: 'task:resume',
   TASK_STOP: 'task:stop',
   TASK_LIST: 'task:list',
+  TASK_GET: 'task:get',
+  TASK_SAVE: 'task:save',
   // 以下预留 — 尚未实现
   // TASK_STATUS: 'task:status',
-  // TASK_SAVE: 'task:save',
   // TASK_DELETE: 'task:delete',
 
   // 股票

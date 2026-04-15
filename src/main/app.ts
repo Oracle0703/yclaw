@@ -23,6 +23,7 @@ import type {
   OHLCVData,
   IndicatorType,
   DataSourceConfig,
+  TaskFlow,
 } from '@shared/types';
 
 /**
@@ -284,6 +285,19 @@ export class App {
     // 任务
     this.ipcController.handle(IPC_CHANNELS.TASK_LIST, () => {
       return this.taskService.listTasks();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_GET, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      return this.taskService.getTaskFlow(taskId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_SAVE, (params: unknown) => {
+      const { taskId, steps } = params as {
+        taskId?: string | null;
+        steps: TaskFlow['steps'];
+      };
+      return this.taskService.saveTaskSteps(taskId, steps);
     });
 
     this.ipcController.handle(IPC_CHANNELS.TASK_START, (params: unknown) => {
