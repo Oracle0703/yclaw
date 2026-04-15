@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 import { getDatabasePath } from '../utils/paths';
-import type { Conversation, ChatMessage } from '@shared/types';
+import type { Conversation, ChatMessage, TaskFlow, TaskStep } from '@shared/types';
 
 /**
  * SQLite 数据库服务
@@ -104,6 +104,54 @@ export class DatabaseService {
     return rows;
   }
 
+  getTaskFlow(taskId: string): TaskFlow | null {
+    this.ensureOpen();
+    const row = this.db!.prepare(`
+      SELECT id, name, description, flow_json as flowJson, created_at as createdAt, updated_at as updatedAt
+      FROM tasks
+      WHERE id = ?
+    `).get(taskId) as
+      | {
+        id: string;
+        name: string;
+        description?: string;
+        flowJson: string;
+        createdAt: string;
+        updatedAt: string;
+      }
+      | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    const parsed = JSON.parse(row.flowJson) as Partial<TaskFlow> | { steps?: TaskStep[] } | TaskStep[];
+    const flowSteps = Array.isArray(parsed)
+      ? parsed
+      : parsed.steps;
+    const steps = flowSteps && flowSteps.length > 0
+      ? flowSteps
+      : this.getTaskSteps(taskId);
+
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      steps,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  updateTaskStatus(taskId: string, status: string): void {
+    this.ensureOpen();
+    this.db!.prepare(`
+      UPDATE tasks
+      SET status = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(status, taskId);
+  }
+
   getInstalledPlugins(): Array<{
     name: string;
     version: string;
@@ -161,6 +209,30 @@ export class DatabaseService {
       WHERE id = ?
     `).run(conversationId);
     return result.changes > 0;
+  }
+
+  private getTaskSteps(taskId: string): TaskStep[] {
+    return this.db!.prepare(`
+      SELECT id, name, action_json as actionJson, retry_count as retryCount, retry_delay as retryDelay
+      FROM task_steps
+      WHERE task_id = ?
+      ORDER BY step_index ASC
+    `).all(taskId).map((row) => {
+      const step = row as {
+        id: string;
+        name: string;
+        actionJson: string;
+        retryCount: number | null;
+        retryDelay: number | null;
+      };
+      return {
+        id: step.id,
+        name: step.name,
+        action: JSON.parse(step.actionJson),
+        retryCount: step.retryCount ?? undefined,
+        retryDelay: step.retryDelay ?? undefined,
+      };
+    });
   }
 
   private ensureOpen(): void {

@@ -21,6 +21,7 @@ export const EVENTS = {
   TASK_COMPLETED: 'task:completed',
   TASK_FAILED: 'task:failed',
   TASK_PAUSED: 'task:paused',
+  TASK_STATUS_CHANGED: 'task:status:changed',
 
   // 股票数据
   STOCK_DATA_UPDATE: 'stock:data:update',

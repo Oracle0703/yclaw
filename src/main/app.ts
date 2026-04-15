@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from 'electron';
+import type { WebContents } from 'electron';
 import { WindowManager } from './windows/WindowManager';
 import { IpcController } from './ipc/IpcController';
 import { EventBus } from './ipc/EventBus';
@@ -11,8 +12,11 @@ import { TabManager } from './browser/TabManager';
 import { IPC_CHANNELS } from '@shared/constants';
 import { AIService } from './ai/AIService';
 import { PluginLoader } from './plugin-loader/PluginLoader';
+import { TaskService } from './services/TaskService';
+import { DataSourceManager } from '@engines/analytics/DataSourceManager';
 import { IndicatorLibrary } from '@engines/analytics/IndicatorLibrary';
-import type { AIChatRequest, AIConfig, OHLCVData, IndicatorType } from '@shared/types';
+import { EVENTS } from '@shared/constants';
+import type { AIChatRequest, AIConfig, OHLCVData, IndicatorType, DataSourceConfig } from '@shared/types';
 
 /**
  * 应用生命周期管理
@@ -29,7 +33,10 @@ export class App {
   private tabManager: TabManager;
   private aiService: AIService;
   private pluginLoader: PluginLoader;
+  private taskService: TaskService;
+  private dataSourceManager: DataSourceManager;
   private indicatorLibrary: IndicatorLibrary;
+  private eventForwarders: Array<{ event: string; listener: (...args: unknown[]) => void }> = [];
   private started = false;
 
   constructor() {
@@ -44,6 +51,8 @@ export class App {
     this.tabManager = new TabManager();
     this.aiService = new AIService(this.configService.get('ai'));
     this.pluginLoader = new PluginLoader();
+    this.taskService = new TaskService({ databaseService: this.databaseService });
+    this.dataSourceManager = new DataSourceManager();
     this.indicatorLibrary = new IndicatorLibrary();
   }
 
@@ -62,6 +71,7 @@ export class App {
 
     // 注册 IPC handlers
     this.registerIpcHandlers();
+    this.registerEventForwarders();
 
     // 创建系统托盘
     this.trayService.create();
@@ -220,33 +230,43 @@ export class App {
 
     // 任务
     this.ipcController.handle(IPC_CHANNELS.TASK_LIST, () => {
-      return this.databaseService.getTasks();
+      return this.taskService.listTasks();
     });
 
     this.ipcController.handle(IPC_CHANNELS.TASK_START, (params: unknown) => {
-      const { taskId } = params as { taskId: string };
-      return { taskId, status: 'running' };
+      const { taskId, tabId } = params as { taskId: string; tabId?: number };
+      const webContents = this.getTaskWebContents(tabId);
+      return this.taskService.startTask(taskId, webContents);
     });
 
     this.ipcController.handle(IPC_CHANNELS.TASK_PAUSE, (params: unknown) => {
       const { taskId } = params as { taskId: string };
-      return { taskId, status: 'paused' };
+      return this.taskService.pauseTask(taskId);
     });
 
     this.ipcController.handle(IPC_CHANNELS.TASK_RESUME, (params: unknown) => {
-      const { taskId } = params as { taskId: string };
-      return { taskId, status: 'running' };
+      const { taskId, tabId } = params as { taskId: string; tabId?: number };
+      const webContents = this.getTaskWebContents(tabId);
+      return this.taskService.resumeTask(taskId, webContents);
     });
 
     this.ipcController.handle(IPC_CHANNELS.TASK_STOP, (params: unknown) => {
       const { taskId } = params as { taskId: string };
-      return { taskId, status: 'idle' };
+      return this.taskService.stopTask(taskId);
     });
 
     // 股票
     this.ipcController.handle(IPC_CHANNELS.STOCK_DATA, (params: unknown) => {
-      const { symbol } = (params as { symbol?: string }) ?? {};
-      return this.createMockStockHistory(symbol ?? 'AAPL');
+      const { symbol, timeframe, sourceConfig } = (params as {
+        symbol?: string;
+        timeframe?: string;
+        sourceConfig?: DataSourceConfig;
+      }) ?? {};
+      return this.getStockHistory({
+        symbol: symbol ?? 'AAPL',
+        timeframe: timeframe ?? '1D',
+        sourceConfig,
+      });
     });
 
     this.ipcController.handle(IPC_CHANNELS.STOCK_INDICATOR_CALC, (params: unknown) => {
@@ -294,7 +314,12 @@ export class App {
   shutdown(): void {
     this.logService.info('main', 'Application shutting down...');
     this.started = false;
+    for (const { event, listener } of this.eventForwarders) {
+      this.eventBus.off(event, listener);
+    }
+    this.eventForwarders = [];
     this.ipcController.dispose();
+    this.dataSourceManager.closeAll();
     this.databaseService.close();
     this.logService.close();
     this.trayService.destroy();
@@ -328,5 +353,67 @@ export class App {
     }
 
     return data;
+  }
+
+  private registerEventForwarders(): void {
+    if (this.eventForwarders.length > 0) {
+      return;
+    }
+
+    const eventsToForward = [
+      EVENTS.TASK_STARTED,
+      EVENTS.TASK_STEP_COMPLETED,
+      EVENTS.TASK_COMPLETED,
+      EVENTS.TASK_FAILED,
+      EVENTS.TASK_PAUSED,
+      EVENTS.TASK_STATUS_CHANGED,
+      EVENTS.STOCK_DATA_UPDATE,
+      EVENTS.STOCK_REALTIME_TICK,
+    ];
+
+    this.eventForwarders = eventsToForward.map((event) => {
+      const listener = (payload: unknown) => {
+        this.windowManager.broadcast(event, payload);
+      };
+      this.eventBus.on(event, listener);
+      return { event, listener };
+    });
+  }
+
+  private async getStockHistory(params: {
+    symbol: string;
+    timeframe: string;
+    sourceConfig?: DataSourceConfig;
+  }): Promise<OHLCVData[]> {
+    const { symbol, timeframe, sourceConfig } = params;
+    let data: OHLCVData[];
+    let source: 'demo' | 'live';
+
+    if (sourceConfig) {
+      data = await this.dataSourceManager.fetchHistory(sourceConfig, symbol, {
+        interval: timeframe,
+      });
+      source = 'live';
+    } else {
+      data = this.createMockStockHistory(symbol);
+      source = 'demo';
+    }
+
+    this.eventBus.emit(EVENTS.STOCK_DATA_UPDATE, {
+      symbol,
+      timeframe,
+      source,
+      data,
+    });
+
+    return data;
+  }
+
+  private getTaskWebContents(tabId?: number): WebContents {
+    const view = this.tabManager.getView(tabId);
+    if (!view) {
+      throw new Error('No active browser tab available for task execution');
+    }
+    return view.webContents;
   }
 }

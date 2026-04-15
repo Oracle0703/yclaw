@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Space, Tag } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
+import { EVENTS } from '@shared/constants';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpcEvent } from '../../shared/hooks';
 import type { TaskStep } from '@shared/types';
@@ -22,13 +23,36 @@ export default function App() {
     setSelectedTaskId(id === 'new' ? null : id);
   };
 
-  useIpcEvent('task:stepCompleted', (_data: unknown) => {
+  useIpcEvent(EVENTS.TASK_STARTED, (_data: unknown) => {
+    const data = _data as { flowId?: string };
+    if (data.flowId && selectedTaskId && data.flowId !== selectedTaskId) {
+      return;
+    }
+    setExecStatus('running');
+    setHasBreakpoint(false);
+    setExecStep(0);
+    setShowExecution(true);
+    setExecLogs((prev) => [...prev, '任务开始执行']);
+  });
+
+  useIpcEvent(EVENTS.TASK_STEP_COMPLETED, (_data: unknown) => {
     const data = _data as { stepIndex: number };
     setExecStep(data.stepIndex + 1);
     setExecLogs((prev) => [...prev, `步骤 ${data.stepIndex + 1} 完成`]);
   });
 
-  useIpcEvent('task:failed', (_data: unknown) => {
+  useIpcEvent(EVENTS.TASK_COMPLETED, () => {
+    setExecStatus('completed');
+    setHasBreakpoint(false);
+    setExecLogs((prev) => [...prev, '任务执行完成']);
+  });
+
+  useIpcEvent(EVENTS.TASK_PAUSED, () => {
+    setExecStatus('paused');
+    setExecLogs((prev) => [...prev, '任务已暂停']);
+  });
+
+  useIpcEvent(EVENTS.TASK_FAILED, (_data: unknown) => {
     const data = _data as { error: string };
     setExecStatus('failed');
     setHasBreakpoint(true);
@@ -83,6 +107,17 @@ export default function App() {
                 totalSteps={steps.length}
                 logs={execLogs}
                 hasBreakpoint={hasBreakpoint}
+                onStatusChange={setExecStatus}
+                onError={(message) => {
+                  setExecStatus('failed');
+                  setExecLogs((prev) => [...prev, `❌ ${message}`]);
+                }}
+                onStopped={() => {
+                  setHasBreakpoint(false);
+                  setExecStep(0);
+                  setExecStatus('idle');
+                  setExecLogs((prev) => [...prev, '任务已停止']);
+                }}
               />
             </ProCard>
           )}

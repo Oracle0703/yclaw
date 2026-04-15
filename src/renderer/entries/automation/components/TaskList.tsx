@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { IPC_CHANNELS } from '@shared/constants/channels';
+import { EVENTS, IPC_CHANNELS } from '@shared/constants';
 import type { TaskStatus } from '@shared/types';
 import { ProCard } from '@ant-design/pro-components';
 import { useIpc, useIpcEvent } from '../../../shared/hooks';
@@ -30,7 +30,7 @@ export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
     void fetchTasks();
   }, [fetchTasks]);
 
-  useIpcEvent('task:statusChanged', () => {
+  useIpcEvent(EVENTS.TASK_STATUS_CHANGED, () => {
     void fetchTasks();
   });
 

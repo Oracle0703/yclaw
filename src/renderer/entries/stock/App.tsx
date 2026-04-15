@@ -1,8 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { Checkbox, Col, Input, Row, Segmented, Skeleton, Space, Tag, Typography } from 'antd';
+import { Alert, Checkbox, Col, Input, Row, Segmented, Skeleton, Space, Tag, Typography } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
-import { IPC_CHANNELS } from '@shared/constants/channels';
+import { EVENTS, IPC_CHANNELS } from '@shared/constants';
 import type { OHLCVData, IndicatorType, IndicatorResult } from '@shared/types';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
@@ -33,25 +33,39 @@ export default function App() {
   const [data, setData] = useState<OHLCVData[]>([]);
   const [indicators, setIndicators] = useState<IndicatorResult[]>([]);
   const [activeIndicators, setActiveIndicators] = useState<IndicatorType[]>(['MA']);
+  const [loading, setLoading] = useState(false);
+  const [dataMode, setDataMode] = useState<'demo' | 'live'>('demo');
+  const [error, setError] = useState<string | null>(null);
+  const [indicatorWarning, setIndicatorWarning] = useState<string | null>(null);
   const activeIndicatorsRef = useRef<IndicatorType[]>(activeIndicators);
 
   const calculateIndicators = useCallback(
     async (series: OHLCVData[], nextIndicators: IndicatorType[]) => {
-      const results: IndicatorResult[] = [];
-      for (const type of nextIndicators) {
-        try {
-          const result = await invoke<IndicatorResult>(IPC_CHANNELS.STOCK_INDICATOR_CALC, {
+      const settled = await Promise.allSettled(
+        nextIndicators.map((type) =>
+          invoke<IndicatorResult>(IPC_CHANNELS.STOCK_INDICATOR_CALC, {
             type,
             data: series,
-          });
-          if (result) {
-            results.push(result);
-          }
-        } catch {
-          // ignore indicator calculation errors for the demo dashboard
+          }),
+        ),
+      );
+
+      const results: IndicatorResult[] = [];
+      const failedTypes: IndicatorType[] = [];
+      settled.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value) {
+          results.push(result.value);
+          return;
         }
-      }
+        failedTypes.push(nextIndicators[index]);
+      });
+
       setIndicators(results);
+      setIndicatorWarning(
+        failedTypes.length > 0
+          ? `以下指标计算失败：${failedTypes.join('、')}`
+          : null,
+      );
     },
     [invoke],
   );
@@ -61,14 +75,19 @@ export default function App() {
   }, [activeIndicators]);
 
   const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const result = await invoke<OHLCVData[]>(IPC_CHANNELS.STOCK_DATA, { symbol, timeframe });
-      if (result) {
-        setData(result);
-        await calculateIndicators(result, activeIndicatorsRef.current);
-      }
-    } catch {
-      // ignore fetch errors for the demo dashboard
+      setDataMode('demo');
+      setData(result ?? []);
+      await calculateIndicators(result ?? [], activeIndicatorsRef.current);
+    } catch (fetchError) {
+      setData([]);
+      setIndicators([]);
+      setError(fetchError instanceof Error ? fetchError.message : '获取股票数据失败');
+    } finally {
+      setLoading(false);
     }
   }, [calculateIndicators, invoke, symbol, timeframe]);
 
@@ -76,10 +95,11 @@ export default function App() {
     void fetchData();
   }, [fetchData]);
 
-  useIpcEvent('stock:data:update', (payload: unknown) => {
-    const p = payload as { data: OHLCVData[] };
+  useIpcEvent(EVENTS.STOCK_DATA_UPDATE, (payload: unknown) => {
+    const p = payload as { data: OHLCVData[]; source?: 'demo' | 'live' };
     if (p.data) {
       setData(p.data);
+      setDataMode(p.source ?? 'live');
       void calculateIndicators(p.data, activeIndicators);
     }
   });
@@ -118,6 +138,9 @@ export default function App() {
       extra={
         <Space wrap className="yclaw-page-actions">
           <Tag color="processing">Market</Tag>
+          <Tag color={dataMode === 'demo' ? 'warning' : 'success'}>
+            {dataMode === 'demo' ? 'Demo Data' : 'Live Data'}
+          </Tag>
           <Input
             prefix={<SearchOutlined />}
             value={symbol}
@@ -130,6 +153,28 @@ export default function App() {
       }
     >
       <Space direction="vertical" size={20} style={{ width: '100%' }}>
+        {dataMode === 'demo' && !error && (
+          <Alert
+            showIcon
+            type="info"
+            message="当前未配置真实数据源，正在展示内置演示 K 线数据。"
+          />
+        )}
+        {error && (
+          <Alert
+            showIcon
+            type="error"
+            message="股票数据获取失败"
+            description={error}
+          />
+        )}
+        {indicatorWarning && !error && (
+          <Alert
+            showIcon
+            type="warning"
+            message={indicatorWarning}
+          />
+        )}
         <Row gutter={[16, 16]}>
           {stockKpis.map((item) => (
             <Col xs={24} md={8} key={item.title}>
@@ -183,7 +228,13 @@ export default function App() {
                 </div>
               }
             >
-              <KLineChart data={data} indicators={indicators} height={520} />
+              {loading ? (
+                <div className="kline-chart">
+                  <Skeleton active paragraph={{ rows: 10 }} title={false} />
+                </div>
+              ) : (
+                <KLineChart data={data} indicators={indicators} height={520} />
+              )}
             </Suspense>
           </Space>
         </ProCard>
