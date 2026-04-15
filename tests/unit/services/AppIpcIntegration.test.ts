@@ -94,6 +94,13 @@ const mockAiListTools = vi.fn(() => []);
 const mockAiListConversations = vi.fn(() => []);
 const mockAiDeleteConversation = vi.fn(() => true);
 const mockIndicatorCalculate = vi.fn(() => ({ type: 'MA', values: [1, 2, 3] }));
+const mockSchedulerStart = vi.fn();
+const mockSchedulerStop = vi.fn();
+const mockSchedulerStatus = vi.fn(() => ({
+  runningCount: 0,
+  queuedCount: 0,
+  scheduledCount: 1,
+}));
 const mockConfigGet = vi.fn((key: string) => {
   if (key === 'ai') {
     return { provider: 'openai', model: 'gpt-3.5-turbo' };
@@ -217,6 +224,14 @@ vi.mock('@main/plugin-loader/PluginLoader', () => ({
     activate: mockPluginActivate,
     deactivate: mockPluginDeactivate,
     uninstall: mockPluginUninstall,
+  })),
+}));
+
+vi.mock('@main/services/SchedulerService', () => ({
+  SchedulerService: vi.fn().mockImplementation(() => ({
+    start: mockSchedulerStart,
+    stop: mockSchedulerStop,
+    getStatus: mockSchedulerStatus,
   })),
 }));
 
@@ -364,6 +379,26 @@ describe('App IPC integration', () => {
           role: 'assistant',
           content: expect.any(String),
         },
+      },
+    });
+  });
+
+  it('returns scheduler status through ipcMain handler', async () => {
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.SCHEDULER_STATUS);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({});
+    expect(mockSchedulerStatus).toHaveBeenCalled();
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        runningCount: 0,
+        queuedCount: 0,
+        scheduledCount: 1,
       },
     });
   });

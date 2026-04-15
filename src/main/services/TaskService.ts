@@ -54,14 +54,14 @@ export class TaskService {
   >;
   private readonly createRunner: () => FlowRunner;
   private readonly eventBus: EventBus;
-  private readonly batchService: Pick<BatchService, 'createBatch' | 'getBatch' | 'listBatchesByTask'>;
+  private batchService?: Pick<BatchService, 'createBatch' | 'getBatch' | 'listBatchesByTask'>;
   private readonly activeTasks = new Map<string, ActiveTask>();
 
   constructor(options: TaskServiceOptions = {}) {
     this.databaseService = options.databaseService ?? DatabaseService.getInstance();
     this.createRunner = options.createRunner ?? (() => new FlowRunner());
     this.eventBus = options.eventBus ?? EventBus.getInstance();
-    this.batchService = options.batchService ?? new BatchService();
+    this.batchService = options.batchService;
   }
 
   listTasks(): TaskSummary[] {
@@ -149,19 +149,30 @@ export class TaskService {
   }
 
   listBatches(taskId: string): TaskBatch[] {
-    return this.batchService.listBatchesByTask(taskId);
+    return this.getBatchService().listBatchesByTask(taskId);
+  }
+
+  getBatch(batchId: string): TaskBatch | null {
+    return this.getBatchService().getBatch(batchId);
   }
 
   retryBatch(batchId: string): TaskBatch {
-    const batch = this.batchService.getBatch(batchId);
+    const batch = this.getBatchService().getBatch(batchId);
     if (!batch) {
       throw new Error(`Batch "${batchId}" not found`);
     }
 
-    return this.batchService.createBatch(batch.taskId, {
+    return this.getBatchService().createBatch(batch.taskId, {
       sourceBatchId: batchId,
       reason: 'retry',
     });
+  }
+
+  private getBatchService(): Pick<BatchService, 'createBatch' | 'getBatch' | 'listBatchesByTask'> {
+    if (!this.batchService) {
+      this.batchService = new BatchService();
+    }
+    return this.batchService;
   }
 
   private getActiveTask(taskId: string): ActiveTask {

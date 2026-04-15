@@ -8,6 +8,7 @@ import { ConfigService } from './services/ConfigService';
 import { LogService } from './services/LogService';
 import { TrayService } from './services/TrayService';
 import { UpdateService } from './services/UpdateService';
+import { SchedulerService } from './services/SchedulerService';
 import { TabManager } from './browser/TabManager';
 import { IPC_CHANNELS } from '@shared/constants';
 import { AIService } from './ai/AIService';
@@ -42,6 +43,7 @@ export class App {
   private pluginLoader: PluginLoader;
   private permissionChecker: PermissionChecker;
   private taskService: TaskService;
+  private schedulerService: SchedulerService;
   private dataSourceManager: DataSourceManager;
   private indicatorLibrary: IndicatorLibrary;
   private eventForwarders: Array<{ event: string; listener: (...args: unknown[]) => void }> = [];
@@ -68,6 +70,7 @@ export class App {
     this.pluginLoader = new PluginLoader();
     this.permissionChecker = new PermissionChecker();
     this.taskService = new TaskService({ databaseService: this.databaseService });
+    this.schedulerService = new SchedulerService({ taskService: this.taskService });
     this.dataSourceManager = new DataSourceManager();
     this.indicatorLibrary = new IndicatorLibrary();
   }
@@ -88,6 +91,7 @@ export class App {
     // 注册 IPC handlers
     this.registerIpcHandlers();
     this.registerEventForwarders();
+    this.schedulerService.start();
 
     // 创建系统托盘
     this.trayService.create();
@@ -306,6 +310,25 @@ export class App {
     this.ipcController.handle(IPC_CHANNELS.TASK_STOP, (params: unknown) => {
       const { taskId } = params as { taskId: string };
       return this.taskService.stopTask(taskId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.SCHEDULER_STATUS, () => {
+      return this.schedulerService.getStatus();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_BATCH_LIST, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      return this.taskService.listBatches(taskId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_BATCH_DETAIL, (params: unknown) => {
+      const { batchId } = params as { batchId: string };
+      return this.taskService.getBatch(batchId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.BATCH_RETRY, (params: unknown) => {
+      const { batchId } = params as { batchId: string };
+      return this.taskService.retryBatch(batchId);
     });
 
     // 股票
