@@ -42,11 +42,13 @@ export class App {
   private started = false;
 
   constructor() {
-    this.windowManager = new WindowManager();
+    this.configService = new ConfigService();
+    this.windowManager = new WindowManager({
+      shouldCloseToTray: () => this.configService.getGeneral().closeToTray,
+    });
     this.ipcController = new IpcController();
     this.eventBus = EventBus.getInstance();
     this.databaseService = new DatabaseService();
-    this.configService = new ConfigService();
     this.logService = new LogService();
     this.trayService = new TrayService(this.windowManager);
     this.updateService = new UpdateService(this.logService);

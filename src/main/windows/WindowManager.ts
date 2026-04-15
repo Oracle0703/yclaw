@@ -14,7 +14,12 @@ interface WindowState {
 
 interface WindowConfig {
   module: string;
+  instanceId?: string;
   options?: Partial<WindowState>;
+}
+
+interface WindowManagerOptions {
+  shouldCloseToTray?: () => boolean;
 }
 
 /**
@@ -26,9 +31,12 @@ export class WindowManager {
   private readyWindows = new Set<string>();
   private eventBus: EventBus;
   private readonly maxWindows = 10;
+  private readonly shouldCloseToTray: () => boolean;
+  private allowWindowClose = false;
 
-  constructor() {
+  constructor(options: WindowManagerOptions = {}) {
     this.eventBus = EventBus.getInstance();
+    this.shouldCloseToTray = options.shouldCloseToTray ?? (() => false);
   }
 
   private getPreloadPath(): string {
@@ -47,12 +55,13 @@ export class WindowManager {
    * 创建或聚焦模块窗口
    */
   openWindow(config: WindowConfig): BrowserWindow {
-    const existing = this.windows.get(config.module);
+    const windowKey = this.getWindowKey(config.module, config.instanceId);
+    const existing = this.windows.get(windowKey);
     if (existing && !existing.isDestroyed()) {
       if (existing.isMinimized()) {
         existing.restore();
       }
-      if (this.readyWindows.has(config.module)) {
+      if (this.readyWindows.has(windowKey)) {
         existing.show();
         existing.focus();
       } else {
@@ -70,7 +79,8 @@ export class WindowManager {
   }
 
   preloadWindow(config: WindowConfig): BrowserWindow {
-    const existing = this.windows.get(config.module);
+    const windowKey = this.getWindowKey(config.module, config.instanceId);
+    const existing = this.windows.get(windowKey);
     if (existing && !existing.isDestroyed()) {
       return existing;
     }
@@ -79,13 +89,14 @@ export class WindowManager {
   }
 
   private ensureWindow(config: WindowConfig, hidden: boolean): BrowserWindow {
-    const { module, options } = config;
+    const { module, instanceId, options } = config;
+    const windowKey = this.getWindowKey(module, instanceId);
 
     if (this.windows.size >= this.maxWindows) {
       throw new Error(`Maximum window limit (${this.maxWindows}) reached`);
     }
 
-    const savedState = this.windowStates.get(module);
+    const savedState = this.windowStates.get(windowKey);
     const defaultState: WindowState = {
       width: options?.width ?? savedState?.width ?? 1200,
       height: options?.height ?? savedState?.height ?? 800,
@@ -93,14 +104,20 @@ export class WindowManager {
       y: options?.y ?? savedState?.y,
     };
 
-    const win = this.createWindow(module, defaultState, hidden);
-    this.windows.set(module, win);
-    this.eventBus.emit(EVENTS.MODULE_OPENED, { module });
+    const win = this.createWindow(windowKey, module, defaultState, hidden, instanceId);
+    this.windows.set(windowKey, win);
+    this.eventBus.emit(EVENTS.MODULE_OPENED, { module, instanceId });
 
     return win;
   }
 
-  private createWindow(module: string, defaultState: WindowState, hidden: boolean): BrowserWindow {
+  private createWindow(
+    windowKey: string,
+    module: string,
+    defaultState: WindowState,
+    hidden: boolean,
+    instanceId?: string,
+  ): BrowserWindow {
     const win = new BrowserWindow({
       ...defaultState,
       show: false,
@@ -123,7 +140,7 @@ export class WindowManager {
 
     // 等待首次渲染完成后再显示，消除白屏闪烁
     win.once('ready-to-show', () => {
-      this.readyWindows.add(module);
+      this.readyWindows.add(windowKey);
       if (!hidden) {
         win.show();
       }
@@ -134,9 +151,15 @@ export class WindowManager {
       this.attachDevDebugListeners(win, module);
     }
     // 保存窗口状态
-    win.on('close', () => {
+    win.on('close', (event) => {
+      if (module === 'workbench' && this.shouldCloseToTray() && !this.allowWindowClose) {
+        event.preventDefault();
+        win.hide();
+        return;
+      }
+
       const bounds = win.getBounds();
-      this.windowStates.set(module, {
+      this.windowStates.set(windowKey, {
         width: bounds.width,
         height: bounds.height,
         x: bounds.x,
@@ -146,9 +169,9 @@ export class WindowManager {
     });
 
     win.on('closed', () => {
-      this.windows.delete(module);
-      this.readyWindows.delete(module);
-      this.eventBus.emit(EVENTS.MODULE_CLOSED, { module });
+      this.windows.delete(windowKey);
+      this.readyWindows.delete(windowKey);
+      this.eventBus.emit(EVENTS.MODULE_CLOSED, { module, instanceId });
     });
 
     return win;
@@ -157,8 +180,8 @@ export class WindowManager {
   /**
    * 关闭指定模块窗口
    */
-  closeWindow(module: string): void {
-    const win = this.windows.get(module);
+  closeWindow(module: string, instanceId?: string): void {
+    const win = this.getWindow(module, instanceId);
     if (win && !win.isDestroyed()) {
       win.close();
     }
@@ -167,8 +190,10 @@ export class WindowManager {
   /**
    * 获取指定模块窗口
    */
-  getWindow(module: string): BrowserWindow | undefined {
-    const win = this.windows.get(module);
+  getWindow(module: string, instanceId?: string): BrowserWindow | undefined {
+    const win = instanceId
+      ? this.windows.get(this.getWindowKey(module, instanceId))
+      : this.findWindowByModule(module);
     return win && !win.isDestroyed() ? win : undefined;
   }
 
@@ -176,13 +201,13 @@ export class WindowManager {
    * 获取所有打开的模块列表
    */
   getOpenModules(): string[] {
-    const result: string[] = [];
-    for (const [module, win] of this.windows) {
+    const result = new Set<string>();
+    for (const [windowKey, win] of this.windows) {
       if (!win.isDestroyed()) {
-        result.push(module);
+        result.add(this.getModuleFromWindowKey(windowKey));
       }
     }
-    return result;
+    return Array.from(result);
   }
 
   /**
@@ -215,6 +240,33 @@ export class WindowManager {
         win.close();
       }
     }
+  }
+
+  allowQuit(): void {
+    this.allowWindowClose = true;
+  }
+
+  private getWindowKey(module: string, instanceId?: string): string {
+    return instanceId ? `${module}:${instanceId}` : module;
+  }
+
+  private getModuleFromWindowKey(windowKey: string): string {
+    return windowKey.split(':')[0];
+  }
+
+  private findWindowByModule(module: string): BrowserWindow | undefined {
+    const exact = this.windows.get(module);
+    if (exact && !exact.isDestroyed()) {
+      return exact;
+    }
+
+    for (const [windowKey, win] of this.windows) {
+      if (this.getModuleFromWindowKey(windowKey) === module && !win.isDestroyed()) {
+        return win;
+      }
+    }
+
+    return undefined;
   }
 
   private attachDevDebugListeners(win: BrowserWindow, module: string): void {

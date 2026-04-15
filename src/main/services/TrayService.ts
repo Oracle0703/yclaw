@@ -49,6 +49,7 @@ export class TrayService {
       {
         label: '退出',
         click: () => {
+          this.windowManager.allowQuit();
           app.quit();
         },
       },
