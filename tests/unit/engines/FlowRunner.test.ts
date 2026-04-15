@@ -17,6 +17,7 @@ vi.mock('@main/ipc/EventBus', () => ({
 import { FlowRunner } from '@engines/automation/FlowRunner';
 import type { TaskFlow, TaskStep } from '@shared/types';
 import { EVENTS } from '@shared/constants';
+import { ExecutionLogService } from '@main/services/ExecutionLogService';
 
 interface MockWebContents {
   executeJavaScript: ReturnType<typeof vi.fn>;
@@ -50,10 +51,18 @@ function createFlow(steps: Partial<TaskStep>[] = []): TaskFlow {
 describe('FlowRunner', () => {
   let runner: FlowRunner;
   let wc: ReturnType<typeof createMockWebContents>;
+  let appendLog: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    runner = new FlowRunner({ defaultRetryCount: 0, defaultRetryDelay: 10 });
+    appendLog = vi.fn();
+    runner = new FlowRunner({
+      defaultRetryCount: 0,
+      defaultRetryDelay: 10,
+      executionLogService: {
+        append: appendLog,
+      } as unknown as ExecutionLogService,
+    });
     wc = createMockWebContents();
   });
 
@@ -104,6 +113,29 @@ describe('FlowRunner', () => {
       expect(mockEmit).toHaveBeenCalledWith(
         EVENTS.TASK_FAILED,
         expect.objectContaining({ flowId: 'flow-1', error: expect.stringContaining('fail') }),
+      );
+    });
+
+    it('writes structured logs for step start and failure', async () => {
+      wc.executeJavaScript.mockRejectedValueOnce(new Error('fail'));
+      const flow = createFlow([{}]);
+
+      await runner.run(flow, wc);
+
+      expect(appendLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: 'flow-1',
+          batchId: 'batch:flow-1',
+          level: 'info',
+        }),
+      );
+      expect(appendLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: 'flow-1',
+          batchId: 'batch:flow-1',
+          level: 'error',
+          message: expect.stringContaining('fail'),
+        }),
       );
     });
 

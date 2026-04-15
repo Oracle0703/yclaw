@@ -1,5 +1,17 @@
 import type { WebContents } from 'electron';
 import type { ActionDefinition, ActionResult } from './types';
+import type { ResultService } from '@main/services/ResultService';
+
+export interface ActionExecutionContext {
+  taskId: string;
+  batchId: string;
+  templateId?: string | null;
+  sourceUrl?: string;
+}
+
+export interface AutomationEngineOptions {
+  resultService?: Pick<ResultService, 'saveResult'>;
+}
 
 /**
  * 自动化引擎核心 — 通过 webContents 操控页面
@@ -7,6 +19,11 @@ import type { ActionDefinition, ActionResult } from './types';
  */
 export class AutomationEngine {
   private readonly defaultTimeout = 30000;
+  private readonly resultService?: Pick<ResultService, 'saveResult'>;
+
+  constructor(options: AutomationEngineOptions = {}) {
+    this.resultService = options.resultService;
+  }
 
   /**
    * 执行单个操作
@@ -14,19 +31,22 @@ export class AutomationEngine {
   async execute(
     webContents: WebContents,
     action: ActionDefinition,
+    context?: ActionExecutionContext,
   ): Promise<ActionResult> {
     const startTime = Date.now();
     const timeout = action.timeout ?? this.defaultTimeout;
 
     try {
       const data = await this.runAction(webContents, action, timeout);
-      return {
+      const result: ActionResult = {
         stepId: '',
         actionType: action.type,
         success: true,
         data,
         duration: Date.now() - startTime,
       };
+      this.persistExtractionResult(action, result, context);
+      return result;
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       return {
@@ -37,6 +57,29 @@ export class AutomationEngine {
         duration: Date.now() - startTime,
       };
     }
+  }
+
+  private persistExtractionResult(
+    action: ActionDefinition,
+    result: ActionResult,
+    context?: ActionExecutionContext,
+  ): void {
+    if (action.type !== 'extract' || !result.success || !this.resultService || !context) {
+      return;
+    }
+
+    this.resultService.saveResult({
+      taskId: context.taskId,
+      batchId: context.batchId,
+      templateId: context.templateId ?? null,
+      data: {
+        selector: action.selector,
+        value: result.data,
+      },
+      status: 'normal',
+      sourceUrl: context.sourceUrl,
+      createdAt: new Date().toISOString(),
+    });
   }
 
   private async runAction(

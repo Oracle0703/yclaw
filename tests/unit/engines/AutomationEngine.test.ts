@@ -118,6 +118,33 @@ describe('AutomationEngine', () => {
       const script = wc.executeJavaScript.mock.calls[0][0] as string;
       expect(script).toContain('href');
     });
+
+    it('persists extraction results after successful extract step', async () => {
+      const saveResult = vi.fn();
+      wc.executeJavaScript.mockResolvedValueOnce(['text1', 'text2']);
+      engine = new AutomationEngine({
+        resultService: {
+          saveResult,
+        } as never,
+      });
+      const action: ActionDefinition = { type: 'extract', selector: '.item' };
+
+      await engine.execute(wc, action, {
+        taskId: 'task-1',
+        batchId: 'batch-1',
+        templateId: 'template-1',
+        sourceUrl: 'https://example.com',
+      });
+
+      expect(saveResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: 'task-1',
+          batchId: 'batch-1',
+          templateId: 'template-1',
+          data: expect.any(Object),
+        }),
+      );
+    });
   });
 
   describe('screenshot action', () => {

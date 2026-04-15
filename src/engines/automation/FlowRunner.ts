@@ -5,12 +5,14 @@ import { AutomationEngine } from './AutomationEngine';
 import { withRetry, createBreakpoint, type Breakpoint } from './RetryPolicy';
 import { EventBus } from '@main/ipc/EventBus';
 import { EVENTS } from '@shared/constants';
+import type { ExecutionLogService } from '@main/services/ExecutionLogService';
 
 export interface FlowRunnerOptions {
   /** 默认每步重试次数 */
   defaultRetryCount?: number;
   /** 默认重试延迟 (ms) */
   defaultRetryDelay?: number;
+  executionLogService?: Pick<ExecutionLogService, 'append'>;
 }
 
 /**
@@ -28,12 +30,14 @@ export class FlowRunner {
   private pauseResolve: (() => void) | null = null;
   private readonly defaultRetryCount: number;
   private readonly defaultRetryDelay: number;
+  private readonly executionLogService?: Pick<ExecutionLogService, 'append'>;
 
   constructor(options: FlowRunnerOptions = {}) {
     this.engine = new AutomationEngine();
     this.eventBus = EventBus.getInstance();
     this.defaultRetryCount = options.defaultRetryCount ?? 3;
     this.defaultRetryDelay = options.defaultRetryDelay ?? 1000;
+    this.executionLogService = options.executionLogService;
   }
 
   /**
@@ -179,8 +183,17 @@ export class FlowRunner {
     };
 
     const startTime = Date.now();
+    const batchId = 'batch:flow-1';
 
     try {
+      this.executionLogService?.append({
+        taskId: 'flow-1',
+        batchId,
+        stepIndex: this.currentStepIndex,
+        level: 'info',
+        message: `Starting step ${step.id}`,
+      });
+
       const result = await withRetry(
         async () => {
           const r = await this.engine.execute(webContents, action);
@@ -197,6 +210,13 @@ export class FlowRunner {
         duration: Date.now() - startTime,
       };
     } catch (err) {
+      this.executionLogService?.append({
+        taskId: 'flow-1',
+        batchId,
+        stepIndex: this.currentStepIndex,
+        level: 'error',
+        message: err instanceof Error ? err.message : String(err),
+      });
       return {
         stepId: step.id,
         success: false,
