@@ -1,5 +1,6 @@
 import { WebContentsView, Session, session } from 'electron';
 import { EventBus } from '../ipc/EventBus';
+import type { TaskStep } from '@shared/types';
 
 export interface TabInfo {
   id: number;
@@ -46,13 +47,21 @@ export class TabManager {
    * 新建标签页
    */
   createTab(url = 'about:blank'): WebContentsView {
+    return this.createView(url, this.session, this.sessionPartition);
+  }
+
+  private createView(
+    url: string,
+    targetSession: Session,
+    partitionLabel: string,
+  ): WebContentsView {
     if (this.tabs.size >= this.maxTabs) {
       throw new Error(`Maximum tab limit (${this.maxTabs}) reached`);
     }
 
     const view = new WebContentsView({
       webPreferences: {
-        session: this.session,
+        session: targetSession,
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
@@ -61,7 +70,7 @@ export class TabManager {
 
     const id = view.webContents.id;
     this.tabs.set(id, view);
-    this.tabSessions.set(id, this.sessionPartition);
+    this.tabSessions.set(id, partitionLabel);
 
     // 监听页面事件
     view.webContents.on('did-start-loading', () => {
@@ -142,27 +151,163 @@ export class TabManager {
     return view.webContents.executeJavaScript(script);
   }
 
+  async startRecorder(tabId?: number): Promise<{ recording: boolean }> {
+    await this.executeJavaScript(
+      `
+      (() => {
+        const globalKey = '__yclawRecorder__';
+        const existing = window[globalKey];
+        if (existing?.cleanup) {
+          existing.cleanup();
+        }
+
+        const getSelector = (element) => {
+          if (!element) return '';
+          if (element.id) return '#' + CSS.escape(element.id);
+
+          const parts = [];
+          let current = element;
+          while (current && current !== document.body && current !== document.documentElement) {
+            let selector = current.tagName.toLowerCase();
+            if (current.classList && current.classList.length > 0) {
+              selector += '.' + Array.from(current.classList)
+                .slice(0, 2)
+                .map((name) => CSS.escape(name))
+                .join('.');
+            }
+            const parent = current.parentElement;
+            if (parent) {
+              const siblings = Array.from(parent.children).filter(
+                (child) => child.tagName === current.tagName,
+              );
+              if (siblings.length > 1) {
+                selector += ':nth-of-type(' + (siblings.indexOf(current) + 1) + ')';
+              }
+            }
+            parts.unshift(selector);
+            current = current.parentElement;
+          }
+          return parts.join(' > ');
+        };
+
+        const toStep = (name, action) => ({
+          id: 'recorded-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+          name,
+          action,
+        });
+
+        const state = {
+          steps: [],
+          handlers: [],
+        };
+
+        const pushStep = (step) => {
+          state.steps.push(step);
+        };
+
+        const clickHandler = (event) => {
+          const target = event.target instanceof Element ? event.target : null;
+          if (!target) return;
+          pushStep(
+            toStep('点击 ' + (target.textContent?.trim() || target.tagName.toLowerCase()), {
+              type: 'click',
+              selector: getSelector(target),
+            }),
+          );
+        };
+
+        const inputHandler = (event) => {
+          const target =
+            event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement
+              ? event.target
+              : null;
+          if (!target) return;
+          pushStep(
+            toStep('输入 ' + (target.name || target.id || target.tagName.toLowerCase()), {
+              type: 'input',
+              selector: getSelector(target),
+              params: { value: target.value },
+            }),
+          );
+        };
+
+        const changeHandler = (event) => {
+          const target = event.target instanceof HTMLSelectElement ? event.target : null;
+          if (!target) return;
+          pushStep(
+            toStep('选择 ' + (target.name || target.id || target.tagName.toLowerCase()), {
+              type: 'input',
+              selector: getSelector(target),
+              params: { value: target.value },
+            }),
+          );
+        };
+
+        const scrollHandler = () => {
+          pushStep(
+            toStep('页面滚动', {
+              type: 'scroll',
+              selector: 'body',
+              params: { x: window.scrollX, y: window.scrollY },
+            }),
+          );
+        };
+
+        document.addEventListener('click', clickHandler, true);
+        document.addEventListener('input', inputHandler, true);
+        document.addEventListener('change', changeHandler, true);
+        window.addEventListener('scroll', scrollHandler, true);
+
+        state.handlers.push(
+          ['click', clickHandler, true],
+          ['input', inputHandler, true],
+          ['change', changeHandler, true],
+        );
+
+        window[globalKey] = {
+          getSteps: () => state.steps,
+          cleanup: () => {
+            state.handlers.forEach(([type, handler, capture]) => {
+              document.removeEventListener(type, handler, capture);
+            });
+            window.removeEventListener('scroll', scrollHandler, true);
+          },
+        };
+      })();
+      `,
+      tabId,
+    );
+
+    return { recording: true };
+  }
+
+  async stopRecorder(tabId?: number): Promise<TaskStep[]> {
+    const result = await this.executeJavaScript(
+      `
+      (() => {
+        const recorder = window.__yclawRecorder__;
+        if (!recorder) {
+          return [];
+        }
+
+        const steps = Array.isArray(recorder.getSteps?.()) ? recorder.getSteps() : [];
+        recorder.cleanup?.();
+        delete window.__yclawRecorder__;
+        return steps;
+      })();
+      `,
+      tabId,
+    );
+
+    return (result as TaskStep[]) ?? [];
+  }
+
   /**
    * 创建临时隔离会话标签
    */
   createIsolatedTab(url = 'about:blank'): WebContentsView {
-    const isolatedSession = session.fromPartition(`temp:${Date.now()}`);
-    const view = new WebContentsView({
-      webPreferences: {
-        session: isolatedSession,
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-      },
-    });
-
-    const id = view.webContents.id;
-    this.tabs.set(id, view);
-    this.tabSessions.set(id, `temp:${id}`);
-    view.webContents.loadURL(url);
-    this.activeTabId = id;
-
-    return view;
+    const partitionLabel = `temp:${Date.now()}`;
+    return this.createView(url, session.fromPartition(partitionLabel), partitionLabel);
   }
 
   getOrCreateTabBySession(sessionPartition: string, url = 'about:blank'): WebContentsView {
@@ -173,9 +318,15 @@ export class TabManager {
       }
     }
 
-    return sessionPartition === this.sessionPartition
-      ? this.createTab(url)
-      : this.createIsolatedTab(url);
+    if (sessionPartition === this.sessionPartition) {
+      return this.createTab(url);
+    }
+
+    if (sessionPartition === 'default') {
+      return this.createView(url, session.defaultSession, 'default');
+    }
+
+    return this.createView(url, session.fromPartition(sessionPartition), sessionPartition);
   }
 
   getTabInfo(id: number): TabInfo | undefined {

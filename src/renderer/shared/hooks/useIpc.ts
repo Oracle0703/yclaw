@@ -21,6 +21,13 @@ export function useIpc() {
     listResults: (taskId: string, batchId?: string) => invoke('result:list', { taskId, batchId }),
     exportResults: (taskId: string, batchId: string | undefined, format: 'csv' | 'json') =>
       invoke('result:export', { taskId, batchId, format }),
+    listTemplates: () => invoke('template:list'),
+    saveTemplate: (name: string, fields: unknown[]) => invoke('template:save', { name, fields }),
+    deleteTemplate: (templateId: string) => invoke('template:delete', { templateId }),
+    startRecorder: (tabId: number) => invoke('recorder:start', { tabId }),
+    stopRecorder: (tabId: number) => invoke('recorder:stop', { tabId }),
+    listAlerts: (taskId?: string) => invoke('alert:list', { taskId }),
+    dismissAlert: (alertId: string) => invoke('alert:dismiss', { alertId }),
   };
 
   return { invoke, automation };

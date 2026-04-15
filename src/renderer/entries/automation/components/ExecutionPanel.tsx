@@ -1,7 +1,9 @@
+import { useCallback, useEffect, useState } from 'react';
 import { Button, List, Progress, Space, Tag, Typography } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import { useIpc } from '../../../shared/hooks';
+import type { AlertRecord } from '@shared/types';
 
 interface ExecutionPanelProps {
   taskId: string | null;
@@ -13,6 +15,7 @@ interface ExecutionPanelProps {
   onStatusChange?: (status: string) => void;
   onError?: (message: string) => void;
   onStopped?: () => void;
+  onJumpToBatch?: (batchId: string) => void;
 }
 
 export function ExecutionPanel({
@@ -25,8 +28,32 @@ export function ExecutionPanel({
   onStatusChange,
   onError,
   onStopped,
+  onJumpToBatch,
 }: ExecutionPanelProps) {
   const { invoke } = useIpc();
+  const [alerts, setAlerts] = useState<AlertRecord[]>([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+
+  const loadAlerts = useCallback(async () => {
+    if (!taskId) {
+      setAlerts([]);
+      return;
+    }
+
+    setLoadingAlerts(true);
+    try {
+      const result = await invoke<AlertRecord[]>(IPC_CHANNELS.ALERT_LIST, { taskId });
+      setAlerts(result ?? []);
+    } catch (error) {
+      onError?.(error instanceof Error ? error.message : '加载告警失败');
+    } finally {
+      setLoadingAlerts(false);
+    }
+  }, [invoke, onError, taskId]);
+
+  useEffect(() => {
+    void loadAlerts();
+  }, [loadAlerts]);
 
   const invokeTask = async (
     channel: string,
@@ -58,6 +85,17 @@ export function ExecutionPanel({
   };
   const handleStop = () => {
     void invokeTask(IPC_CHANNELS.TASK_STOP, 'idle', { stopped: true });
+  };
+
+  const handleDismissAlert = async (alertId: string) => {
+    try {
+      await invoke(IPC_CHANNELS.ALERT_DISMISS, { alertId });
+      setAlerts((current) =>
+        current.map((alert) => (alert.id === alertId ? { ...alert, read: true } : alert)),
+      );
+    } catch (error) {
+      onError?.(error instanceof Error ? error.message : '告警标记失败');
+    }
   };
 
   return (
@@ -98,6 +136,43 @@ export function ExecutionPanel({
             dataSource={logs}
             locale={{ emptyText: '暂无执行日志' }}
             renderItem={(log) => <List.Item>{log}</List.Item>}
+          />
+        </div>
+
+        <div>
+          <Typography.Title level={5}>最近告警</Typography.Title>
+          <List
+            bordered
+            loading={loadingAlerts}
+            dataSource={alerts}
+            locale={{ emptyText: '暂无告警' }}
+            renderItem={(alert) => (
+              <List.Item
+                actions={[
+                  alert.batchId ? (
+                    <Button key="jump" type="link" onClick={() => onJumpToBatch?.(alert.batchId!)}>
+                      跳转到批次
+                    </Button>
+                  ) : null,
+                  <Button
+                    key="dismiss"
+                    type="link"
+                    onClick={() => void handleDismissAlert(alert.id)}
+                    disabled={alert.read}
+                  >
+                    标记已读
+                  </Button>,
+                ].filter(Boolean)}
+              >
+                <Space direction="vertical" size={4}>
+                  <Space>
+                    <Tag color={alert.read ? 'default' : 'error'}>{alert.read ? '已读' : '未读'}</Tag>
+                    {alert.batchId && <Typography.Text type="secondary">{alert.batchId}</Typography.Text>}
+                  </Space>
+                  <Typography.Text>{alert.message}</Typography.Text>
+                </Space>
+              </List.Item>
+            )}
           />
         </div>
       </Space>

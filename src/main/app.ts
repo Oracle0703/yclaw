@@ -10,6 +10,9 @@ import { TrayService } from './services/TrayService';
 import { UpdateService } from './services/UpdateService';
 import { SchedulerService } from './services/SchedulerService';
 import { SessionRegistry } from './services/SessionRegistry';
+import { TemplateService } from './services/TemplateService';
+import { AlertService } from './services/AlertService';
+import { ExecutionLogService } from './services/ExecutionLogService';
 import { TabManager } from './browser/TabManager';
 import { IPC_CHANNELS } from '@shared/constants';
 import { AIService } from './ai/AIService';
@@ -46,6 +49,9 @@ export class App {
   private taskService: TaskService;
   private schedulerService: SchedulerService;
   private sessionRegistry: SessionRegistry;
+  private templateService: TemplateService;
+  private executionLogService: ExecutionLogService;
+  private alertService: AlertService;
   private dataSourceManager: DataSourceManager;
   private indicatorLibrary: IndicatorLibrary;
   private eventForwarders: Array<{ event: string; listener: (...args: unknown[]) => void }> = [];
@@ -73,7 +79,13 @@ export class App {
     this.permissionChecker = new PermissionChecker();
     this.taskService = new TaskService({ databaseService: this.databaseService });
     this.schedulerService = new SchedulerService({ taskService: this.taskService });
-    this.sessionRegistry = new SessionRegistry();
+    this.sessionRegistry = new SessionRegistry({ databaseService: this.databaseService });
+    this.templateService = new TemplateService({ databaseService: this.databaseService });
+    this.executionLogService = new ExecutionLogService({ databaseService: this.databaseService });
+    this.alertService = new AlertService({
+      databaseService: this.databaseService,
+      executionLogService: this.executionLogService,
+    });
     this.dataSourceManager = new DataSourceManager();
     this.indicatorLibrary = new IndicatorLibrary();
   }
@@ -355,6 +367,55 @@ export class App {
       return { taskId, sessionId };
     });
 
+    this.ipcController.handle(IPC_CHANNELS.TEMPLATE_LIST, () => {
+      return this.templateService.listTemplates();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TEMPLATE_SAVE, (params: unknown) => {
+      const { id, name, fields } = (params as {
+        id?: string;
+        name: string;
+        fields: Array<{ name: string; selector: string; attribute: string }>;
+      }) ?? { name: '', fields: [] };
+
+      if (!name || !Array.isArray(fields)) {
+        throw new Error('Invalid template payload');
+      }
+
+      return this.templateService.saveTemplate({ id, name, fields });
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TEMPLATE_DELETE, (params: unknown) => {
+      const { templateId } = params as { templateId: string };
+      this.templateService.deleteTemplate(templateId);
+      return { templateId };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.RECORDER_START, async (params: unknown) => {
+      const { tabId } = (params as { tabId?: number }) ?? {};
+      return this.tabManager.startRecorder(tabId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.RECORDER_STOP, async (params: unknown) => {
+      const { tabId } = (params as { tabId?: number }) ?? {};
+      return this.tabManager.stopRecorder(tabId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.ALERT_LIST, (params: unknown) => {
+      const { taskId } = (params as { taskId?: string }) ?? {};
+      const created = this.alertService.aggregateFromExecutionLogs(10);
+      created.forEach((alert) => {
+        this.eventBus.emit(IPC_CHANNELS.ALERT_PUSHED, alert);
+      });
+      return this.alertService.listAlerts({ taskId });
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.ALERT_DISMISS, (params: unknown) => {
+      const { alertId } = params as { alertId: string };
+      this.alertService.dismissAlert(alertId);
+      return { alertId };
+    });
+
     // 股票
     this.ipcController.handle(IPC_CHANNELS.STOCK_DATA, (params: unknown) => {
       const { symbol, timeframe, sourceConfig } =
@@ -478,6 +539,7 @@ export class App {
       EVENTS.TASK_STATUS_CHANGED,
       EVENTS.STOCK_DATA_UPDATE,
       EVENTS.STOCK_REALTIME_TICK,
+      IPC_CHANNELS.ALERT_PUSHED,
     ];
 
     this.eventForwarders = eventsToForward.map((event) => {

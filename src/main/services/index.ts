@@ -4,3 +4,5 @@ export { LogService } from './LogService';
 export { BatchService } from './BatchService';
 export { SchedulerService } from './SchedulerService';
 export { SessionRegistry } from './SessionRegistry';
+export { TemplateService } from './TemplateService';
+export { AlertService } from './AlertService';

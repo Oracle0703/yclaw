@@ -237,6 +237,18 @@ describe('TabManager', () => {
 
       expect(recovered.webContents.id).toBe(first.webContents.id);
     });
+
+    it('creates a persistent tab for a named intervention session partition', () => {
+      const recovered = tabManager.getOrCreateTabBySession(
+        'persist:session_a',
+        'https://example.com',
+      );
+
+      expect(session.fromPartition).toHaveBeenCalledWith('persist:session_a');
+      expect(tabManager.getTabInfo(recovered.webContents.id)).toMatchObject({
+        sessionPartition: 'persist:session_a',
+      });
+    });
   });
 
   describe('closeAll', () => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { TaskBatch, TaskBreakpoint, StepResult } from '@shared/types';
+import type { TaskBreakpoint, StepResult } from '@shared/types';
 
 const mockDb = {
   run: vi.fn(),

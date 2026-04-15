@@ -14,7 +14,7 @@ export class DatabaseService {
   private db: Database.Database | null = null;
   private dbDir: string;
   private dbPath: string;
-  private readonly currentVersion = 3;
+  private readonly currentVersion = 4;
 
   constructor(dbName = 'yclaw.sqlite') {
     this.dbDir = getDatabasePath();
@@ -480,6 +480,26 @@ export class DatabaseService {
         CREATE INDEX IF NOT EXISTS idx_execution_logs_task_batch ON execution_logs(task_id, batch_id, created_at DESC);
 
         INSERT INTO migrations (version) VALUES (3);
+      `);
+    }
+
+    if (currentDbVersion < 4) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS alerts (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          batch_id TEXT,
+          message TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          read INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+          FOREIGN KEY (batch_id) REFERENCES task_batches(id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_alerts_task_created ON alerts(task_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_alerts_unread ON alerts(read, created_at DESC);
+
+        INSERT INTO migrations (version) VALUES (4);
       `);
     }
   }

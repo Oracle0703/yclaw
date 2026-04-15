@@ -1,4 +1,4 @@
-export type { IpcResponse, WindowOpenParams, LogWriteParams, ElectronAPI } from './ipc';
+export type { IpcResponse, WindowOpenParams, LogWriteParams, ElectronAPI, AlertRecord } from './ipc';
 export type { PluginManifest, PluginRegistryEntry } from './plugin';
 export { PluginStatus } from './plugin';
 export type {

@@ -9,27 +9,31 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import { useLoading as useLoadingDirect } from '@renderer/shared/hooks/useLoading';
+import * as hooks from '@renderer/shared/hooks';
+import {
+  LoadingProvider,
+  useLoading as useLoadingFromGlobal,
+} from '@renderer/shared/components/GlobalLoading';
+import { PageShell } from '@renderer/shared/components/PageShell';
 
 // ---- 回归-004: useLoading hook 可从 hooks 路径导入 ----
 describe('Regression: useLoading hook availability', () => {
-  it('should be importable from hooks/useLoading', async () => {
-    const mod = await import('@renderer/shared/hooks/useLoading');
-    expect(mod.useLoading).toBeDefined();
-    expect(typeof mod.useLoading).toBe('function');
+  it('should be importable from hooks/useLoading', () => {
+    expect(useLoadingDirect).toBeDefined();
+    expect(typeof useLoadingDirect).toBe('function');
   });
 
-  it('should be importable from hooks index barrel', async () => {
-    const mod = await import('@renderer/shared/hooks');
-    expect(mod.useLoading).toBeDefined();
-    expect(typeof mod.useLoading).toBe('function');
+  it('should be importable from hooks index barrel', () => {
+    expect(hooks.useLoading).toBeDefined();
+    expect(typeof hooks.useLoading).toBe('function');
   });
 
-  it('should throw when used outside LoadingProvider', async () => {
-    const { useLoading } = await import('@renderer/shared/hooks/useLoading');
+  it('should throw when used outside LoadingProvider', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     // React hook 在 provider 外使用应该抛出
     const TestComp = () => {
-      useLoading();
+      useLoadingDirect();
       return null;
     };
     expect(() => render(<TestComp />)).toThrow('useLoading must be used within a LoadingProvider');
@@ -39,30 +43,26 @@ describe('Regression: useLoading hook availability', () => {
 
 // ---- 回归-005: LoadingProvider 从 GlobalLoading 正确导出 ----
 describe('Regression: LoadingProvider export', () => {
-  it('should export LoadingProvider from GlobalLoading', async () => {
-    const mod = await import('@renderer/shared/components/GlobalLoading');
-    expect(mod.LoadingProvider).toBeDefined();
-    expect(typeof mod.LoadingProvider).toBe('function');
+  it('should export LoadingProvider from GlobalLoading', () => {
+    expect(LoadingProvider).toBeDefined();
+    expect(typeof LoadingProvider).toBe('function');
   });
 
-  it('should export useLoading from GlobalLoading', async () => {
-    const mod = await import('@renderer/shared/components/GlobalLoading');
-    expect(mod.useLoading).toBeDefined();
-    expect(typeof mod.useLoading).toBe('function');
+  it('should export useLoading from GlobalLoading', () => {
+    expect(useLoadingFromGlobal).toBeDefined();
+    expect(typeof useLoadingFromGlobal).toBe('function');
   });
 });
 
 // ---- 回归-006: PageShell 不导入未使用的组件 ----
 describe('Regression: PageShell clean imports', () => {
-  it('should render correctly without Spin dependency', async () => {
-    const { PageShell } = await import('@renderer/shared/components/PageShell');
+  it('should render correctly without Spin dependency', () => {
     render(<PageShell title="Test">Content</PageShell>);
     expect(screen.getByText('Test')).toBeDefined();
     expect(screen.getByText('Content')).toBeDefined();
   });
 
-  it('should show skeleton when loading', async () => {
-    const { PageShell } = await import('@renderer/shared/components/PageShell');
+  it('should show skeleton when loading', () => {
     const { container } = render(
       <PageShell title="Test" loading>
         Content

@@ -65,4 +65,26 @@ describe('StepEditor', () => {
     const selects = screen.getAllByRole('combobox');
     expect(selects.length).toBeGreaterThanOrEqual(2);
   });
+
+  it('imports recorded steps into the editor', () => {
+    const recordedSteps: TaskStep[] = [
+      {
+        id: 'recorded-1',
+        name: 'Recorded Step',
+        action: { type: 'extract', selector: '.price' },
+      },
+    ];
+
+    render(
+      <StepEditor
+        steps={steps}
+        onChange={onChange}
+        recordedSteps={recordedSteps}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /导入录制结果/ }));
+
+    expect(onChange).toHaveBeenCalledWith(recordedSteps);
+  });
 });

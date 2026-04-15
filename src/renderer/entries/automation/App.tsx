@@ -11,6 +11,7 @@ import { ExecutionPanel } from './components/ExecutionPanel';
 import { ResultTable } from './components/ResultTable';
 import { StepEditor } from './components/StepEditor';
 import { TaskList } from './components/TaskList';
+import { TemplateManager } from './components/TemplateManager';
 
 export default function App() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -21,6 +22,15 @@ export default function App() {
   const [execLogs, setExecLogs] = useState<string[]>([]);
   const [hasBreakpoint, setHasBreakpoint] = useState(false);
   const [showExecution, setShowExecution] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+
+  const templateDraftFields = steps
+    .filter((step) => step.action.type === 'extract' && step.action.selector)
+    .map((step) => ({
+      name: step.name,
+      selector: step.action.selector,
+      attribute: String(step.action.params?.attribute ?? 'textContent'),
+    }));
 
   const handleSelectTask = (id: string) => {
     setSelectedTaskId(id === 'new' ? null : id);
@@ -98,9 +108,16 @@ export default function App() {
 
         {/* 右栏：编辑器 + 执行面板 */}
         <div className="yclaw-automation-main">
+          <TemplateManager
+            draftFields={templateDraftFields}
+            onSelectTemplate={(templateId) => setSelectedTemplateId(templateId)}
+          />
+
           <ProCard className="yclaw-panel-card" title="步骤编辑器" style={{ flex: 1 }}>
             <StepEditor steps={steps} onChange={setSteps} />
           </ProCard>
+
+          {selectedTemplateId && <Tag color="processing">当前已选择模板：{selectedTemplateId}</Tag>}
 
           <BatchList taskId={selectedTaskId} onSelectBatch={setSelectedBatchId} />
 

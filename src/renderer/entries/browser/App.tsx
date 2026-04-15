@@ -8,6 +8,7 @@ import { useIpc, useIpcEvent } from '../../shared/hooks';
 import { useLoading } from '../../shared/hooks/useLoading';
 import { AddressBar } from './components/AddressBar';
 import { InterventionPanel } from './components/InterventionPanel';
+import { RecorderPanel } from './components/RecorderPanel';
 import { TabBar } from './components/TabBar';
 import { WebViewContainer } from './components/WebViewContainer';
 import type { InterventionState, Tab } from '@shared/types/browser';
@@ -155,6 +156,8 @@ export default function App() {
         </ProCard>
 
         <InterventionPanel state={interventionState} />
+
+        <RecorderPanel tabId={activeTabId} />
       </Space>
     </PageShell>
   );

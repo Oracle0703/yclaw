@@ -12,6 +12,23 @@ YClaw is a modular desktop workbench for operations-heavy workflows: analytics, 
 
 Core capabilities are implemented: main-process services, multi-window management, IPC bridge, automation/analytics engines, AI assistant (LLM + tool calling), command palette, and broad unit/regression test coverage.
 
+## Automation Browser Ops V1
+
+This branch now includes a first productized pass of the automation + browser ops loop:
+
+- task list, batch list, result table, export flow, and failed-batch retry entry
+- browser intervention panel with breakpoint/session context and manual resume
+- session registry, extraction template service, template manager, and recorder panel
+- execution alert view backed by structured execution logs
+- Playwright acceptance coverage for manual start, export, and intervention resume
+
+Current known limits:
+
+- full task CRUD/product editing flow is not finished yet
+- scheduler and recorder are minimal production skeletons, not the final hardened implementation
+- captcha handling remains manual-only
+- Playwright coverage runs against Vite renderer entries with mocked preload, not packaged Electron binaries
+
 ## Why YClaw
 
 YClaw targets a practical gap between generic admin panels and heavyweight internal tooling platforms. It treats the desktop shell as an operations cockpit:
@@ -49,6 +66,7 @@ YClaw targets a practical gap between generic admin panels and heavyweight inter
 - System services: SQLite (WAL mode), config, logging (7-day rotation), tray, auto-update
 - Automation engine: 5 actions (click/input/scroll/extract/screenshot), flow runner with breakpoint resume
 - Analytics engine: DataSourceManager (REST/WebSocket), IndicatorLibrary
+- Automation Browser Ops V1 scaffold: batches, results, intervention, sessions, templates, recorder, alerts
 - Test coverage: unit and regression suites across services, engines, components, shared utilities, and scripts
 
 ## Current Status
@@ -65,6 +83,7 @@ Implemented and tested:
 - Stock analysis module with K-line chart and indicator workflow
 - Automation task list/editor/execution panel with step editor
 - Browser session console with multi-tab management, navigation state, and configurable session partitions
+- Automation Browser Ops V1: batch tracking, result export, session binding, template CRUD, recorder import, alert aggregation
 - Plugin center with local install, enable/disable, uninstall confirmation, permission review flow, and three-level permission model
 - SQLite database service (WAL mode), config service, log service (7-day rotation), tray, auto-update
 - Automation engine: 5 operations, flow runner with retry + breakpoint resume
@@ -76,7 +95,8 @@ Still evolving:
 
 - Full production-grade automation execution against real pages
 - Complete plugin runtime isolation (V1.5 target)
-- End-to-end test coverage
+- End-to-end test coverage for packaged Electron runtime
+- Automation Browser Ops V1 hardening: full task CRUD, stronger scheduler recovery, richer recorder semantics
 - Production packaging verification across all platforms
 
 ## Tech Stack
@@ -141,6 +161,12 @@ npm run dist:linux
 
 ```bash
 npm test
+```
+
+### End-to-End Acceptance
+
+```bash
+npm run test:e2e -- --grep automation-browser-ops
 ```
 
 ### Type Check
