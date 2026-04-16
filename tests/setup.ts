@@ -6,11 +6,7 @@
 import React from 'react';
 import { vi } from 'vitest';
 
-vi.mock('@ant-design/pro-components', async () => {
-  const actual = await vi.importActual<typeof import('@ant-design/pro-components')>(
-    '@ant-design/pro-components',
-  );
-
+vi.mock('@ant-design/pro-components', () => {
   const renderContainer = ({
     children,
     title,
@@ -40,7 +36,6 @@ vi.mock('@ant-design/pro-components', async () => {
     );
 
   return {
-    ...actual,
     ProCard: renderContainer,
     PageContainer: renderContainer,
     ProLayout: ({

@@ -2,16 +2,25 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-vi.mock('antd', async () => {
-  const actual = await vi.importActual<typeof import('antd')>('antd');
-
+vi.mock('antd', () => {
   return {
-    ...actual,
+    Button: ({
+      children,
+      onClick,
+      disabled,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+      disabled?: boolean;
+    }) => (
+      <button type="button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    ),
     Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     Col: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     Space: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     Typography: {
-      ...actual.Typography,
       Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
     },
     Form: Object.assign(
@@ -30,6 +39,21 @@ vi.mock('antd', async () => {
           </div>
         ),
       },
+    ),
+    Input: ({
+      value,
+      onChange,
+      placeholder,
+    }: {
+      value?: string;
+      onChange?: (event: { target: { value: string } }) => void;
+      placeholder?: string;
+    }) => (
+      <input
+        value={value ?? ''}
+        placeholder={placeholder}
+        onChange={(event) => onChange?.({ target: { value: event.target.value } })}
+      />
     ),
     Select: ({
       value,

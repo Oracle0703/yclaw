@@ -1,6 +1,64 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+vi.mock('antd', () => {
+  return {
+    Modal: ({
+      children,
+      title,
+      okText,
+      cancelText,
+      onOk,
+      onCancel,
+    }: {
+      children?: React.ReactNode;
+      title?: React.ReactNode;
+      okText?: React.ReactNode;
+      cancelText?: React.ReactNode;
+      onOk?: () => void;
+      onCancel?: () => void;
+    }) => (
+      <section>
+        <header>{title}</header>
+        <div>{children}</div>
+        <footer>
+          <button type="button" onClick={onOk}>
+            {okText}
+          </button>
+          <button type="button" onClick={onCancel}>
+            {cancelText}
+          </button>
+        </footer>
+      </section>
+    ),
+    List: Object.assign(
+      ({
+        dataSource = [],
+        renderItem,
+      }: {
+        dataSource?: string[];
+        renderItem: (item: string) => React.ReactNode;
+      }) => (
+        <ul>
+          {dataSource.map((item) => (
+            <React.Fragment key={item}>{renderItem(item)}</React.Fragment>
+          ))}
+        </ul>
+      ),
+      {
+        Item: ({ children }: { children?: React.ReactNode }) => <li>{children}</li>,
+      },
+    ),
+    Alert: ({ message }: { message?: React.ReactNode }) => <div>{message}</div>,
+    Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Typography: {
+      Paragraph: ({ children }: { children?: React.ReactNode }) => <p>{children}</p>,
+      Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    },
+  };
+});
+
 import { PermissionDialog } from '@renderer/entries/plugin-center/components/PermissionDialog';
 
 describe('PermissionDialog', () => {
