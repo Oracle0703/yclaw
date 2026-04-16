@@ -13,7 +13,10 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'happy-dom',
+    environment: 'node',
+    environmentMatchGlobs: [
+      ['tests/unit/components/**/*.{test,spec}.{ts,tsx}', 'happy-dom'],
+    ],
     include: ['tests/unit/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['tests/e2e/**'],
     coverage: {

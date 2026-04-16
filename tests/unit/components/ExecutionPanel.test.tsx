@@ -3,27 +3,31 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('antd', () => {
-  const List = ({
+  function MockList({
     dataSource = [],
     renderItem,
   }: {
     dataSource?: Array<Record<string, unknown> | string>;
     renderItem: (item: Record<string, unknown> | string) => React.ReactNode;
-  }) => <div>{dataSource.map((item, index) => React.createElement(React.Fragment, { key: String((item as { id?: string }).id ?? index) }, renderItem(item)))}</div>;
-  const ListItem = ({
+  }) {
+    return <div>{dataSource.map((item, index) => React.createElement(React.Fragment, { key: String((item as { id?: string }).id ?? index) }, renderItem(item)))}</div>;
+  }
+
+  function MockListItem({
     children,
     actions,
   }: {
     children?: React.ReactNode;
     actions?: React.ReactNode[];
-  }) => (
-    <div>
-      {children}
-      {actions}
-    </div>
-  );
-  ListItem.displayName = 'MockListItem';
-  List.Item = ListItem;
+  }) {
+    return (
+      <div>
+        {children}
+        {actions}
+      </div>
+    );
+  }
+  MockList.Item = MockListItem;
 
   return {
     Button: ({
@@ -39,7 +43,7 @@ vi.mock('antd', () => {
         {children}
       </button>
     ),
-    List,
+    List: MockList,
     Progress: ({ percent }: { percent?: number }) => <div>{percent}%</div>,
     Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,

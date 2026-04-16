@@ -3,16 +3,19 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('antd', () => {
-  const List = ({
+  function MockList({
     dataSource = [],
     renderItem,
   }: {
     dataSource?: Array<Record<string, unknown>>;
     renderItem: (item: Record<string, unknown>) => React.ReactNode;
-  }) => <div>{dataSource.map((item) => React.createElement(React.Fragment, { key: String(item.id) }, renderItem(item)))}</div>;
-  const ListItem = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
-  ListItem.displayName = 'MockListItem';
-  List.Item = ListItem;
+  }) {
+    return <div>{dataSource.map((item) => React.createElement(React.Fragment, { key: String(item.id) }, renderItem(item)))}</div>;
+  }
+  function MockListItem({ children }: { children?: React.ReactNode }) {
+    return <div>{children}</div>;
+  }
+  MockList.Item = MockListItem;
 
   return {
     Button: ({
@@ -28,7 +31,7 @@ vi.mock('antd', () => {
         {children}
       </button>
     ),
-    List,
+    List: MockList,
     Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
     Typography: {
