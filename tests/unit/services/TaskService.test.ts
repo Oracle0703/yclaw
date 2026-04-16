@@ -98,18 +98,39 @@ describe('TaskService', () => {
     expect(mockDb.saveTaskFlow).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'task-1',
+        name: '采集任务',
         steps: nextSteps,
       }),
     );
     expect(result).toEqual(
       expect.objectContaining({
         id: 'task-1',
+        name: '采集任务',
         steps: nextSteps,
       }),
     );
   });
 
-  it('saves updated task name with edited steps', () => {
+  it('preserves existing task name when saving steps via saveTaskSteps', () => {
+    const nextSteps = [
+      {
+        id: 'step-new',
+        name: '新步骤',
+        action: { type: 'click' as const, selector: '#new' },
+      },
+    ];
+
+    service.saveTaskSteps('task-1', nextSteps);
+
+    expect(mockDb.saveTaskFlow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'task-1',
+        name: '采集任务',
+      }),
+    );
+  });
+
+  it('saves updated task name with edited steps when name is explicitly provided', () => {
     const nextSteps = [
       ...sampleFlow.steps,
       {

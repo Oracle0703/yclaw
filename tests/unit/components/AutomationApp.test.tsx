@@ -118,8 +118,10 @@ describe('Automation App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '选择任务' }));
 
-    const nameInput = await screen.findByPlaceholderText('请输入任务名称');
-    expect((nameInput as HTMLInputElement).value).toBe('采集任务');
+    const nameInput = screen.getByPlaceholderText('请输入任务名称');
+    await waitFor(() => {
+      expect((nameInput as HTMLInputElement).value).toBe('采集任务');
+    });
   });
 
   it('saves edited steps for the selected task', async () => {

@@ -50,19 +50,23 @@ export default function App() {
   };
 
   const handleSaveTask = async () => {
-    const saved = await invoke<TaskFlow>(IPC_CHANNELS.TASK_SAVE, {
-      taskId: selectedTaskId,
-      name: taskName,
-      steps,
-    });
+    try {
+      const saved = await invoke<TaskFlow>(IPC_CHANNELS.TASK_SAVE, {
+        taskId: selectedTaskId,
+        name: taskName,
+        steps,
+      });
 
-    setSelectedTaskId(saved.id);
-    setSelectedTaskSummary({
-      id: saved.id,
-      stepsCount: saved.steps.length,
-    });
-    setTaskName(saved.name);
-    setSteps(saved.steps);
+      setSelectedTaskId(saved.id);
+      setSelectedTaskSummary({
+        id: saved.id,
+        stepsCount: saved.steps.length,
+      });
+      setTaskName(saved.name);
+      setSteps(saved.steps);
+    } catch (err) {
+      console.error('保存任务失败', err);
+    }
   };
 
   const totalSteps = steps.length > 0 ? steps.length : (selectedTaskSummary?.stepsCount ?? 0);

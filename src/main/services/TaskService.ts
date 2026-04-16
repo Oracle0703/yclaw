@@ -70,19 +70,23 @@ export class TaskService {
     payload: SaveTaskFlowPayload,
   ): TaskFlow {
     const now = new Date().toISOString();
-    const normalizedName = payload.name?.trim() || '未命名任务';
     const currentFlow = taskId
       ? this.getTaskFlow(taskId)
       : {
           id: crypto.randomUUID(),
-          name: normalizedName,
+          name: '未命名任务',
           steps: [],
           createdAt: now,
           updatedAt: now,
         };
+    // undefined → 保留已有任务名称；空串/纯空白 → 回退默认值
+    const resolvedName =
+      payload.name !== undefined
+        ? (payload.name.trim() || '未命名任务')
+        : currentFlow.name;
     const nextFlow: TaskFlow = {
       ...currentFlow,
-      name: normalizedName,
+      name: resolvedName,
       steps: payload.steps,
       updatedAt: now,
     };
