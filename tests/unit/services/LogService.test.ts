@@ -14,14 +14,23 @@ import { LogService } from '@main/services/LogService';
 
 describe('LogService', () => {
   let service: LogService;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     fs.mkdirSync(testLogDir, { recursive: true });
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     service = new LogService();
   });
 
   afterEach(() => {
     service.close();
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
     fs.rmSync(testLogDir, { recursive: true, force: true });
   });
 
