@@ -2,6 +2,45 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+vi.mock('antd', () => ({
+  Button: ({
+    children,
+    onClick,
+    disabled,
+  }: {
+    children?: React.ReactNode;
+    onClick?: () => void;
+    disabled?: boolean;
+  }) => (
+    <button type="button" onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  ),
+  Input: ({
+    value,
+    onChange,
+    placeholder,
+  }: {
+    value?: string;
+    onChange?: (event: { target: { value: string } }) => void;
+    placeholder?: string;
+  }) => (
+    <input
+      aria-label="任务名称"
+      value={value ?? ''}
+      placeholder={placeholder}
+      onChange={(event) => onChange?.({ target: { value: event.target.value } })}
+    />
+  ),
+  Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+}));
+
+vi.mock('@ant-design/icons', () => ({
+  PlusOutlined: () => <span>plus</span>,
+  ThunderboltOutlined: () => <span>thunder</span>,
+}));
+
 vi.mock('@renderer/entries/automation/components/TaskList', () => ({
   TaskList: ({
     onSelect,

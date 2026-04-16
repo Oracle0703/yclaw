@@ -1,6 +1,53 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+vi.mock('antd', () => ({
+  Button: ({
+    children,
+    onClick,
+  }: {
+    children?: React.ReactNode;
+    onClick?: () => void;
+  }) => (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
+  Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+  Typography: {
+    Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+  },
+  Table: ({
+    dataSource = [],
+    columns = [],
+  }: {
+    dataSource?: Array<Record<string, unknown>>;
+    columns?: Array<Record<string, unknown>>;
+  }) => (
+    <table>
+      <tbody>
+        {dataSource.map((record, rowIndex) => (
+          <tr key={String(record.id ?? rowIndex)}>
+            {columns.map((column, columnIndex) => {
+              const key = String(column.key ?? column.dataIndex ?? columnIndex);
+              const value =
+                typeof column.dataIndex === 'string' ? record[column.dataIndex] : undefined;
+              const content =
+                typeof column.render === 'function'
+                  ? column.render(value, record, rowIndex)
+                  : value;
+
+              return <td key={key}>{content as React.ReactNode}</td>;
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ),
+}));
+
 import { TaskList } from '@renderer/entries/automation/components/TaskList';
 import { IPC_CHANNELS } from '@shared/constants';
 

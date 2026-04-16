@@ -1,6 +1,93 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
+
+vi.mock('antd', () => {
+  const Space = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+  Space.displayName = 'MockSpace';
+  Space.Compact = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+  Space.Compact.displayName = 'MockSpaceCompact';
+
+  const List = ({
+    dataSource = [],
+    renderItem,
+  }: {
+    dataSource?: Array<Record<string, unknown>>;
+    renderItem: (item: Record<string, unknown>) => React.ReactNode;
+  }) => <div>{dataSource.map((item) => React.createElement(React.Fragment, { key: String(item.id) }, renderItem(item)))}</div>;
+  List.displayName = 'MockList';
+  List.Item = ({
+    children,
+    actions,
+  }: {
+    children?: React.ReactNode;
+    actions?: React.ReactNode[];
+  }) => (
+    <div>
+      {children}
+      {actions}
+    </div>
+  );
+  List.Item.displayName = 'MockListItem';
+  const ListItemMeta = ({
+    title,
+    description,
+  }: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+  }) => (
+    <div>
+      <div>{title}</div>
+      <div>{description}</div>
+    </div>
+  );
+  ListItemMeta.displayName = 'MockListMeta';
+  List.Item.Meta = ListItemMeta;
+
+  return {
+    Button: ({
+      children,
+      onClick,
+      disabled,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+      disabled?: boolean;
+    }) => (
+      <button type="button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    ),
+    Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
+    Input: ({
+      value,
+      onChange,
+      placeholder,
+    }: {
+      value?: string;
+      onChange?: (event: { target: { value: string } }) => void;
+      placeholder?: string;
+    }) => (
+      <input
+        value={value ?? ''}
+        placeholder={placeholder}
+        onChange={(event) => onChange?.({ target: { value: event.target.value } })}
+      />
+    ),
+    List,
+    Popconfirm: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    Space,
+    Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Typography: {
+      Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    },
+    message: {
+      success: vi.fn(),
+      error: vi.fn(),
+    },
+  };
+});
+
 import { TemplateManager } from '@renderer/entries/automation/components/TemplateManager';
 import { IPC_CHANNELS } from '@shared/constants';
 
