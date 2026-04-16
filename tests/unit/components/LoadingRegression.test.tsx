@@ -17,6 +17,10 @@ import {
 } from '@renderer/shared/components/GlobalLoading';
 import { PageShell } from '@renderer/shared/components/PageShell';
 
+vi.mock('@ant-design/pro-components', () => ({
+  PageContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
 // ---- 回归-004: useLoading hook 可从 hooks 路径导入 ----
 describe('Regression: useLoading hook availability', () => {
   it('should be importable from hooks/useLoading', () => {
