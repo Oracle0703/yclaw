@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('antd', () => ({
   Button: ({
@@ -49,11 +49,21 @@ vi.mock('antd', () => ({
 }));
 
 import { TaskList } from '@renderer/entries/automation/components/TaskList';
-import { IPC_CHANNELS } from '@shared/constants';
+import { EVENTS, IPC_CHANNELS } from '@shared/constants';
 
 describe('TaskList', () => {
+  let taskStatusChangedHandler: (() => void) | undefined;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    taskStatusChangedHandler = undefined;
+    vi.mocked(window.electronAPI.on).mockImplementation((channel, handler) => {
+      if (channel === EVENTS.TASK_STATUS_CHANGED) {
+        taskStatusChangedHandler = handler as () => void;
+      }
+
+      return () => {};
+    });
     vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
       if (channel === IPC_CHANNELS.TASK_LIST) {
         return {
@@ -103,5 +113,77 @@ describe('TaskList', () => {
     await waitFor(() => {
       expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.BATCH_RETRY, { batchId: 'batch-1' });
     });
+  });
+
+  it('ignores stale task list responses after a newer refresh', async () => {
+    let resolveInitialList: (value: unknown) => void = () => {};
+    let resolveRefreshList: (value: unknown) => void = () => {};
+    let listCallCount = 0;
+
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
+      if (channel !== IPC_CHANNELS.TASK_LIST) {
+        return { success: true, data: { status: 'running' } };
+      }
+
+      listCallCount += 1;
+      if (listCallCount === 1) {
+        return new Promise((resolve) => {
+          resolveInitialList = resolve;
+        }) as never;
+      }
+
+      return new Promise((resolve) => {
+        resolveRefreshList = resolve;
+      }) as never;
+    });
+
+    render(<TaskList onSelect={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(taskStatusChangedHandler).toBeDefined();
+    });
+
+    await act(async () => {
+      taskStatusChangedHandler?.();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.invoke).toHaveBeenCalledTimes(2);
+    });
+
+    await act(async () => {
+      resolveRefreshList({
+        success: true,
+        data: [
+          {
+            id: 'task-new',
+            name: '新任务',
+            status: 'running',
+            updatedAt: '2026-04-15 10:01:00',
+          },
+        ],
+      });
+    });
+
+    expect(await screen.findByText('新任务')).toBeDefined();
+
+    await act(async () => {
+      resolveInitialList({
+        success: true,
+        data: [
+          {
+            id: 'task-old',
+            name: '旧任务',
+            status: 'idle',
+            updatedAt: '2026-04-15 10:00:00',
+          },
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('旧任务')).toBeNull();
+    });
+    expect(screen.getByText('新任务')).toBeDefined();
   });
 });

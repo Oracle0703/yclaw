@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { EVENTS } from '@shared/constants';
@@ -26,12 +26,17 @@ export function TaskList({
   const { automation } = useIpc();
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const requestSeqRef = useRef(0);
 
   const fetchTasks = useCallback(async () => {
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
     setLoading(true);
     const res = await automation.listTasks() as TaskSummary[];
-    setTasks(res ?? []);
-    setLoading(false);
+    if (requestSeqRef.current === requestSeq) {
+      setTasks(res ?? []);
+      setLoading(false);
+    }
   }, [automation]);
 
   useEffect(() => {
