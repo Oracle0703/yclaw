@@ -15,14 +15,24 @@ export function BatchList({ taskId, onSelectBatch }: BatchListProps) {
   const [filter, setFilter] = useState<'all' | 'failed'>('all');
 
   useEffect(() => {
+    let isCurrent = true;
+
     if (!taskId) {
       setBatches([]);
-      return;
+      return () => {
+        isCurrent = false;
+      };
     }
 
     void automation.listBatches(taskId).then((data) => {
-      setBatches((data as TaskBatch[]) ?? []);
+      if (isCurrent) {
+        setBatches((data as TaskBatch[]) ?? []);
+      }
     });
+
+    return () => {
+      isCurrent = false;
+    };
   }, [automation, taskId]);
 
   const visibleBatches = useMemo(() => {

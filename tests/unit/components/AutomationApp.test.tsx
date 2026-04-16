@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+const { invokeMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+}));
+
 vi.mock('antd', () => ({
   Button: ({
     children,
@@ -120,46 +124,48 @@ vi.mock('@renderer/shared/components/PageShell', () => ({
   ),
 }));
 
+vi.mock('@renderer/shared/hooks', () => ({
+  useIpc: () => ({
+    invoke: invokeMock,
+  }),
+  useIpcEvent: vi.fn(),
+}));
+
 import AutomationApp from '@renderer/entries/automation/App';
 
 describe('Automation App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.electronAPI.invoke.mockResolvedValue({
-      success: true,
-      data: {
-        id: 'task-1',
-        name: '采集任务',
-        steps: [
-          {
-            id: 'step-1',
-            name: '打开页面',
-            action: { type: 'click', selector: '#open' },
-          },
-          {
-            id: 'step-2',
-            name: '采集数据',
-            action: { type: 'extract', selector: '.price' },
-          },
-        ],
-        createdAt: '2026-04-16T00:00:00.000Z',
-        updatedAt: '2026-04-16T00:00:00.000Z',
-      },
+    invokeMock.mockResolvedValue({
+      id: 'task-1',
+      name: '采集任务',
+      steps: [
+        {
+          id: 'step-1',
+          name: '打开页面',
+          action: { type: 'click', selector: '#open' },
+        },
+        {
+          id: 'step-2',
+          name: '采集数据',
+          action: { type: 'extract', selector: '.price' },
+        },
+      ],
+      createdAt: '2026-04-16T00:00:00.000Z',
+      updatedAt: '2026-04-16T00:00:00.000Z',
     });
   });
 
   it('uses selected task summary stepsCount as execution total when persisted steps fail to load', async () => {
-    window.electronAPI.invoke.mockRejectedValueOnce(new Error('load task failed'));
+    invokeMock.mockRejectedValueOnce(new Error('load task failed'));
 
     render(<AutomationApp />);
 
     fireEvent.click(screen.getByRole('button', { name: '选择任务' }));
     fireEvent.click(screen.getByRole('button', { name: /打开执行面板/ }));
 
-    await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith('task:get', { taskId: 'task-1' });
-    });
-    expect(screen.getByText('总步骤:3')).toBeDefined();
+    expect(await screen.findByText('总步骤:3')).toBeDefined();
+    expect(invokeMock).toHaveBeenCalledWith('task:get', { taskId: 'task-1' });
   });
 
   it('loads persisted task steps into editor when selecting an existing task', async () => {
@@ -167,10 +173,8 @@ describe('Automation App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '选择任务' }));
 
-    await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith('task:get', { taskId: 'task-1' });
-    });
     expect(await screen.findByText('编辑器步骤数:2')).toBeDefined();
+    expect(invokeMock).toHaveBeenCalledWith('task:get', { taskId: 'task-1' });
   });
 
   it('loads selected task name into the task name input', async () => {
@@ -178,10 +182,7 @@ describe('Automation App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '选择任务' }));
 
-    const nameInput = screen.getByPlaceholderText('请输入任务名称');
-    await waitFor(() => {
-      expect((nameInput as HTMLInputElement).value).toBe('采集任务');
-    });
+    expect(await screen.findByDisplayValue('采集任务')).toBeDefined();
   });
 
   it('saves edited steps for the selected task', async () => {
@@ -194,7 +195,7 @@ describe('Automation App', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存任务' }));
 
     await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(
+      expect(invokeMock).toHaveBeenCalledWith(
         'task:save',
         expect.objectContaining({
           taskId: 'task-1',
@@ -217,7 +218,7 @@ describe('Automation App', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存任务' }));
 
     await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(
+      expect(invokeMock).toHaveBeenCalledWith(
         'task:save',
         expect.objectContaining({
           taskId: 'task-1',
@@ -231,21 +232,18 @@ describe('Automation App', () => {
   });
 
   it('creates a new task when saving after clicking 新建任务', async () => {
-    window.electronAPI.invoke.mockResolvedValueOnce({
-      success: true,
-      data: {
-        id: 'task-new-1',
-        name: '未命名任务',
-        steps: [
-          {
-            id: 'step-new-1',
-            name: '打开首页',
-            action: { type: 'click', selector: '#home' },
-          },
-        ],
-        createdAt: '2026-04-16T00:00:00.000Z',
-        updatedAt: '2026-04-16T00:00:00.000Z',
-      },
+    invokeMock.mockResolvedValueOnce({
+      id: 'task-new-1',
+      name: '未命名任务',
+      steps: [
+        {
+          id: 'step-new-1',
+          name: '打开首页',
+          action: { type: 'click', selector: '#home' },
+        },
+      ],
+      createdAt: '2026-04-16T00:00:00.000Z',
+      updatedAt: '2026-04-16T00:00:00.000Z',
     });
 
     render(<AutomationApp />);
@@ -255,7 +253,7 @@ describe('Automation App', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存任务' }));
 
     await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(
+      expect(invokeMock).toHaveBeenCalledWith(
         'task:save',
         expect.objectContaining({
           taskId: null,
@@ -278,7 +276,7 @@ describe('Automation App', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存任务' }));
 
     await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(
+      expect(invokeMock).toHaveBeenCalledWith(
         'task:save',
         expect.objectContaining({
           taskId: null,

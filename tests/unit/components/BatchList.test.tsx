@@ -95,4 +95,59 @@ describe('BatchList', () => {
     expect(screen.queryByText('batch-running')).toBeNull();
     expect(screen.getByText('batch-failed')).toBeDefined();
   });
+
+  it('ignores stale batch responses after task changes', async () => {
+    let resolveTask1: (value: unknown) => void = () => {};
+    let resolveTask2: (value: unknown) => void = () => {};
+
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (_channel, params) => {
+      if ((params as { taskId?: string }).taskId === 'task-1') {
+        return new Promise((resolve) => {
+          resolveTask1 = resolve;
+        }) as never;
+      }
+
+      return new Promise((resolve) => {
+        resolveTask2 = resolve;
+      }) as never;
+    });
+
+    const { rerender } = render(<BatchList taskId="task-1" onSelectBatch={vi.fn()} />);
+    rerender(<BatchList taskId="task-2" onSelectBatch={vi.fn()} />);
+
+    await act(async () => {
+      resolveTask2({
+        success: true,
+        data: [
+          {
+            id: 'batch-task-2',
+            taskId: 'task-2',
+            status: 'running',
+            createdAt: '2026-04-15T10:00:00.000Z',
+            stepResults: [],
+          },
+        ],
+      });
+    });
+
+    expect(await screen.findByText('batch-task-2')).toBeDefined();
+
+    await act(async () => {
+      resolveTask1({
+        success: true,
+        data: [
+          {
+            id: 'batch-task-1',
+            taskId: 'task-1',
+            status: 'failed',
+            createdAt: '2026-04-15T09:00:00.000Z',
+            stepResults: [],
+          },
+        ],
+      });
+    });
+
+    expect(screen.queryByText('batch-task-1')).toBeNull();
+    expect(screen.getByText('batch-task-2')).toBeDefined();
+  });
 });

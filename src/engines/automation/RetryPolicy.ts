@@ -5,6 +5,7 @@ export interface RetryOptions {
   maxRetries: number;
   baseDelay: number;
   maxDelay?: number;
+  sleep?: (ms: number) => Promise<void>;
 }
 
 const DEFAULT_OPTIONS: RetryOptions = {
@@ -34,7 +35,7 @@ export async function withRetry<T>(
           opts.baseDelay * Math.pow(2, attempt),
           opts.maxDelay ?? 30000,
         );
-        await sleep(delay);
+        await (opts.sleep ?? sleep)(delay);
       }
     }
   }

@@ -1,7 +1,7 @@
 /**
- * Vitest 全局 setup
+ * Vitest 组件测试 setup
  * - Mock Electron APIs
- * - 设置全局 DOM 环境
+ * - 轻量替代部分 Pro 组件
  */
 import React from 'react';
 import { vi } from 'vitest';
@@ -65,14 +65,12 @@ vi.mock('@ant-design/pro-components', () => {
   };
 });
 
-// Mock window.electronAPI for renderer tests
 const mockElectronAPI = {
   invoke: vi.fn().mockResolvedValue({ success: true, data: null }),
   on: vi.fn().mockReturnValue(() => {}),
   off: vi.fn(),
 };
 
-// Attach electronAPI to the existing window (don't replace window itself)
 Object.defineProperty(globalThis.window ?? globalThis, 'electronAPI', {
   value: mockElectronAPI,
   writable: true,

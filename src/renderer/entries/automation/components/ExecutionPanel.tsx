@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, List, Progress, Space, Tag, Typography } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
@@ -33,6 +33,13 @@ export function ExecutionPanel({
   const { invoke } = useIpc();
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const onErrorRef = useRef(onError);
+
+  onErrorRef.current = onError;
+
+  const reportError = useCallback((error: unknown, fallback: string) => {
+    onErrorRef.current?.(error instanceof Error ? error.message : fallback);
+  }, []);
 
   const loadAlerts = useCallback(async () => {
     if (!taskId) {
@@ -45,11 +52,11 @@ export function ExecutionPanel({
       const result = await invoke<AlertRecord[]>(IPC_CHANNELS.ALERT_LIST, { taskId });
       setAlerts(result ?? []);
     } catch (error) {
-      onError?.(error instanceof Error ? error.message : '加载告警失败');
+      reportError(error, '加载告警失败');
     } finally {
       setLoadingAlerts(false);
     }
-  }, [invoke, onError, taskId]);
+  }, [invoke, reportError, taskId]);
 
   useEffect(() => {
     void loadAlerts();
@@ -70,7 +77,7 @@ export function ExecutionPanel({
       }
       onStatusChange?.(result?.status ?? nextStatus);
     } catch (error) {
-      onError?.(error instanceof Error ? error.message : '任务操作失败');
+      reportError(error, '任务操作失败');
     }
   };
 
@@ -94,7 +101,7 @@ export function ExecutionPanel({
         current.map((alert) => (alert.id === alertId ? { ...alert, read: true } : alert)),
       );
     } catch (error) {
-      onError?.(error instanceof Error ? error.message : '告警标记失败');
+      reportError(error, '告警标记失败');
     }
   };
 

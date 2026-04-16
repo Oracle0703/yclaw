@@ -13,18 +13,11 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'node',
-    environmentMatchGlobs: [
-      ['tests/unit/components/**/*.{test,spec}.{ts,tsx}', 'happy-dom'],
-    ],
-    include: ['tests/unit/**/*.{test,spec}.{ts,tsx}'],
-    exclude: ['tests/e2e/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/**/*.d.ts', 'src/**/index.html'],
     },
-    setupFiles: ['tests/setup.ts'],
   },
 });

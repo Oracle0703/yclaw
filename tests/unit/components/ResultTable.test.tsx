@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('antd', () => ({
   Button: ({
@@ -99,5 +99,66 @@ describe('ResultTable', () => {
         format: 'csv',
       });
     });
+  });
+
+  it('ignores stale result responses after task changes', async () => {
+    let resolveTask1: (value: unknown) => void = () => {};
+    let resolveTask2: (value: unknown) => void = () => {};
+
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel, params) => {
+      if (channel !== IPC_CHANNELS.RESULT_LIST) {
+        return { success: true, data: { path: 'C:\\temp\\results.csv' } };
+      }
+
+      if ((params as { taskId?: string }).taskId === 'task-1') {
+        return new Promise((resolve) => {
+          resolveTask1 = resolve;
+        }) as never;
+      }
+
+      return new Promise((resolve) => {
+        resolveTask2 = resolve;
+      }) as never;
+    });
+
+    const { rerender } = render(<ResultTable taskId="task-1" batchId="batch-1" />);
+    rerender(<ResultTable taskId="task-2" batchId="batch-2" />);
+
+    await act(async () => {
+      resolveTask2({
+        success: true,
+        data: [
+          {
+            id: 'result-task-2',
+            taskId: 'task-2',
+            batchId: 'batch-2',
+            data: { price: 456 },
+            status: 'normal',
+            createdAt: '2026-04-15T10:00:00.000Z',
+          },
+        ],
+      });
+    });
+
+    expect(await screen.findByText('result-task-2')).toBeDefined();
+
+    await act(async () => {
+      resolveTask1({
+        success: true,
+        data: [
+          {
+            id: 'result-task-1',
+            taskId: 'task-1',
+            batchId: 'batch-1',
+            data: { price: 123 },
+            status: 'normal',
+            createdAt: '2026-04-15T09:00:00.000Z',
+          },
+        ],
+      });
+    });
+
+    expect(screen.queryByText('result-task-1')).toBeNull();
+    expect(screen.getByText('result-task-2')).toBeDefined();
   });
 });

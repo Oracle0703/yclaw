@@ -118,6 +118,7 @@ describe('TemplateManager', () => {
     render(<TemplateManager onSelectTemplate={vi.fn()} />);
 
     expect(await screen.findByText('价格采集')).toBeDefined();
+    expect(window.electronAPI.invoke).toHaveBeenCalledTimes(1);
   });
 
   it('notifies selection when a template is chosen', async () => {

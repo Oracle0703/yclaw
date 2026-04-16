@@ -14,14 +14,24 @@ export function ResultTable({ taskId, batchId }: ResultTableProps) {
   const [results, setResults] = useState<ExtractionResult[]>([]);
 
   useEffect(() => {
+    let isCurrent = true;
+
     if (!taskId) {
       setResults([]);
-      return;
+      return () => {
+        isCurrent = false;
+      };
     }
 
     void automation.listResults(taskId, batchId ?? undefined).then((data) => {
-      setResults((data as ExtractionResult[]) ?? []);
+      if (isCurrent) {
+        setResults((data as ExtractionResult[]) ?? []);
+      }
     });
+
+    return () => {
+      isCurrent = false;
+    };
   }, [automation, taskId, batchId]);
 
   return (

@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
+const { invokeMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+}));
+
 vi.mock('antd', () => {
   function MockList({
     dataSource = [],
@@ -54,10 +58,14 @@ vi.mock('antd', () => {
   };
 });
 
+vi.mock('@renderer/shared/hooks', () => ({
+  useIpc: () => ({
+    invoke: invokeMock,
+  }),
+}));
+
 import { ExecutionPanel } from '@renderer/entries/automation/components/ExecutionPanel';
 import { IPC_CHANNELS } from '@shared/constants';
-
-// window.electronAPI is mocked globally in tests/setup.ts
 
 describe('ExecutionPanel', () => {
   type ExecutionPanelTestProps = React.ComponentProps<typeof ExecutionPanel>;
@@ -81,24 +89,21 @@ describe('ExecutionPanel', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
+    invokeMock.mockImplementation(async (channel: string) => {
       if (channel === IPC_CHANNELS.ALERT_LIST) {
-        return {
-          success: true,
-          data: [
-            {
-              id: 'alert-1',
-              taskId: 'task-1',
-              batchId: 'batch-1',
-              message: '任务失败，请检查登录状态',
-              createdAt: '2026-04-15T00:00:00.000Z',
-              read: false,
-            },
-          ],
-        } as never;
+        return [
+          {
+            id: 'alert-1',
+            taskId: 'task-1',
+            batchId: 'batch-1',
+            message: '任务失败，请检查登录状态',
+            createdAt: '2026-04-15T00:00:00.000Z',
+            read: false,
+          },
+        ] as never;
       }
 
-      return { success: true, data: null } as never;
+      return null as never;
     });
   });
 
@@ -158,15 +163,39 @@ describe('ExecutionPanel', () => {
   it('should call invoke on start click', async () => {
     renderExecutionPanel({ taskId: 'task-1' });
     await screen.findByText(/任务失败，请检查登录状态/);
-    vi.mocked(window.electronAPI.invoke).mockClear();
+    invokeMock.mockClear();
 
     fireEvent.click(screen.getByRole('button', { name: /启\s*动/ }));
 
     await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.TASK_START, {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.TASK_START, {
         taskId: 'task-1',
       });
     });
+  });
+
+  it('does not refetch alerts when only onError callback identity changes', async () => {
+    const firstOnError = vi.fn();
+    const { rerender } = render(
+      <ExecutionPanel
+        {...defaultProps}
+        taskId="task-1"
+        onError={firstOnError}
+      />,
+    );
+
+    await screen.findByText(/任务失败，请检查登录状态/);
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ExecutionPanel
+        {...defaultProps}
+        taskId="task-1"
+        onError={vi.fn()}
+      />,
+    );
+
+    expect(invokeMock).toHaveBeenCalledTimes(1);
   });
 
   it('shows recent alerts', async () => {
@@ -191,7 +220,7 @@ describe('ExecutionPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: /标记已读/ }));
 
     await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.ALERT_DISMISS, {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.ALERT_DISMISS, {
         alertId: 'alert-1',
       });
     });
@@ -199,31 +228,25 @@ describe('ExecutionPanel', () => {
 
   it('surfaces dismiss alert failures through onError', async () => {
     const onError = vi.fn();
-    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
+    invokeMock.mockImplementation(async (channel: string) => {
       if (channel === IPC_CHANNELS.ALERT_LIST) {
-        return {
-          success: true,
-          data: [
-            {
-              id: 'alert-1',
-              taskId: 'task-1',
-              batchId: 'batch-1',
-              message: '任务失败，请检查登录状态',
-              createdAt: '2026-04-15T00:00:00.000Z',
-              read: false,
-            },
-          ],
-        } as never;
+        return [
+          {
+            id: 'alert-1',
+            taskId: 'task-1',
+            batchId: 'batch-1',
+            message: '任务失败，请检查登录状态',
+            createdAt: '2026-04-15T00:00:00.000Z',
+            read: false,
+          },
+        ] as never;
       }
 
       if (channel === IPC_CHANNELS.ALERT_DISMISS) {
-        return {
-          success: false,
-          error: { message: 'dismiss failed' },
-        } as never;
+        throw new Error('dismiss failed');
       }
 
-      return { success: true, data: null } as never;
+      return null as never;
     });
 
     renderExecutionPanel({ taskId: 'task-1', onError });

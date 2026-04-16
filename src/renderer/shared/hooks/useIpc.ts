@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { IpcResponse } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/constants';
 
@@ -17,24 +17,28 @@ export function useIpc() {
     [],
   );
 
-  const automation = {
-    listTasks: () => invoke(IPC_CHANNELS.TASK_LIST),
-    startTask: (taskId: string) => invoke(IPC_CHANNELS.TASK_START, { taskId }),
-    retryBatch: (batchId: string) => invoke(IPC_CHANNELS.BATCH_RETRY, { batchId }),
-    listBatches: (taskId: string) => invoke(IPC_CHANNELS.TASK_BATCH_LIST, { taskId }),
-    listResults: (taskId: string, batchId?: string) =>
-      invoke(IPC_CHANNELS.RESULT_LIST, { taskId, batchId }),
-    exportResults: (taskId: string, batchId: string | undefined, format: 'csv' | 'json') =>
-      invoke(IPC_CHANNELS.RESULT_EXPORT, { taskId, batchId, format }),
-    listTemplates: () => invoke(IPC_CHANNELS.TEMPLATE_LIST),
-    saveTemplate: (name: string, fields: unknown[]) =>
-      invoke(IPC_CHANNELS.TEMPLATE_SAVE, { name, fields }),
-    deleteTemplate: (templateId: string) => invoke(IPC_CHANNELS.TEMPLATE_DELETE, { templateId }),
-    startRecorder: (tabId: number) => invoke(IPC_CHANNELS.RECORDER_START, { tabId }),
-    stopRecorder: (tabId: number) => invoke(IPC_CHANNELS.RECORDER_STOP, { tabId }),
-    listAlerts: (taskId?: string) => invoke(IPC_CHANNELS.ALERT_LIST, { taskId }),
-    dismissAlert: (alertId: string) => invoke(IPC_CHANNELS.ALERT_DISMISS, { alertId }),
-  };
+  const automation = useMemo(
+    () => ({
+      listTasks: () => invoke(IPC_CHANNELS.TASK_LIST),
+      startTask: (taskId: string) => invoke(IPC_CHANNELS.TASK_START, { taskId }),
+      retryBatch: (batchId: string) => invoke(IPC_CHANNELS.BATCH_RETRY, { batchId }),
+      listBatches: (taskId: string) => invoke(IPC_CHANNELS.TASK_BATCH_LIST, { taskId }),
+      listResults: (taskId: string, batchId?: string) =>
+        invoke(IPC_CHANNELS.RESULT_LIST, { taskId, batchId }),
+      exportResults: (taskId: string, batchId: string | undefined, format: 'csv' | 'json') =>
+        invoke(IPC_CHANNELS.RESULT_EXPORT, { taskId, batchId, format }),
+      listTemplates: () => invoke(IPC_CHANNELS.TEMPLATE_LIST),
+      saveTemplate: (name: string, fields: unknown[]) =>
+        invoke(IPC_CHANNELS.TEMPLATE_SAVE, { name, fields }),
+      deleteTemplate: (templateId: string) =>
+        invoke(IPC_CHANNELS.TEMPLATE_DELETE, { templateId }),
+      startRecorder: (tabId: number) => invoke(IPC_CHANNELS.RECORDER_START, { tabId }),
+      stopRecorder: (tabId: number) => invoke(IPC_CHANNELS.RECORDER_STOP, { tabId }),
+      listAlerts: (taskId?: string) => invoke(IPC_CHANNELS.ALERT_LIST, { taskId }),
+      dismissAlert: (alertId: string) => invoke(IPC_CHANNELS.ALERT_DISMISS, { alertId }),
+    }),
+    [invoke],
+  );
 
   return { invoke, automation };
 }
