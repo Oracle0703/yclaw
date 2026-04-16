@@ -1,6 +1,71 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+vi.mock('antd', async () => {
+  const actual = await vi.importActual<typeof import('antd')>('antd');
+
+  return {
+    ...actual,
+    Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Col: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Space: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Typography: {
+      ...actual.Typography,
+      Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    },
+    Form: Object.assign(
+      ({ children }: { children: React.ReactNode }) => <form>{children}</form>,
+      {
+        Item: ({
+          children,
+          label,
+        }: {
+          children: React.ReactNode;
+          label?: React.ReactNode;
+        }) => (
+          <div>
+            {label ? <span>{label}</span> : null}
+            {children}
+          </div>
+        ),
+      },
+    ),
+    Select: ({
+      value,
+      options = [],
+      onChange,
+    }: {
+      value?: string;
+      options?: Array<{ value: string; label: string }>;
+      onChange?: (value: string) => void;
+    }) => (
+      <select value={value} onChange={(event) => onChange?.(event.target.value)}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    ),
+    InputNumber: ({
+      value,
+      onChange,
+    }: {
+      value?: number;
+      onChange?: (value: number | null) => void;
+    }) => (
+      <input
+        type="number"
+        value={value ?? ''}
+        onChange={(event) =>
+          onChange?.(event.target.value === '' ? null : Number(event.target.value))
+        }
+      />
+    ),
+  };
+});
+
 import { StepEditor } from '@renderer/entries/automation/components/StepEditor';
 import type { TaskStep } from '@shared/types';
 

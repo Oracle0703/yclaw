@@ -33,15 +33,13 @@ describe('TaskList', () => {
   it('renders task rows from task:list', async () => {
     render(<TaskList onSelect={vi.fn()} />);
 
-    await waitFor(() => {
-      expect(screen.getByText('采集任务')).toBeDefined();
-    });
+    expect(await screen.findByText('采集任务')).toBeDefined();
   });
 
   it('starts a task from the action column', async () => {
     render(<TaskList onSelect={vi.fn()} />);
 
-    await waitFor(() => screen.getByText('采集任务'));
+    await screen.findByText('采集任务');
     fireEvent.click(screen.getByRole('button', { name: /启动/ }));
 
     await waitFor(() => {
@@ -52,7 +50,7 @@ describe('TaskList', () => {
   it('retries the latest failed batch from the action column', async () => {
     render(<TaskList onSelect={vi.fn()} />);
 
-    await waitFor(() => screen.getByText('采集任务'));
+    await screen.findByText('采集任务');
     fireEvent.click(screen.getByRole('button', { name: /复跑/ }));
 
     await waitFor(() => {

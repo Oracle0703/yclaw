@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { TemplateManager } from '@renderer/entries/automation/components/TemplateManager';
 import { IPC_CHANNELS } from '@shared/constants';
 
@@ -30,16 +30,14 @@ describe('TemplateManager', () => {
   it('loads existing templates on mount', async () => {
     render(<TemplateManager onSelectTemplate={vi.fn()} />);
 
-    await waitFor(() => {
-      expect(screen.getByText('价格采集')).toBeDefined();
-    });
+    expect(await screen.findByText('价格采集')).toBeDefined();
   });
 
   it('notifies selection when a template is chosen', async () => {
     const onSelectTemplate = vi.fn();
     render(<TemplateManager onSelectTemplate={onSelectTemplate} />);
 
-    await waitFor(() => screen.getByText('价格采集'));
+    await screen.findByText('价格采集');
     fireEvent.click(screen.getByRole('button', { name: /使用模板/ }));
 
     expect(onSelectTemplate).toHaveBeenCalledWith('template-1');

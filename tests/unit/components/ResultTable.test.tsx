@@ -34,16 +34,14 @@ describe('ResultTable', () => {
   it('renders result rows for the selected batch', async () => {
     render(<ResultTable taskId="task-1" batchId="batch-1" />);
 
-    await waitFor(() => {
-      expect(screen.getByText('result-1')).toBeDefined();
-      expect(screen.getByText(/123/)).toBeDefined();
-    });
+    expect(await screen.findByText('result-1')).toBeDefined();
+    expect(await screen.findByText(/123/)).toBeDefined();
   });
 
   it('exports current results as csv', async () => {
     render(<ResultTable taskId="task-1" batchId="batch-1" />);
 
-    await waitFor(() => screen.getByText('result-1'));
+    await screen.findByText('result-1');
     fireEvent.click(screen.getByRole('button', { name: /导出 CSV/ }));
 
     await waitFor(() => {

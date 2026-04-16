@@ -7,8 +7,10 @@ import { IPC_CHANNELS } from '@shared/constants';
 // window.electronAPI is mocked globally in tests/setup.ts
 
 describe('ExecutionPanel', () => {
-  const defaultProps = {
-    taskId: 'task-1',
+  type ExecutionPanelTestProps = React.ComponentProps<typeof ExecutionPanel>;
+
+  const defaultProps: ExecutionPanelTestProps = {
+    taskId: null,
     status: 'idle',
     currentStep: 0,
     totalSteps: 5,
@@ -16,16 +18,11 @@ describe('ExecutionPanel', () => {
     hasBreakpoint: false,
   };
 
-  const renderExecutionPanel = async (
-    props: Partial<typeof defaultProps> & { onJumpToBatch?: (batchId: string) => void; onError?: (message: string) => void } = {},
+  const renderExecutionPanel = (
+    props: Partial<ExecutionPanelTestProps> = {},
   ) => {
     const mergedProps = { ...defaultProps, ...props };
     render(<ExecutionPanel {...mergedProps} />);
-    await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.ALERT_LIST, {
-        taskId: mergedProps.taskId,
-      });
-    });
     return mergedProps;
   };
 
@@ -52,67 +49,75 @@ describe('ExecutionPanel', () => {
     });
   });
 
-  it('should render execution panel header', async () => {
-    await renderExecutionPanel();
+  it('should render execution panel header', () => {
+    renderExecutionPanel();
     expect(screen.getByText('执行面板')).toBeDefined();
   });
 
-  it('should display status', async () => {
-    await renderExecutionPanel({ status: 'running' });
+  it('should display status', () => {
+    renderExecutionPanel({ status: 'running' });
     expect(screen.getByText(/running/)).toBeDefined();
   });
 
-  it('should render start button', async () => {
-    await renderExecutionPanel();
+  it('should render start button', () => {
+    renderExecutionPanel();
     expect(screen.getByRole('button', { name: /启\s*动/ })).toBeDefined();
   });
 
-  it('should render pause button', async () => {
-    await renderExecutionPanel({ status: 'running' });
+  it('should render pause button', () => {
+    renderExecutionPanel({ status: 'running' });
     expect(screen.getByRole('button', { name: /暂\s*停/ })).toBeDefined();
   });
 
-  it('should render resume button', async () => {
-    await renderExecutionPanel({ status: 'paused' });
+  it('should render resume button', () => {
+    renderExecutionPanel({ status: 'paused' });
     expect(screen.getByRole('button', { name: /继\s*续/ })).toBeDefined();
   });
 
-  it('should render stop button', async () => {
-    await renderExecutionPanel({ status: 'running' });
+  it('should render stop button', () => {
+    renderExecutionPanel({ status: 'running' });
     expect(screen.getByRole('button', { name: /停\s*止/ })).toBeDefined();
   });
 
-  it('should display progress', async () => {
-    await renderExecutionPanel({ status: 'running', currentStep: 3, totalSteps: 5 });
+  it('should display progress', () => {
+    renderExecutionPanel({ status: 'running', currentStep: 3, totalSteps: 5 });
     expect(screen.getByText('3 / 5')).toBeDefined();
   });
 
-  it('should display logs', async () => {
+  it('should display logs', () => {
     const logs = ['Step 1 completed', 'Step 2 failed'];
-    await renderExecutionPanel({ logs });
+    renderExecutionPanel({ logs });
     expect(screen.getByText('Step 1 completed')).toBeDefined();
     expect(screen.getByText('Step 2 failed')).toBeDefined();
   });
 
-  it('should show breakpoint resume button when hasBreakpoint', async () => {
-    await renderExecutionPanel({ hasBreakpoint: true });
+  it('should show breakpoint resume button when hasBreakpoint', () => {
+    renderExecutionPanel({ hasBreakpoint: true });
     expect(screen.getByText(/从断点继续/)).toBeDefined();
   });
 
-  it('should disable start when running', async () => {
-    await renderExecutionPanel({ status: 'running' });
+  it('should disable start when running', () => {
+    renderExecutionPanel({ status: 'running' });
     const startBtn = screen.getByRole('button', { name: /启\s*动/ });
     expect(startBtn).toHaveProperty('disabled', true);
   });
 
   it('should call invoke on start click', async () => {
-    await renderExecutionPanel();
+    renderExecutionPanel({ taskId: 'task-1' });
+    await screen.findByText(/任务失败，请检查登录状态/);
+    vi.mocked(window.electronAPI.invoke).mockClear();
+
     fireEvent.click(screen.getByRole('button', { name: /启\s*动/ }));
-    expect(window.electronAPI.invoke).toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.TASK_START, {
+        taskId: 'task-1',
+      });
+    });
   });
 
   it('shows recent alerts', async () => {
-    await renderExecutionPanel();
+    renderExecutionPanel({ taskId: 'task-1' });
 
     expect(await screen.findByText(/任务失败，请检查登录状态/)).toBeDefined();
     expect(screen.getByText(/未读/)).toBeDefined();
@@ -120,7 +125,7 @@ describe('ExecutionPanel', () => {
 
   it('jumps to the batch linked to an alert', async () => {
     const onJumpToBatch = vi.fn();
-    await renderExecutionPanel({ onJumpToBatch });
+    renderExecutionPanel({ taskId: 'task-1', onJumpToBatch });
 
     fireEvent.click(await screen.findByRole('button', { name: /跳转到批次/ }));
 
@@ -128,7 +133,7 @@ describe('ExecutionPanel', () => {
   });
 
   it('marks an alert as read', async () => {
-    await renderExecutionPanel();
+    renderExecutionPanel({ taskId: 'task-1' });
 
     fireEvent.click(await screen.findByRole('button', { name: /标记已读/ }));
 
@@ -168,7 +173,7 @@ describe('ExecutionPanel', () => {
       return { success: true, data: null } as never;
     });
 
-    await renderExecutionPanel({ onError });
+    renderExecutionPanel({ taskId: 'task-1', onError });
 
     fireEvent.click(await screen.findByRole('button', { name: /标记已读/ }));
 
