@@ -1,6 +1,55 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+vi.mock('antd', () => {
+  const List = ({
+    dataSource = [],
+    renderItem,
+  }: {
+    dataSource?: Array<Record<string, unknown> | string>;
+    renderItem: (item: Record<string, unknown> | string) => React.ReactNode;
+  }) => <div>{dataSource.map((item, index) => React.createElement(React.Fragment, { key: String((item as { id?: string }).id ?? index) }, renderItem(item)))}</div>;
+  const ListItem = ({
+    children,
+    actions,
+  }: {
+    children?: React.ReactNode;
+    actions?: React.ReactNode[];
+  }) => (
+    <div>
+      {children}
+      {actions}
+    </div>
+  );
+  ListItem.displayName = 'MockListItem';
+  List.Item = ListItem;
+
+  return {
+    Button: ({
+      children,
+      onClick,
+      disabled,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+      disabled?: boolean;
+    }) => (
+      <button type="button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    ),
+    List,
+    Progress: ({ percent }: { percent?: number }) => <div>{percent}%</div>,
+    Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Typography: {
+      Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+      Title: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    },
+  };
+});
+
 import { ExecutionPanel } from '@renderer/entries/automation/components/ExecutionPanel';
 import { IPC_CHANNELS } from '@shared/constants';
 

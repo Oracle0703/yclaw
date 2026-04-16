@@ -1,6 +1,50 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+
+vi.mock('antd', () => {
+  const List = ({
+    dataSource = [],
+    renderItem,
+  }: {
+    dataSource?: Array<Record<string, unknown>>;
+    renderItem: (item: Record<string, unknown>) => React.ReactNode;
+  }) => <div>{dataSource.map((item) => React.createElement(React.Fragment, { key: String(item.id) }, renderItem(item)))}</div>;
+  const ListItem = ({
+    children,
+    onClick,
+  }: {
+    children?: React.ReactNode;
+    onClick?: () => void;
+  }) => (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  );
+  ListItem.displayName = 'MockListItem';
+  List.Item = ListItem;
+
+  return {
+    Button: ({
+      children,
+      onClick,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+    }) => (
+      <button type="button" onClick={onClick}>
+        {children}
+      </button>
+    ),
+    List,
+    Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Typography: {
+      Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    },
+  };
+});
+
 import { BatchList } from '@renderer/entries/automation/components/BatchList';
 import { IPC_CHANNELS } from '@shared/constants';
 
@@ -31,17 +75,19 @@ describe('BatchList', () => {
   it('loads batch list for the selected task', async () => {
     render(<BatchList taskId="task-1" onSelectBatch={vi.fn()} />);
 
-    await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.TASK_BATCH_LIST, { taskId: 'task-1' });
-      expect(screen.getByText('batch-running')).toBeDefined();
+    expect(await screen.findByText('batch-running')).toBeDefined();
+    expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.TASK_BATCH_LIST, {
+      taskId: 'task-1',
     });
   });
 
   it('filters batch rows by status', async () => {
     render(<BatchList taskId="task-1" onSelectBatch={vi.fn()} />);
 
-    await waitFor(() => screen.getByText('batch-running'));
-    fireEvent.click(screen.getByRole('button', { name: /仅失败/ }));
+    await screen.findByText('batch-running');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /仅失败/ }));
+    });
 
     expect(screen.queryByText('batch-running')).toBeNull();
     expect(screen.getByText('batch-failed')).toBeDefined();

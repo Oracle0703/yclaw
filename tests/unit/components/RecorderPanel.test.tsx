@@ -1,6 +1,45 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+vi.mock('antd', () => {
+  const List = ({
+    dataSource = [],
+    renderItem,
+  }: {
+    dataSource?: Array<Record<string, unknown>>;
+    renderItem: (item: Record<string, unknown>) => React.ReactNode;
+  }) => <div>{dataSource.map((item) => React.createElement(React.Fragment, { key: String(item.id) }, renderItem(item)))}</div>;
+  const ListItem = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+  ListItem.displayName = 'MockListItem';
+  List.Item = ListItem;
+
+  return {
+    Button: ({
+      children,
+      onClick,
+      disabled,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+      disabled?: boolean;
+    }) => (
+      <button type="button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    ),
+    List,
+    Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Typography: {
+      Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    },
+    message: {
+      error: vi.fn(),
+    },
+  };
+});
+
 import { RecorderPanel } from '@renderer/entries/browser/components/RecorderPanel';
 import { IPC_CHANNELS } from '@shared/constants';
 
