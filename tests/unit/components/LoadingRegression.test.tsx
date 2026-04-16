@@ -21,6 +21,41 @@ vi.mock('@ant-design/pro-components', () => ({
   PageContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+vi.mock('antd', () => ({
+  Button: ({
+    children,
+    onClick,
+  }: {
+    children?: React.ReactNode;
+    onClick?: () => void;
+  }) => (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
+  Result: ({
+    title,
+    subTitle,
+    extra,
+  }: {
+    title?: React.ReactNode;
+    subTitle?: React.ReactNode;
+    extra?: React.ReactNode;
+  }) => (
+    <div>
+      {title}
+      {subTitle}
+      {extra}
+    </div>
+  ),
+  Skeleton: () => <div className="ant-skeleton" />,
+  Spin: ({ children }: { children?: React.ReactNode }) => <div className="ant-spin">{children}</div>,
+  Typography: {
+    Paragraph: ({ children }: { children?: React.ReactNode }) => <p>{children}</p>,
+    Title: ({ children }: { children?: React.ReactNode }) => <h1>{children}</h1>,
+  },
+}));
+
 // ---- 回归-004: useLoading hook 可从 hooks 路径导入 ----
 describe('Regression: useLoading hook availability', () => {
   it('should be importable from hooks/useLoading', () => {

@@ -1,6 +1,47 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
+
+vi.mock('antd', () => {
+  function MockDescriptions({ children }: { children?: React.ReactNode }) {
+    return <dl>{children}</dl>;
+  }
+  function MockDescriptionsItem({
+    children,
+    label,
+  }: {
+    children?: React.ReactNode;
+    label?: React.ReactNode;
+  }) {
+    return (
+      <div>
+        <dt>{label}</dt>
+        <dd>{children}</dd>
+      </div>
+    );
+  }
+  MockDescriptions.Item = MockDescriptionsItem;
+
+  return {
+    Button: ({
+      children,
+      onClick,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+    }) => (
+      <button type="button" onClick={onClick}>
+        {children}
+      </button>
+    ),
+    Descriptions: MockDescriptions,
+    Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Typography: {
+      Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    },
+  };
+});
+
 import { InterventionPanel } from '@renderer/entries/browser/components/InterventionPanel';
 import type { InterventionState } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/constants';

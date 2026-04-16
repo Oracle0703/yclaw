@@ -3,9 +3,40 @@
  *
  * - #1: WebViewContainer.tsx 文件缺失问题
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+
+vi.mock('antd', () => {
+  function MockDescriptions({ children }: { children?: React.ReactNode }) {
+    return <dl>{children}</dl>;
+  }
+  function MockDescriptionsItem({
+    children,
+    label,
+  }: {
+    children?: React.ReactNode;
+    label?: React.ReactNode;
+  }) {
+    return (
+      <div>
+        <dt>{label}</dt>
+        <dd>{children}</dd>
+      </div>
+    );
+  }
+  MockDescriptions.Item = MockDescriptionsItem;
+
+  return {
+    Descriptions: MockDescriptions,
+    Empty: ({ description }: { description?: React.ReactNode }) => <div>{description}</div>,
+    Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Typography: {
+      Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    },
+  };
+});
+
 import { WebViewContainer } from '@renderer/entries/browser/components/WebViewContainer';
 
 describe('Regression: WebViewContainer', () => {
