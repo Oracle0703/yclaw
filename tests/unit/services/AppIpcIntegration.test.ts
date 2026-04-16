@@ -11,6 +11,22 @@ const mockCloseWindow = vi.fn();
 const mockCloseAllWindows = vi.fn();
 const mockOpenDb = vi.fn();
 const mockCloseDb = vi.fn();
+const mockDbGetTasks = vi.fn(() => []);
+const mockDbGetTaskFlow = vi.fn((taskId: string) => ({
+  id: taskId,
+  name: '采集任务',
+  steps: [
+    {
+      id: 'step-1',
+      name: '打开页面',
+      action: { type: 'click', selector: '#open' },
+    },
+  ],
+  createdAt: '2026-04-16T00:00:00.000Z',
+  updatedAt: '2026-04-16T00:00:00.000Z',
+}));
+const mockDbSaveTaskFlow = vi.fn((flow) => flow);
+const mockDbUpdateTaskStatus = vi.fn();
 const mockLogInfo = vi.fn();
 const mockLogWrite = vi.fn();
 const mockLogExport = vi.fn(() => 'debug-package');
@@ -152,6 +168,10 @@ vi.mock('@main/services/DatabaseService', () => ({
   DatabaseService: vi.fn().mockImplementation(() => ({
     open: mockOpenDb,
     close: mockCloseDb,
+    getTasks: mockDbGetTasks,
+    getTaskFlow: mockDbGetTaskFlow,
+    saveTaskFlow: mockDbSaveTaskFlow,
+    updateTaskStatus: mockDbUpdateTaskStatus,
   })),
 }));
 
@@ -399,6 +419,142 @@ describe('App IPC integration', () => {
         runningCount: 0,
         queuedCount: 0,
         scheduledCount: 1,
+      },
+    });
+  });
+
+  it('returns persisted task flow details through task:get', async () => {
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.TASK_GET);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, { taskId: 'task-1' });
+    expect(mockDbGetTaskFlow).toHaveBeenCalledWith('task-1');
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        id: 'task-1',
+        steps: [
+          {
+            id: 'step-1',
+          },
+        ],
+      },
+    });
+  });
+
+  it('persists updated task steps through task:save', async () => {
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.TASK_SAVE);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, {
+      taskId: 'task-1',
+      steps: [
+        {
+          id: 'step-1',
+          name: '打开页面',
+          action: { type: 'click', selector: '#open' },
+        },
+        {
+          id: 'step-2',
+          name: '采集价格',
+          action: { type: 'extract', selector: '.price' },
+        },
+      ],
+    });
+    expect(mockDbSaveTaskFlow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'task-1',
+        steps: expect.arrayContaining([
+          expect.objectContaining({ id: 'step-2' }),
+        ]),
+      }),
+    );
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        id: 'task-1',
+        steps: expect.arrayContaining([
+          expect.objectContaining({ id: 'step-2' }),
+        ]),
+      },
+    });
+  });
+
+  it('persists updated task name through task:save', async () => {
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.TASK_SAVE);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, {
+      taskId: 'task-1',
+      name: '价格采集任务',
+      steps: [
+        {
+          id: 'step-1',
+          name: '打开页面',
+          action: { type: 'click', selector: '#open' },
+        },
+      ],
+    });
+
+    expect(mockDbSaveTaskFlow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'task-1',
+        name: '价格采集任务',
+      }),
+    );
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        id: 'task-1',
+        name: '价格采集任务',
+      },
+    });
+  });
+
+  it('creates a new task through task:save when taskId is missing', async () => {
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.TASK_SAVE);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, {
+      steps: [
+        {
+          id: 'step-new-1',
+          name: '打开首页',
+          action: { type: 'click', selector: '#home' },
+        },
+      ],
+    });
+
+    expect(mockDbSaveTaskFlow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.any(String),
+        name: '未命名任务',
+        steps: expect.arrayContaining([
+          expect.objectContaining({ id: 'step-new-1' }),
+        ]),
+      }),
+    );
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        id: expect.any(String),
+        name: '未命名任务',
       },
     });
   });

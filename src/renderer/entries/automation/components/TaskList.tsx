@@ -18,7 +18,11 @@ interface TaskSummary {
   } | null;
 }
 
-export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
+export function TaskList({
+  onSelect,
+}: {
+  onSelect: (task: TaskSummary | 'new') => void;
+}) {
   const { automation } = useIpc();
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +87,7 @@ export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
       width: 220,
       render: (_, record) => (
         <Space>
-          <Button type="link" onClick={() => onSelect(record.id)}>
+          <Button type="link" onClick={() => onSelect(record)}>
             打开
           </Button>
           <Button type="link" onClick={() => void automation.startTask(record.id)}>
@@ -117,7 +121,7 @@ export function TaskList({ onSelect }: { onSelect: (id: string) => void }) {
         locale={{ emptyText: '暂无任务，点击右上角按钮创建' }}
         pagination={false}
         onRow={(record) => ({
-          onClick: () => onSelect(record.id),
+          onClick: () => onSelect(record),
         })}
       />
     </ProCard>

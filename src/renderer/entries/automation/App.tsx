@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Button, Space, Tag } from 'antd';
+import { Button, Input, Space, Tag } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
-import { EVENTS } from '@shared/constants';
+import { EVENTS, IPC_CHANNELS } from '@shared/constants';
 import { PageShell } from '../../shared/components/PageShell';
-import { useIpcEvent } from '../../shared/hooks';
-import type { TaskStep } from '@shared/types';
+import { useIpc, useIpcEvent } from '../../shared/hooks';
+import type { TaskFlow, TaskStep } from '@shared/types';
 import { BatchList } from './components/BatchList';
 import { ExecutionPanel } from './components/ExecutionPanel';
 import { ResultTable } from './components/ResultTable';
@@ -13,8 +13,16 @@ import { StepEditor } from './components/StepEditor';
 import { TaskList } from './components/TaskList';
 import { TemplateManager } from './components/TemplateManager';
 
+interface SelectedTaskSummary {
+  id: string;
+  stepsCount?: number;
+}
+
 export default function App() {
+  const { invoke } = useIpc();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskSummary, setSelectedTaskSummary] = useState<SelectedTaskSummary | null>(null);
+  const [taskName, setTaskName] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [steps, setSteps] = useState<TaskStep[]>([]);
   const [execStatus, setExecStatus] = useState('idle');
@@ -32,10 +40,51 @@ export default function App() {
       attribute: String(step.action.params?.attribute ?? 'textContent'),
     }));
 
-  const handleSelectTask = (id: string) => {
-    setSelectedTaskId(id === 'new' ? null : id);
+  const handleSelectTask = async (task: SelectedTaskSummary | 'new') => {
+    if (task === 'new') {
+      setSelectedTaskId(null);
+      setSelectedTaskSummary(null);
+      setTaskName('');
+      setSelectedBatchId(null);
+      setSteps([]);
+      return;
+    }
+
+    setSelectedTaskId(task.id);
+    setSelectedTaskSummary(task);
     setSelectedBatchId(null);
+
+    try {
+      const flow = await invoke<TaskFlow>(IPC_CHANNELS.TASK_GET, { taskId: task.id });
+      setTaskName(flow.name);
+      setSteps(flow.steps);
+    } catch {
+      setTaskName('');
+      setSteps([]);
+    }
   };
+
+  const handleSaveTask = async () => {
+    try {
+      const saved = await invoke<TaskFlow>(IPC_CHANNELS.TASK_SAVE, {
+        taskId: selectedTaskId,
+        name: taskName,
+        steps,
+      });
+
+      setSelectedTaskId(saved.id);
+      setSelectedTaskSummary({
+        id: saved.id,
+        stepsCount: saved.steps.length,
+      });
+      setTaskName(saved.name);
+      setSteps(saved.steps);
+    } catch (err) {
+      console.error('保存任务失败', err);
+    }
+  };
+
+  const totalSteps = steps.length > 0 ? steps.length : (selectedTaskSummary?.stepsCount ?? 0);
 
   useIpcEvent(EVENTS.TASK_STARTED, (_data: unknown) => {
     const data = _data as { flowId?: string };
@@ -81,14 +130,26 @@ export default function App() {
       extra={
         <Space wrap className="yclaw-page-actions">
           <Tag color="processing">Automation</Tag>
+          <Input
+            aria-label="任务名称"
+            placeholder="请输入任务名称"
+            value={taskName}
+            onChange={(event) => setTaskName(event.target.value)}
+            style={{ width: 220 }}
+          />
           <Button
             icon={<PlusOutlined />}
             onClick={() => {
               setSelectedTaskId(null);
+              setSelectedTaskSummary(null);
+              setTaskName('');
               setSteps([]);
             }}
           >
             新建任务
+          </Button>
+          <Button onClick={() => void handleSaveTask()} disabled={steps.length === 0}>
+            保存任务
           </Button>
           <Button
             type="primary"
@@ -129,7 +190,7 @@ export default function App() {
                 taskId={selectedTaskId}
                 status={execStatus}
                 currentStep={execStep}
-                totalSteps={steps.length}
+                totalSteps={totalSteps}
                 logs={execLogs}
                 hasBreakpoint={hasBreakpoint}
                 onStatusChange={setExecStatus}

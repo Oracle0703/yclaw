@@ -30,6 +30,7 @@ import type {
   IndicatorType,
   DataSourceConfig,
   InterventionState,
+  TaskFlow,
 } from '@shared/types';
 
 /**
@@ -308,6 +309,20 @@ export class App {
     // 任务
     this.ipcController.handle(IPC_CHANNELS.TASK_LIST, () => {
       return this.taskService.listTasks();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_GET, (params: unknown) => {
+      const { taskId } = params as { taskId: string };
+      return this.taskService.getTaskFlow(taskId);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TASK_SAVE, (params: unknown) => {
+      const { taskId, name, steps } = params as {
+        taskId?: string | null;
+        name?: string;
+        steps: TaskFlow['steps'];
+      };
+      return this.taskService.saveTaskFlow(taskId, { name, steps });
     });
 
     this.ipcController.handle(IPC_CHANNELS.TASK_START, (params: unknown) => {

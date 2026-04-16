@@ -32,6 +32,8 @@ export const IPC_CHANNELS = {
   TASK_RESUME: 'task:resume',
   TASK_STOP: 'task:stop',
   TASK_LIST: 'task:list',
+  TASK_GET: 'task:get',
+  TASK_SAVE: 'task:save',
   TASK_CREATE: 'task:create',
   TASK_UPDATE: 'task:update',
   TASK_DELETE: 'task:delete',
