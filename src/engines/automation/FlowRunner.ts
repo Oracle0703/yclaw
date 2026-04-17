@@ -2,13 +2,16 @@ import type { WebContents } from 'electron';
 import type { TaskFlow, TaskStep, TaskExecutionResult, StepResult } from '@shared/types';
 import { TaskStatus } from '@shared/types';
 import type { ActionDefinition } from './types';
-import { AutomationEngine } from './AutomationEngine';
+import type { AutomationEngine } from './AutomationEngine';
 import { withRetry, createBreakpoint, type Breakpoint } from './RetryPolicy';
-import { EventBus } from '@main/ipc/EventBus';
 import { EVENTS } from '@shared/constants';
 import type { ExecutionLogService } from '@main/services/ExecutionLogService';
 
 export interface FlowRunnerOptions {
+  engine?: Pick<AutomationEngine, 'execute'>;
+  eventBus?: {
+    emit: (event: string, payload?: unknown) => void;
+  };
   /** 默认每步重试次数 */
   defaultRetryCount?: number;
   /** 默认重试延迟 (ms) */
@@ -21,8 +24,8 @@ export interface FlowRunnerOptions {
  * 支持错误重试 & 断点继续
  */
 export class FlowRunner {
-  private engine: AutomationEngine;
-  private eventBus: EventBus;
+  private engine: Pick<AutomationEngine, 'execute'>;
+  private eventBus: NonNullable<FlowRunnerOptions['eventBus']>;
   private status: TaskStatus = TaskStatus.IDLE;
   private currentStepIndex = 0;
   private breakpoint: Breakpoint | null = null;
@@ -36,8 +39,16 @@ export class FlowRunner {
   private batchId = '';
 
   constructor(options: FlowRunnerOptions = {}) {
-    this.engine = new AutomationEngine();
-    this.eventBus = EventBus.getInstance();
+    if (!options.eventBus) {
+      throw new Error('eventBus is required');
+    }
+
+    if (!options.engine) {
+      throw new Error('engine is required');
+    }
+
+    this.engine = options.engine;
+    this.eventBus = options.eventBus;
     this.defaultRetryCount = options.defaultRetryCount ?? 3;
     this.defaultRetryDelay = options.defaultRetryDelay ?? 1000;
     this.executionLogService = options.executionLogService;

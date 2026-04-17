@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Col, Row, Space, Tag, Typography } from 'antd';
+import { Button, Card, Col, Row, Space, Tag, Typography, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { ProCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
@@ -20,14 +19,22 @@ export default function App() {
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
   const [interventionState, setInterventionState] = useState<InterventionState | null>(null);
 
+  const reportActionError = (error: unknown, fallbackMessage: string) => {
+    message.error(error instanceof Error ? error.message : fallbackMessage);
+  };
+
   // 初始化：从主进程同步当前标签列表
   useEffect(() => {
-    void invoke<Tab[]>(IPC_CHANNELS.BROWSER_LIST_TABS).then((existingTabs) => {
-      if (existingTabs && existingTabs.length > 0) {
-        setTabs(existingTabs);
-        setActiveTabId(existingTabs[existingTabs.length - 1].id);
-      }
-    });
+    void invoke<Tab[]>(IPC_CHANNELS.BROWSER_LIST_TABS)
+      .then((existingTabs) => {
+        if (existingTabs && existingTabs.length > 0) {
+          setTabs(existingTabs);
+          setActiveTabId(existingTabs[existingTabs.length - 1].id);
+        }
+      })
+      .catch((error) => {
+        reportActionError(error, '读取标签页失败');
+      });
   }, [invoke]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -38,35 +45,59 @@ export default function App() {
   ] as const;
 
   const createTab = async () => {
-    await withLoading(async () => {
-      const res = await invoke<Tab>(IPC_CHANNELS.BROWSER_CREATE_TAB, {
-        url: 'https://www.google.com',
-      });
-      if (res) {
-        setTabs((prev) => [...prev, res]);
-        setActiveTabId(res.id);
-      }
-    }, '正在创建标签页...');
+    try {
+      await withLoading(async () => {
+        const res = await invoke<Tab>(IPC_CHANNELS.BROWSER_CREATE_TAB, {
+          url: 'https://www.google.com',
+        });
+        if (res) {
+          setTabs((prev) => [...prev, res]);
+          setActiveTabId(res.id);
+        }
+      }, '正在创建标签页...');
+    } catch (error) {
+      reportActionError(error, '创建标签页失败');
+    }
   };
 
   const closeTab = async (id: number) => {
-    await invoke(IPC_CHANNELS.BROWSER_CLOSE_TAB, { id });
-    setTabs((prev) => {
-      const remaining = prev.filter((t) => t.id !== id);
-      setActiveTabId((currentId) =>
-        currentId === id
-          ? remaining.length > 0
-            ? remaining[remaining.length - 1].id
-            : null
-          : currentId,
-      );
-      return remaining;
-    });
+    try {
+      await invoke(IPC_CHANNELS.BROWSER_CLOSE_TAB, { id });
+      setTabs((prev) => {
+        const remaining = prev.filter((t) => t.id !== id);
+        setActiveTabId((currentId) =>
+          currentId === id
+            ? remaining.length > 0
+              ? remaining[remaining.length - 1].id
+              : null
+            : currentId,
+        );
+        return remaining;
+      });
+    } catch (error) {
+      reportActionError(error, '关闭标签页失败');
+    }
   };
 
   const navigate = async (url: string) => {
     if (activeTabId != null) {
-      await invoke(IPC_CHANNELS.BROWSER_NAVIGATE, { tabId: activeTabId, url });
+      try {
+        await invoke(IPC_CHANNELS.BROWSER_NAVIGATE, { tabId: activeTabId, url });
+      } catch (error) {
+        reportActionError(error, '页面跳转失败');
+      }
+    }
+  };
+
+  const runTabAction = async (channel: string, fallbackMessage: string) => {
+    if (activeTabId == null) {
+      return;
+    }
+
+    try {
+      await invoke(channel, { tabId: activeTabId });
+    } catch (error) {
+      reportActionError(error, fallbackMessage);
     }
   };
 
@@ -107,7 +138,7 @@ export default function App() {
         <Row gutter={[16, 16]}>
           {browserKpis.map((item) => (
             <Col xs={24} md={8} key={item.title}>
-              <ProCard className="yclaw-panel-card yclaw-kpi-card" bordered={false}>
+              <Card className="yclaw-panel-card yclaw-kpi-card">
                 <div className="yclaw-kpi-card-head">
                   <Typography.Text type="secondary">{item.title}</Typography.Text>
                 </div>
@@ -117,12 +148,12 @@ export default function App() {
                 >
                   {item.value}
                 </Typography.Title>
-              </ProCard>
+              </Card>
             </Col>
           ))}
         </Row>
 
-        <ProCard className="yclaw-panel-card" title="会话控制台">
+        <Card className="yclaw-panel-card" title="会话控制台">
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <TabBar
               tabs={tabs}
@@ -142,18 +173,24 @@ export default function App() {
               onNavigate={(url) => {
                 void navigate(url);
               }}
-              onBack={() => void invoke(IPC_CHANNELS.BROWSER_GO_BACK, { tabId: activeTabId })}
-              onForward={() => void invoke(IPC_CHANNELS.BROWSER_GO_FORWARD, { tabId: activeTabId })}
-              onReload={() => void invoke(IPC_CHANNELS.BROWSER_RELOAD, { tabId: activeTabId })}
+              onBack={() => {
+                void runTabAction(IPC_CHANNELS.BROWSER_GO_BACK, '后退失败');
+              }}
+              onForward={() => {
+                void runTabAction(IPC_CHANNELS.BROWSER_GO_FORWARD, '前进失败');
+              }}
+              onReload={() => {
+                void runTabAction(IPC_CHANNELS.BROWSER_RELOAD, '刷新失败');
+              }}
             />
           </Space>
-        </ProCard>
+        </Card>
 
-        <ProCard className="yclaw-panel-card" title="当前视图">
+        <Card className="yclaw-panel-card" title="当前视图">
           <div className="browser-viewport yclaw-browser-frame">
             <WebViewContainer tab={activeTab ?? null} interventionState={interventionState} />
           </div>
-        </ProCard>
+        </Card>
 
         <InterventionPanel state={interventionState} />
 

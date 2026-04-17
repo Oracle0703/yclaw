@@ -8,7 +8,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import { FloatButton, App as AntdApp, ConfigProvider, Tooltip, theme as antdTheme } from 'antd';
+import {
+  FloatButton,
+  App as AntdApp,
+  ConfigProvider,
+  Tooltip,
+  notification,
+  theme as antdTheme,
+} from 'antd';
 import { BulbOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
 import { IPC_CHANNELS } from '@shared/constants/channels';
@@ -116,6 +123,25 @@ function getStoredThemePreference(): GeneralConfig['theme'] {
   return normalizeThemePreference(window.localStorage.getItem(THEME_STORAGE_KEY));
 }
 
+function reportThemePreferenceFailure(
+  title: string,
+  fallbackMessage: string,
+  error: unknown,
+) {
+  const description = error instanceof Error ? error.message : fallbackMessage;
+
+  notification.warning({
+    key: 'theme-preference-sync',
+    message: title,
+    description,
+    placement: 'bottomRight',
+  });
+
+  if (import.meta.env.DEV) {
+    console.error(`[AppProviders] ${title}`, error);
+  }
+}
+
 export function useThemeMode() {
   const context = useContext(ThemeContext);
 
@@ -161,7 +187,7 @@ export function AppProviders({ children }: AppProvidersProps) {
           },
         });
       } catch (error) {
-        console.error('Failed to persist theme preference', error);
+        reportThemePreferenceFailure('主题偏好未保存', '保存主题偏好失败', error);
       }
     },
     [invoke],
@@ -186,7 +212,7 @@ export function AppProviders({ children }: AppProvidersProps) {
         setThemePreferenceState(nextTheme);
         window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
       } catch (error) {
-        console.error('Failed to load theme preference', error);
+        reportThemePreferenceFailure('主题偏好未同步', '读取主题偏好失败', error);
       }
     })();
 

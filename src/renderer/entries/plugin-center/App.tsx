@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Col, Descriptions, Modal, Row, Space, Tag, Typography } from 'antd';
+import { Button, Col, Descriptions, Modal, Row, Space, Tag, Typography, message } from 'antd';
 import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
@@ -19,11 +19,17 @@ export default function App() {
     level: number;
   } | null>(null);
 
+  const reportActionError = (error: unknown, fallbackMessage: string) => {
+    message.error(error instanceof Error ? error.message : fallbackMessage);
+  };
+
   const fetchPlugins = useCallback(async () => {
     try {
       const list = await invoke<PluginRegistryEntry[]>(IPC_CHANNELS.PLUGIN_LIST);
       setPlugins(list ?? []);
-    } catch { /* ignore */ }
+    } catch (error) {
+      reportActionError(error, '读取插件列表失败');
+    }
   }, [invoke]);
 
   useEffect(() => {
@@ -32,8 +38,12 @@ export default function App() {
 
   const handleToggle = async (name: string, active: boolean) => {
     const channel = active ? IPC_CHANNELS.PLUGIN_ENABLE : IPC_CHANNELS.PLUGIN_DISABLE;
-    await invoke(channel, { name });
-    await fetchPlugins();
+    try {
+      await invoke(channel, { name });
+      await fetchPlugins();
+    } catch (error) {
+      reportActionError(error, '切换插件状态失败');
+    }
   };
 
   const handleUninstall = (name: string) => {
@@ -44,8 +54,12 @@ export default function App() {
       cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: async () => {
-        await invoke(IPC_CHANNELS.PLUGIN_UNINSTALL, { name, confirmed: true });
-        await fetchPlugins();
+        try {
+          await invoke(IPC_CHANNELS.PLUGIN_UNINSTALL, { name, confirmed: true });
+          await fetchPlugins();
+        } catch (error) {
+          reportActionError(error, '卸载插件失败');
+        }
       },
     });
   };
@@ -66,19 +80,24 @@ export default function App() {
       } else {
         await fetchPlugins();
       }
-    } catch {
+    } catch (error) {
+      reportActionError(error, '安装插件失败');
       await fetchPlugins();
     }
   };
 
   const confirmInstall = async () => {
     if (dialog) {
-      await invoke(IPC_CHANNELS.PLUGIN_PERMISSION_CHECK, {
-        name: dialog.name,
-        confirmed: true,
-      });
-      setDialog(null);
-      await fetchPlugins();
+      try {
+        await invoke(IPC_CHANNELS.PLUGIN_PERMISSION_CHECK, {
+          name: dialog.name,
+          confirmed: true,
+        });
+        setDialog(null);
+        await fetchPlugins();
+      } catch (error) {
+        reportActionError(error, '确认插件权限失败');
+      }
     }
   };
 

@@ -29,28 +29,24 @@ vi.mock('electron', () => ({
 }));
 
 // Mock EventBus
-vi.mock('@main/ipc/EventBus', () => {
-  const emitFn = vi.fn();
-  return {
-    EventBus: {
-      getInstance: vi.fn().mockReturnValue({
-        emit: emitFn,
-        on: vi.fn(),
-        off: vi.fn(),
-      }),
-    },
-  };
-});
-
 import { TabManager } from '@main/browser/TabManager';
 
 describe('TabManager', () => {
   let tabManager: TabManager;
+  const mockEventBus = {
+    emit: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     nextTabId = 1;
-    tabManager = new TabManager({ maxTabs: 5 });
+    tabManager = new TabManager({ maxTabs: 5, eventBus: mockEventBus as never });
+  });
+
+  it('should require event bus injection', () => {
+    expect(() => new TabManager({ maxTabs: 5 })).toThrowError('eventBus is required');
   });
 
   describe('createTab', () => {
@@ -217,7 +213,10 @@ describe('TabManager', () => {
 
   describe('session info', () => {
     it('should expose configured persistent session partition in tab info', () => {
-      const partitionedManager = new TabManager({ sessionPartition: 'workspace-a' });
+      const partitionedManager = new TabManager({
+        sessionPartition: 'workspace-a',
+        eventBus: mockEventBus as never,
+      });
       const view = partitionedManager.createTab('https://example.com');
 
       expect(session.fromPartition).toHaveBeenCalledWith('persist:workspace-a');

@@ -2,9 +2,8 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { DatabaseService } from './DatabaseService';
 import type { ExtractionResult } from '@shared/types';
-import { DatabaseService as DatabaseServiceSingleton } from './DatabaseService';
+import { ResultRepository } from './repositories';
 
 export interface ResultQuery {
   taskId?: string;
@@ -12,14 +11,21 @@ export interface ResultQuery {
 }
 
 export interface ResultServiceOptions {
-  databaseService?: Pick<DatabaseService, 'run' | 'get' | 'all'>;
+  resultRepository?: Pick<ResultRepository, 'saveResult' | 'listResults' | 'getResult' | 'markSuspicious'>;
 }
 
 export class ResultService {
-  private readonly databaseService: Pick<DatabaseService, 'run' | 'get' | 'all'>;
+  private readonly resultRepository: Pick<
+    ResultRepository,
+    'saveResult' | 'listResults' | 'getResult' | 'markSuspicious'
+  >;
 
   constructor(options: ResultServiceOptions = {}) {
-    this.databaseService = options.databaseService ?? DatabaseServiceSingleton.getInstance();
+    if (!options.resultRepository) {
+      throw new Error('resultRepository is required');
+    }
+
+    this.resultRepository = options.resultRepository;
   }
 
   saveResult(result: Omit<ExtractionResult, 'id'> & { id?: string }): ExtractionResult {
@@ -35,111 +41,21 @@ export class ResultService {
       createdAt: result.createdAt,
     };
 
-    this.databaseService.run(
-      `INSERT INTO extraction_results (
-        id, task_id, batch_id, template_id, data, status, source_url, screenshot, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        record.id,
-        record.taskId,
-        record.batchId,
-        record.templateId ?? null,
-        JSON.stringify(record.data),
-        record.status,
-        record.sourceUrl ?? null,
-        record.screenshot ?? null,
-        record.createdAt,
-      ],
-    );
+    this.resultRepository.saveResult(record);
 
     return record;
   }
 
   listResults(query: ResultQuery = {}): ExtractionResult[] {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-
-    if (query.taskId) {
-      conditions.push('task_id = ?');
-      params.push(query.taskId);
-    }
-    if (query.batchId) {
-      conditions.push('batch_id = ?');
-      params.push(query.batchId);
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const rows = this.databaseService.all<{
-      id: string;
-      task_id: string;
-      batch_id: string;
-      template_id?: string | null;
-      data: string;
-      status: ExtractionResult['status'];
-      source_url?: string | null;
-      screenshot?: string | null;
-      created_at: string;
-    }>(
-      `SELECT id, task_id, batch_id, template_id, data, status, source_url, screenshot, created_at
-       FROM extraction_results
-       ${whereClause}
-       ORDER BY created_at DESC`,
-      params,
-    );
-
-    return rows.map((row) => ({
-      id: row.id,
-      taskId: row.task_id,
-      batchId: row.batch_id,
-      templateId: row.template_id ?? null,
-      data: JSON.parse(row.data) as Record<string, unknown>,
-      status: row.status,
-      sourceUrl: row.source_url ?? undefined,
-      screenshot: row.screenshot ?? undefined,
-      createdAt: row.created_at,
-    }));
+    return this.resultRepository.listResults(query);
   }
 
   getResult(resultId: string): ExtractionResult | null {
-    const row = this.databaseService.get<{
-      id: string;
-      task_id: string;
-      batch_id: string;
-      template_id?: string | null;
-      data: string;
-      status: ExtractionResult['status'];
-      source_url?: string | null;
-      screenshot?: string | null;
-      created_at: string;
-    }>(
-      `SELECT id, task_id, batch_id, template_id, data, status, source_url, screenshot, created_at
-       FROM extraction_results
-       WHERE id = ?`,
-      [resultId],
-    );
-
-    if (!row) {
-      return null;
-    }
-
-    return {
-      id: row.id,
-      taskId: row.task_id,
-      batchId: row.batch_id,
-      templateId: row.template_id ?? null,
-      data: JSON.parse(row.data) as Record<string, unknown>,
-      status: row.status,
-      sourceUrl: row.source_url ?? undefined,
-      screenshot: row.screenshot ?? undefined,
-      createdAt: row.created_at,
-    };
+    return this.resultRepository.getResult(resultId);
   }
 
   markSuspicious(resultId: string): void {
-    this.databaseService.run('UPDATE extraction_results SET status = ? WHERE id = ?', [
-      'suspicious',
-      resultId,
-    ]);
+    this.resultRepository.markSuspicious(resultId);
   }
 
   exportResults(query: ResultQuery, format: 'csv' | 'json'): string {

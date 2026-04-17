@@ -1,6 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
 import { Button, Result, Skeleton, Typography } from 'antd';
-import { PageContainer } from '@ant-design/pro-components';
 
 interface PageShellProps extends PropsWithChildren {
   title: string;
@@ -27,7 +26,7 @@ export function PageShell({
 }: PageShellProps) {
   if (error) {
     return (
-      <PageContainer title={false} className="yclaw-page-container">
+      <div className="yclaw-page-container">
         <div className="yclaw-page-shell yclaw-panel-card">
           <Result
             status="error"
@@ -42,12 +41,12 @@ export function PageShell({
             }
           />
         </div>
-      </PageContainer>
+      </div>
     );
   }
 
   return (
-    <PageContainer title={false} className="yclaw-page-container">
+    <div className="yclaw-page-container">
       <div className="yclaw-page-shell yclaw-panel-card">
         <div className="yclaw-page-shell-header">
           <div className="yclaw-page-shell-main">
@@ -71,6 +70,6 @@ export function PageShell({
           {loading ? <Skeleton active paragraph={{ rows: 6 }} /> : children}
         </div>
       </div>
-    </PageContainer>
+    </div>
   );
 }

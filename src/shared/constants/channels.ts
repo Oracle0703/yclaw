@@ -18,6 +18,10 @@ export const IPC_CHANNELS = {
   CONFIG_EXPORT: 'config:export',
   CONFIG_IMPORT: 'config:import',
 
+  // 功能包
+  FEATURE_PACKAGE_LIST: 'feature:list',
+  FEATURE_PACKAGE_INSTALL: 'feature:install',
+
   // 日志
   LOG_WRITE: 'log:write',
   LOG_EXPORT: 'log:export',

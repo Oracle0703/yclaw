@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ContextManager } from '@main/ai/ContextManager';
+import { ToolRegistry } from '@main/ai/ToolRegistry';
 
 // Mock os module
 vi.mock('os', () => ({
@@ -18,37 +20,94 @@ vi.mock('os', () => ({
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-const mockDb = {
-  saveAIConversation: vi.fn(),
-  saveAIMessage: vi.fn(),
-  deleteAIConversation: vi.fn(() => true),
+const mockTaskRepository = {
   getTasks: vi.fn(() => []),
+};
+
+const mockPluginRepository = {
   getInstalledPlugins: vi.fn(() => []),
 };
 
-vi.mock('@main/services/DatabaseService', () => ({
-  DatabaseService: {
-    getInstance: vi.fn(() => mockDb),
-  },
-}));
+const mockAIRepository = {
+  saveAIConversation: vi.fn(),
+  saveAIMessage: vi.fn(),
+  deleteAIConversation: vi.fn(() => true),
+};
 
 import { AIService } from '@main/ai/AIService';
 
 describe('AIService', () => {
   let service: AIService;
+  let contextManager: ContextManager;
+  let toolRegistry: ToolRegistry;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    contextManager = new ContextManager({
+      taskRepository: mockTaskRepository,
+      pluginRepository: mockPluginRepository,
+    });
+    toolRegistry = new ToolRegistry();
     service = new AIService({
       provider: 'openai',
       apiKey: 'test-key',
       baseUrl: 'https://api.test.com/v1',
       model: 'gpt-test',
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry,
     });
   });
 
+  it('should require context manager injection', () => {
+    expect(
+      () =>
+        new AIService({
+          aiRepository: mockAIRepository,
+          taskRepository: mockTaskRepository,
+        }),
+    ).toThrowError('contextManager is required');
+  });
+
+  it('should require ai repository injection', () => {
+    expect(
+      () =>
+        new AIService({
+          taskRepository: mockTaskRepository,
+          contextManager,
+        }),
+    ).toThrowError('aiRepository is required');
+  });
+
+  it('should require task repository injection', () => {
+    expect(
+      () =>
+        new AIService({
+          aiRepository: mockAIRepository,
+          contextManager,
+        }),
+    ).toThrowError('taskRepository is required');
+  });
+
+  it('should require tool registry injection', () => {
+    expect(
+      () =>
+        new AIService({
+          aiRepository: mockAIRepository,
+          taskRepository: mockTaskRepository,
+          contextManager,
+        }),
+    ).toThrowError('toolRegistry is required');
+  });
+
   it('should initialize with default config', () => {
-    const s = new AIService();
+    const s = new AIService({
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
+    });
     const config = s.getConfig();
     expect(config.provider).toBe('openai');
     expect(config.model).toBe('gpt-3.5-turbo');
@@ -65,6 +124,30 @@ describe('AIService', () => {
     expect(toolNames).toContain('task_list');
     expect(toolNames).toContain('system_status');
     expect(toolNames).toContain('navigate');
+  });
+
+  it('should execute task_list tool via injected task repository', async () => {
+    mockTaskRepository.getTasks.mockReturnValueOnce([
+      { id: 'task-1', name: '任务一', status: 'running', updatedAt: '2026-04-17 14:00:00' },
+      { id: 'task-2', name: '任务二', status: 'completed', updatedAt: '2026-04-17 14:05:00' },
+    ]);
+
+    const result = await service.getToolRegistry().execute('task_list', {}, {
+      currentModule: 'workbench',
+      systemMetrics: { cpu: 0, memory: 0, disk: 0, uptime: 0 },
+      recentTasks: [],
+      installedPlugins: [],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockTaskRepository.getTasks).toHaveBeenCalledTimes(1);
+    expect(result.data).toMatchObject({
+      summary: {
+        total: 2,
+        running: 1,
+        success: 1,
+      },
+    });
   });
 
   it('should handle chat and return response', async () => {
@@ -153,8 +236,8 @@ describe('AIService', () => {
 
     await service.chat({ message: '请记录这段对话' });
 
-    expect(mockDb.saveAIConversation).toHaveBeenCalledTimes(1);
-    expect(mockDb.saveAIMessage).toHaveBeenCalledTimes(2);
+    expect(mockAIRepository.saveAIConversation).toHaveBeenCalledTimes(1);
+    expect(mockAIRepository.saveAIMessage).toHaveBeenCalledTimes(2);
   });
 
   it('should delete persisted conversation from database', async () => {
@@ -169,13 +252,17 @@ describe('AIService', () => {
     const response = await service.chat({ message: '待删除会话' });
     service.deleteConversation(response.conversationId);
 
-    expect(mockDb.deleteAIConversation).toHaveBeenCalledWith(response.conversationId);
+    expect(mockAIRepository.deleteAIConversation).toHaveBeenCalledWith(response.conversationId);
   });
 
   it('should return prompt without API key warning', async () => {
     const noKeyService = new AIService({
       provider: 'openai',
       apiKey: '',
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
     });
 
     const response = await noKeyService.chat({ message: 'hello' });

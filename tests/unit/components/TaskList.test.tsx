@@ -19,14 +19,19 @@ vi.mock('antd', () => ({
   Typography: {
     Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   },
+  message: {
+    error: vi.fn(),
+  },
   Table: ({
     dataSource = [],
     columns = [],
+    loading = false,
   }: {
     dataSource?: Array<Record<string, unknown>>;
     columns?: Array<Record<string, unknown>>;
+    loading?: boolean;
   }) => (
-    <table>
+    <table data-loading={String(loading)}>
       <tbody>
         {dataSource.map((record, rowIndex) => (
           <tr key={String(record.id ?? rowIndex)}>
@@ -115,6 +120,84 @@ describe('TaskList', () => {
     });
   });
 
+  it('shows an error message when starting a task fails', async () => {
+    const { message } = await import('antd');
+
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.TASK_LIST) {
+        return {
+          success: true,
+          data: [
+            {
+              id: 'task-1',
+              name: '采集任务',
+              status: 'idle',
+              updatedAt: '2026-04-15 10:00:00',
+              latestBatch: {
+                id: 'batch-1',
+                status: 'failed',
+              },
+            },
+          ],
+        };
+      }
+
+      if (channel === IPC_CHANNELS.TASK_START) {
+        return Promise.reject(new Error('start failed')) as never;
+      }
+
+      return { success: true, data: { status: 'running' } };
+    });
+
+    render(<TaskList onSelect={vi.fn()} />);
+
+    await screen.findByText('采集任务');
+    fireEvent.click(screen.getByRole('button', { name: /启动/ }));
+
+    await waitFor(() => {
+      expect(message.error).toHaveBeenCalledWith('start failed');
+    });
+  });
+
+  it('shows an error message when retrying a batch fails', async () => {
+    const { message } = await import('antd');
+
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.TASK_LIST) {
+        return {
+          success: true,
+          data: [
+            {
+              id: 'task-1',
+              name: '采集任务',
+              status: 'idle',
+              updatedAt: '2026-04-15 10:00:00',
+              latestBatch: {
+                id: 'batch-1',
+                status: 'failed',
+              },
+            },
+          ],
+        };
+      }
+
+      if (channel === IPC_CHANNELS.BATCH_RETRY) {
+        return Promise.reject(new Error('retry failed')) as never;
+      }
+
+      return { success: true, data: { status: 'running' } };
+    });
+
+    render(<TaskList onSelect={vi.fn()} />);
+
+    await screen.findByText('采集任务');
+    fireEvent.click(screen.getByRole('button', { name: /复跑/ }));
+
+    await waitFor(() => {
+      expect(message.error).toHaveBeenCalledWith('retry failed');
+    });
+  });
+
   it('ignores stale task list responses after a newer refresh', async () => {
     let resolveInitialList: (value: unknown) => void = () => {};
     let resolveRefreshList: (value: unknown) => void = () => {};
@@ -185,5 +268,25 @@ describe('TaskList', () => {
       expect(screen.queryByText('旧任务')).toBeNull();
     });
     expect(screen.getByText('新任务')).toBeDefined();
+  });
+
+  it('stops loading when task refresh fails', async () => {
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.TASK_LIST) {
+        return Promise.reject(new Error('network down')) as never;
+      }
+
+      return { success: true, data: { status: 'running' } };
+    });
+
+    render(<TaskList onSelect={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.TASK_LIST);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('table').getAttribute('data-loading')).toBe('false');
+    });
   });
 });

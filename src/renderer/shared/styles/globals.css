@@ -83,6 +83,11 @@ canvas {
   height: 100vh;
 }
 
+.yclaw-admin-layout,
+.yclaw-admin-main {
+  min-height: 100%;
+}
+
 .yclaw-admin-shell .ant-pro-layout {
   min-height: 100vh;
 }
@@ -93,6 +98,13 @@ canvas {
 
 .yclaw-admin-shell .ant-layout {
   background: transparent;
+}
+
+.yclaw-admin-shell .ant-layout-sider-children,
+.yclaw-admin-shell .yclaw-admin-sider {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .yclaw-admin-shell .ant-layout-sider,
@@ -106,6 +118,29 @@ canvas {
 
 .yclaw-admin-shell .ant-layout-sider-children {
   border-inline-end: 1px solid rgba(148, 163, 184, 0.14) !important;
+}
+
+.yclaw-admin-shell .yclaw-admin-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 18px 16px 14px;
+  border: none;
+  border-block-end: 1px solid rgba(148, 163, 184, 0.12);
+  background: transparent;
+  color: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.yclaw-admin-shell .yclaw-admin-brand .ant-typography {
+  color: inherit;
+}
+
+.yclaw-admin-shell .ant-layout-sider-collapsed .yclaw-admin-brand {
+  justify-content: center;
+  padding-inline: 12px;
 }
 
 .yclaw-admin-shell .ant-pro-sider-logo {
@@ -126,28 +161,42 @@ canvas {
   padding-inline: 12px !important;
 }
 
+.yclaw-admin-shell .yclaw-admin-menu {
+  flex: 1;
+  padding-top: 10px;
+  border-inline-end: none;
+  background: transparent !important;
+}
+
 .yclaw-admin-shell .ant-pro-sider .ant-menu {
   padding-top: 10px;
 }
 
 .yclaw-admin-shell .ant-menu-dark,
 .yclaw-admin-shell .ant-menu-dark .ant-menu-sub,
-.yclaw-admin-shell .ant-pro-sider .ant-menu {
+.yclaw-admin-shell .ant-pro-sider .ant-menu,
+.yclaw-admin-shell .ant-layout-sider .ant-menu {
   background: transparent !important;
 }
 
 .yclaw-admin-shell .ant-pro-sider .ant-menu-item,
 .yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-item,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-submenu-title,
 .yclaw-admin-shell .ant-pro-sider .ant-pro-base-menu-inline-item-title,
 .yclaw-admin-shell .ant-pro-sider .ant-pro-base-menu-item-text,
 .yclaw-admin-shell .ant-pro-sider .ant-menu-item .ant-menu-title-content,
-.yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title .ant-menu-title-content {
+.yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title .ant-menu-title-content,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-item .ant-menu-title-content,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-submenu-title .ant-menu-title-content {
   color: rgba(255, 255, 255, 0.78) !important;
   font-weight: 500;
 }
 
 .yclaw-admin-shell .ant-pro-sider .ant-menu-item,
-.yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title {
+.yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-item,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-submenu-title {
   height: 44px;
   margin: 6px 12px;
   padding-inline: 14px !important;
@@ -157,13 +206,17 @@ canvas {
 }
 
 .yclaw-admin-shell .ant-pro-sider .ant-menu-item .anticon,
-.yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title .anticon {
+.yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title .anticon,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-item .anticon,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-submenu-title .anticon {
   min-width: 18px;
   font-size: 16px;
 }
 
 .yclaw-admin-shell .ant-pro-sider.ant-pro-sider-collapsed .ant-menu-item,
-.yclaw-admin-shell .ant-pro-sider.ant-pro-sider-collapsed .ant-menu-submenu-title {
+.yclaw-admin-shell .ant-pro-sider.ant-pro-sider-collapsed .ant-menu-submenu-title,
+.yclaw-admin-shell .ant-layout-sider-collapsed .ant-menu-item,
+.yclaw-admin-shell .ant-layout-sider-collapsed .ant-menu-submenu-title {
   margin-inline: 10px;
   padding-inline: calc(50% - 8px) !important;
 }
@@ -171,7 +224,11 @@ canvas {
 .yclaw-admin-shell .ant-pro-sider .ant-menu-item-selected,
 .yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-selected > .ant-menu-submenu-title,
 .yclaw-admin-shell .ant-pro-sider .ant-menu-item:hover,
-.yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title:hover {
+.yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title:hover,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-item-selected,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-submenu-selected > .ant-menu-submenu-title,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-item:hover,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-submenu-title:hover {
   color: #ffffff !important;
   background: rgba(255, 255, 255, 0.08) !important;
   transform: translateX(2px);
@@ -182,12 +239,20 @@ canvas {
 .yclaw-admin-shell .ant-pro-sider .ant-menu-item:hover .ant-menu-title-content,
 .yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title:hover .ant-menu-title-content,
 .yclaw-admin-shell .ant-pro-sider .ant-menu-item .anticon,
-.yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title .anticon {
+.yclaw-admin-shell .ant-pro-sider .ant-menu-submenu-title .anticon,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-item-selected .ant-menu-title-content,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-submenu-selected > .ant-menu-submenu-title .ant-menu-title-content,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-item:hover .ant-menu-title-content,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-submenu-title:hover .ant-menu-title-content,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-item .anticon,
+.yclaw-admin-shell .ant-layout-sider .ant-menu-submenu-title .anticon {
   color: inherit !important;
 }
 
 .yclaw-admin-shell .ant-pro-sider.ant-pro-sider-collapsed .ant-menu-item:hover,
-.yclaw-admin-shell .ant-pro-sider.ant-pro-sider-collapsed .ant-menu-item-selected {
+.yclaw-admin-shell .ant-pro-sider.ant-pro-sider-collapsed .ant-menu-item-selected,
+.yclaw-admin-shell .ant-layout-sider-collapsed .ant-menu-item:hover,
+.yclaw-admin-shell .ant-layout-sider-collapsed .ant-menu-item-selected {
   transform: none;
 }
 
@@ -200,6 +265,32 @@ canvas {
 }
 
 .yclaw-admin-shell .ant-pro-layout-container {
+  background: var(--yclaw-shell-gradient);
+}
+
+.yclaw-admin-header.ant-layout-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: auto;
+  padding: 14px 24px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
+  line-height: 1.2;
+}
+
+.yclaw-admin-header-left {
+  min-width: 0;
+}
+
+.yclaw-admin-trigger.ant-btn {
+  color: var(--yclaw-text);
+}
+
+.yclaw-admin-content {
+  padding: 0 24px 24px;
   background: var(--yclaw-shell-gradient);
 }
 
@@ -263,6 +354,12 @@ canvas {
 .yclaw-brand-subtitle {
   display: block;
   font-size: 12px;
+}
+
+.yclaw-page-container {
+  background: transparent;
+  color: var(--yclaw-text);
+  padding-block-end: 24px;
 }
 
 .yclaw-page-actions {
@@ -368,8 +465,19 @@ canvas {
   backdrop-filter: blur(12px);
 }
 
+.yclaw-panel-card.ant-card {
+  overflow: hidden;
+}
+
 .yclaw-panel-card .ant-pro-card-header {
   padding: 15px 18px 8px;
+}
+
+.yclaw-panel-card .ant-card-head {
+  min-height: 0;
+  padding: 15px 18px 8px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  background: transparent;
 }
 
 .yclaw-panel-card .ant-pro-card-title {
@@ -377,7 +485,21 @@ canvas {
   font-weight: 600;
 }
 
+.yclaw-panel-card .ant-card-head-title {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.yclaw-panel-card .ant-card-extra {
+  padding: 0;
+}
+
 .yclaw-panel-card .ant-pro-card-body {
+  padding: 18px;
+}
+
+.yclaw-panel-card .ant-card-body {
   padding: 18px;
 }
 
@@ -440,7 +562,8 @@ canvas {
   margin-block-start: 18px !important;
 }
 
-.yclaw-page-hero .ant-pro-card-body {
+.yclaw-page-hero .ant-pro-card-body,
+.yclaw-page-hero .ant-card-body {
   padding: 22px;
 }
 
@@ -472,7 +595,8 @@ canvas {
   font-size: 24px;
 }
 
-.yclaw-kpi-card .ant-pro-card-body {
+.yclaw-kpi-card .ant-pro-card-body,
+.yclaw-kpi-card .ant-card-body {
   padding: 16px 18px;
 }
 
@@ -525,12 +649,46 @@ canvas {
   height: 100%;
 }
 
-.yclaw-module-card .ant-pro-card {
+.yclaw-module-card.ant-card {
+  cursor: pointer;
+}
+
+.yclaw-module-card .ant-pro-card,
+.yclaw-module-card.ant-card {
   border-radius: 16px;
+}
+
+.yclaw-module-card .ant-card-body {
+  height: 100%;
 }
 
 .yclaw-module-card .ant-pro-checkcard-description {
   line-height: 1.55;
+}
+
+.yclaw-module-card.is-active {
+  border-color: rgba(22, 119, 255, 0.28);
+  box-shadow: 0 18px 40px rgba(22, 119, 255, 0.12);
+}
+
+.yclaw-module-card-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(22, 119, 255, 0.08);
+  color: #1677ff;
+  flex: none;
+}
+
+.yclaw-module-card-content {
+  min-width: 0;
+}
+
+.yclaw-module-card-meta {
+  display: inline-block;
+  margin-bottom: 4px;
 }
 
 .yclaw-compact-table .ant-table-thead > tr > th {
@@ -617,6 +775,13 @@ canvas {
 
 .yclaw-settings-section {
   margin-bottom: 16px;
+}
+
+.yclaw-panel-section {
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  background: var(--yclaw-surface-muted);
 }
 
 .yclaw-settings-submit {
@@ -843,6 +1008,10 @@ canvas {
   background: rgba(148, 163, 184, 0.08);
 }
 
+:root[data-theme='dark'] .yclaw-page-container .ant-table-thead > tr > th {
+  background: rgba(148, 163, 184, 0.08);
+}
+
 .browser-viewport {
   min-height: 340px;
 }
@@ -939,6 +1108,7 @@ canvas {
   padding-top: 38px;
 }
 
-.yclaw-admin-shell .ant-pro-layout .ant-layout-header {
+.yclaw-admin-shell .ant-pro-layout .ant-layout-header,
+.yclaw-admin-shell .ant-layout .ant-layout-header {
   margin-top: 0;
 }

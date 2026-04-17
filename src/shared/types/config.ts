@@ -3,12 +3,14 @@
  */
 
 import type { AIConfig } from './ai';
+import type { FeaturePackageInstallState } from './features';
 
 export interface AppConfig {
   general: GeneralConfig;
   modules: Record<string, ModuleConfig>;
   plugins: Record<string, PluginConfig>;
   ai: AIConfig;
+  featurePackages: Record<string, FeaturePackageInstallState>;
 }
 
 export interface GeneralConfig {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Drawer, Descriptions, Tag, Typography, Divider, Space } from 'antd';
+import { Drawer, Descriptions, Tag, Typography, Divider, Space, message } from 'antd';
 import { MinusOutlined, CloseOutlined, SettingOutlined, BorderOutlined } from '@ant-design/icons';
 import { useIpc } from '../hooks';
 import { IPC_CHANNELS } from '@shared/constants/channels';
@@ -12,23 +12,36 @@ export function TitleBar() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [config, setConfig] = useState<AppConfig | null>(null);
 
+  const reportActionError = (error: unknown, fallbackMessage: string) => {
+    message.error(error instanceof Error ? error.message : fallbackMessage);
+  };
+
   const handleMinimize = useCallback(() => {
-    void invoke(IPC_CHANNELS.WINDOW_MINIMIZE);
+    void invoke(IPC_CHANNELS.WINDOW_MINIMIZE).catch((error) => {
+      reportActionError(error, '最小化窗口失败');
+    });
   }, [invoke]);
 
   const handleMaximize = useCallback(() => {
-    void invoke(IPC_CHANNELS.WINDOW_MAXIMIZE);
+    void invoke(IPC_CHANNELS.WINDOW_MAXIMIZE).catch((error) => {
+      reportActionError(error, '切换窗口状态失败');
+    });
   }, [invoke]);
 
   const handleClose = useCallback(() => {
-    void invoke(IPC_CHANNELS.WINDOW_CLOSE);
+    void invoke(IPC_CHANNELS.WINDOW_CLOSE).catch((error) => {
+      reportActionError(error, '关闭窗口失败');
+    });
   }, [invoke]);
 
   useEffect(() => {
     if (!settingsOpen) return;
+    setConfig(null);
     void invoke<AppConfig>(IPC_CHANNELS.CONFIG_GET_ALL)
       .then(setConfig)
-      .catch(() => {});
+      .catch((error) => {
+        reportActionError(error, '读取设置失败');
+      });
   }, [settingsOpen, invoke]);
 
   const themeLabel = { light: '亮色', dark: '暗色', system: '跟随系统' } as const;

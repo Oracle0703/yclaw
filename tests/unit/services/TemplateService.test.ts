@@ -1,36 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mockDb = {
-  run: vi.fn(),
-  get: vi.fn(),
-  all: vi.fn(),
-  transaction: vi.fn((fn: () => void) => fn()),
-};
-
-vi.mock('@main/services/DatabaseService', () => ({
-  DatabaseService: {
-    getInstance: vi.fn(() => mockDb),
-  },
-}));
-
 import { TemplateService } from '@main/services/TemplateService';
 
 describe('TemplateService', () => {
   let service: TemplateService;
+  const mockRepository = {
+    getTemplateCreatedAt: vi.fn(),
+    saveTemplate: vi.fn(),
+    listTemplates: vi.fn(),
+    deleteTemplate: vi.fn(),
+    attachTemplateToTask: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new TemplateService();
+    service = new TemplateService({ templateRepository: mockRepository });
+  });
+
+  it('requires template repository injection', () => {
+    expect(() => new TemplateService()).toThrow('templateRepository is required');
   });
 
   it('saves templates and lists them later', () => {
-    mockDb.all.mockReturnValueOnce([
+    mockRepository.saveTemplate.mockImplementationOnce((template) => ({
+      ...template,
+      createdAt: '2026-04-15T00:00:00.000Z',
+      updatedAt: '2026-04-15T00:00:00.000Z',
+    }));
+    mockRepository.listTemplates.mockReturnValueOnce([
       {
         id: 'template-1',
         name: '价格采集',
-        fields: JSON.stringify([{ name: 'price', selector: '.price', attribute: 'textContent' }]),
-        created_at: '2026-04-15T00:00:00.000Z',
-        updated_at: '2026-04-15T00:00:00.000Z',
+        fields: [{ name: 'price', selector: '.price', attribute: 'textContent' }],
+        createdAt: '2026-04-15T00:00:00.000Z',
+        updatedAt: '2026-04-15T00:00:00.000Z',
       },
     ]);
 
@@ -41,7 +44,7 @@ describe('TemplateService', () => {
     });
     const templates = service.listTemplates();
 
-    expect(mockDb.run).toHaveBeenCalled();
+    expect(mockRepository.saveTemplate).toHaveBeenCalled();
     expect(templates).toHaveLength(1);
     expect(templates[0].fields[0].name).toBe('price');
   });
@@ -49,46 +52,36 @@ describe('TemplateService', () => {
   it('attaches a template to a task', () => {
     service.attachTemplateToTask('task-1', 'template-1');
 
-    expect(mockDb.run).toHaveBeenCalledWith(expect.stringContaining('UPDATE tasks'), [
-      'template-1',
-      'task-1',
-    ]);
+    expect(mockRepository.attachTemplateToTask).toHaveBeenCalledWith('task-1', 'template-1');
   });
 
   it('preserves createdAt when updating an existing template', () => {
-    mockDb.get.mockReturnValueOnce({
-      created_at: '2026-04-15T00:00:00.000Z',
-    });
+    mockRepository.getTemplateCreatedAt.mockReturnValueOnce('2026-04-15T00:00:00.000Z');
+    mockRepository.saveTemplate.mockImplementationOnce((template) => ({
+      ...template,
+      createdAt: '2026-04-15T00:00:00.000Z',
+      updatedAt: '2026-04-16T00:00:00.000Z',
+    }));
 
-    service.saveTemplate({
+    const template = service.saveTemplate({
       id: 'template-1',
       name: '价格采集-更新',
       fields: [{ name: 'price', selector: '.price', attribute: 'textContent' }],
     });
 
-    expect(mockDb.run).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO extraction_templates'),
-      expect.arrayContaining([
-        'template-1',
-        '价格采集-更新',
-        JSON.stringify([{ name: 'price', selector: '.price', attribute: 'textContent' }]),
-        '2026-04-15T00:00:00.000Z',
-      ]),
+    expect(mockRepository.saveTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'template-1',
+        name: '价格采集-更新',
+        createdAt: '2026-04-15T00:00:00.000Z',
+      }),
     );
+    expect(template.createdAt).toBe('2026-04-15T00:00:00.000Z');
   });
 
   it('clears task bindings before deleting templates', () => {
     service.deleteTemplate('template-1');
 
-    expect(mockDb.run).toHaveBeenCalledTimes(2);
-    expect(mockDb.run).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('UPDATE tasks SET template_id = NULL'),
-      ['template-1'],
-    );
-    expect(mockDb.run).toHaveBeenCalledWith(
-      expect.stringContaining('DELETE FROM extraction_templates'),
-      ['template-1'],
-    );
+    expect(mockRepository.deleteTemplate).toHaveBeenCalledWith('template-1');
   });
 });

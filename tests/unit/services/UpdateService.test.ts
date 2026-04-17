@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { LogService } from '@main/services/LogService';
 
 // Must use vi.hoisted for variables referenced in vi.mock factories
-const { mockAutoUpdater, mockEmit } = vi.hoisted(() => ({
+const { mockAutoUpdater } = vi.hoisted(() => ({
   mockAutoUpdater: {
     autoDownload: true,
     autoInstallOnAppQuit: false,
@@ -11,21 +11,10 @@ const { mockAutoUpdater, mockEmit } = vi.hoisted(() => ({
     downloadUpdate: vi.fn().mockResolvedValue({}),
     quitAndInstall: vi.fn(),
   },
-  mockEmit: vi.fn(),
 }));
 
 vi.mock('electron-updater', () => ({
   autoUpdater: mockAutoUpdater,
-}));
-
-vi.mock('@main/ipc/EventBus', () => ({
-  EventBus: {
-    getInstance: vi.fn().mockReturnValue({
-      emit: mockEmit,
-      on: vi.fn(),
-      off: vi.fn(),
-    }),
-  },
 }));
 
 // Mock LogService
@@ -43,13 +32,33 @@ import { UpdateService } from '@main/services/UpdateService';
 
 describe('UpdateService', () => {
   let service: UpdateService;
+  const mockEventBus = {
+    emit: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new UpdateService(mockLogService as unknown as LogService);
+    service = new UpdateService({
+      logService: mockLogService as unknown as LogService,
+      eventBus: mockEventBus,
+    });
   });
 
   describe('constructor', () => {
+    it('requires log service injection', () => {
+      expect(() => new UpdateService({ eventBus: mockEventBus })).toThrowError(
+        'logService is required',
+      );
+    });
+
+    it('requires event bus injection', () => {
+      expect(() =>
+        new UpdateService({
+          logService: mockLogService as unknown as LogService,
+        }),
+      ).toThrowError('eventBus is required');
+    });
+
     it('should set autoDownload to false', () => {
       expect(mockAutoUpdater.autoDownload).toBe(false);
     });
@@ -115,7 +124,7 @@ describe('UpdateService', () => {
       )?.[1];
       expect(handler).toBeDefined();
       handler({ version: '2.0.0', releaseDate: '2024-01-01', releaseNotes: 'New stuff' });
-      expect(mockEmit).toHaveBeenCalledWith('update:available', {
+      expect(mockEventBus.emit).toHaveBeenCalledWith('update:available', {
         version: '2.0.0',
         releaseDate: '2024-01-01',
         releaseNotes: 'New stuff',
@@ -127,7 +136,7 @@ describe('UpdateService', () => {
         ([event]: [string]) => event === 'update-not-available',
       )?.[1];
       handler();
-      expect(mockEmit).toHaveBeenCalledWith('update:notAvailable');
+      expect(mockEventBus.emit).toHaveBeenCalledWith('update:notAvailable');
     });
 
     it('should emit update:downloadProgress on download-progress event', () => {
@@ -135,7 +144,7 @@ describe('UpdateService', () => {
         ([event]: [string]) => event === 'download-progress',
       )?.[1];
       handler({ percent: 50, bytesPerSecond: 1024, transferred: 512, total: 1024 });
-      expect(mockEmit).toHaveBeenCalledWith('update:downloadProgress', {
+      expect(mockEventBus.emit).toHaveBeenCalledWith('update:downloadProgress', {
         percent: 50,
         bytesPerSecond: 1024,
         transferred: 512,
@@ -148,7 +157,7 @@ describe('UpdateService', () => {
         ([event]: [string]) => event === 'update-downloaded',
       )?.[1];
       handler();
-      expect(mockEmit).toHaveBeenCalledWith('update:downloaded');
+      expect(mockEventBus.emit).toHaveBeenCalledWith('update:downloaded');
     });
 
     it('should emit update:error on error event', () => {
@@ -156,7 +165,7 @@ describe('UpdateService', () => {
         ([event]: [string]) => event === 'error',
       )?.[1];
       handler(new Error('Update failed'));
-      expect(mockEmit).toHaveBeenCalledWith('update:error', { message: 'Update failed' });
+      expect(mockEventBus.emit).toHaveBeenCalledWith('update:error', { message: 'Update failed' });
     });
   });
 

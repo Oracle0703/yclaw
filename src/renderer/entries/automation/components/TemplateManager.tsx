@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Empty, Input, List, Popconfirm, Space, Tag, Typography, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import { useIpc } from '../../../shared/hooks';
@@ -15,16 +15,25 @@ export function TemplateManager({ onSelectTemplate, draftFields = [] }: Template
   const [templateName, setTemplateName] = useState('');
   const [loading, setLoading] = useState(false);
   const hasDraftFields = draftFields.length > 0;
+  const requestSeqRef = useRef(0);
 
   const loadTemplates = useCallback(async () => {
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
     setLoading(true);
     try {
       const data = await automation.listTemplates();
-      setTemplates((data as ExtractionTemplate[]) ?? []);
+      if (requestSeqRef.current === requestSeq) {
+        setTemplates((data as ExtractionTemplate[]) ?? []);
+      }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载模板失败');
+      if (requestSeqRef.current === requestSeq) {
+        message.error(error instanceof Error ? error.message : '加载模板失败');
+      }
     } finally {
-      setLoading(false);
+      if (requestSeqRef.current === requestSeq) {
+        setLoading(false);
+      }
     }
   }, [automation]);
 

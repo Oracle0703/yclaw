@@ -28,6 +28,9 @@ vi.mock('electron', () => {
   }
   const webContentsMock = {
     send: vi.fn(),
+    on: vi.fn(),
+    getURL: vi.fn(() => 'http://localhost:5173/mock/'),
+    openDevTools: vi.fn(),
   };
   const createBrowserWindow = (opts: MockWindowOptions): MockWindow => {
     const win: MockWindow = {
@@ -94,27 +97,28 @@ vi.mock('@main/utils/paths', () => ({
   getRendererUrl: (module: string) => `http://localhost:5173/${module}/`,
 }));
 
-// Mock EventBus
-vi.mock('@main/ipc/EventBus', () => {
-  const emitFn = vi.fn().mockReturnValue(true);
-  return {
-    EventBus: {
-      getInstance: () => ({
-        emit: emitFn,
-        on: vi.fn(),
-        off: vi.fn(),
-      }),
-    },
-  };
-});
-
 import { WindowManager } from '@main/windows/WindowManager';
 
 describe('WindowManager', () => {
   let manager: WindowManager;
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+  const mockEventBus = {
+    emit: vi.fn().mockReturnValue(true),
+    on: vi.fn(),
+    off: vi.fn(),
+  };
 
   beforeEach(() => {
-    manager = new WindowManager();
+    vi.clearAllMocks();
+    process.env.NODE_ENV = 'development';
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    manager = new WindowManager({ eventBus: mockEventBus as never });
+  });
+
+  it('should require event bus injection', () => {
+    expect(() => new WindowManager()).toThrowError('eventBus is required');
   });
 
   it('should create a new window for a module', async () => {
@@ -143,7 +147,7 @@ describe('WindowManager', () => {
   });
 
   it('should hide the workbench instead of closing when closeToTray is enabled', () => {
-    manager = new WindowManager({ shouldCloseToTray: () => true });
+    manager = new WindowManager({ shouldCloseToTray: () => true, eventBus: mockEventBus as never });
     const win = manager.openWindow({ module: 'workbench' });
     manager.closeWindow('workbench');
     expect(win.hide).toHaveBeenCalled();
@@ -210,5 +214,37 @@ describe('WindowManager', () => {
     manager.closeAll();
     expect(win1.close).toHaveBeenCalled();
     expect(win2.close).toHaveBeenCalled();
+  });
+
+  it('should log only window failures in development debug listeners', () => {
+    const win = manager.openWindow({ module: 'stock' });
+
+    expect(win.webContents.on).toHaveBeenCalledWith('did-fail-load', expect.any(Function));
+    expect(win.webContents.on).toHaveBeenCalledWith('render-process-gone', expect.any(Function));
+    expect(win.webContents.on).not.toHaveBeenCalledWith('did-finish-load', expect.any(Function));
+    expect(win.webContents.on).not.toHaveBeenCalledWith('console-message', expect.any(Function));
+
+    const didFailLoadHandler = vi
+      .mocked(win.webContents.on)
+      .mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
+      | ((
+          event: unknown,
+          errorCode: number,
+          errorDescription: string,
+          validatedURL: string,
+          isMainFrame: boolean,
+        ) => void)
+      | undefined;
+
+    didFailLoadHandler?.(undefined, -2, 'ERR_FAILED', 'https://example.com', true);
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith('[window] did-fail-load', {
+      module: 'stock',
+      errorCode: -2,
+      errorDescription: 'ERR_FAILED',
+      validatedURL: 'https://example.com',
+      isMainFrame: true,
+    });
+    expect(consoleLogSpy).not.toHaveBeenCalled();
   });
 });

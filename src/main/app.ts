@@ -8,6 +8,7 @@ import { ConfigService } from './services/ConfigService';
 import { LogService } from './services/LogService';
 import { TrayService } from './services/TrayService';
 import { UpdateService } from './services/UpdateService';
+import { FeaturePackageService } from './services/FeaturePackageService';
 import { SchedulerService } from './services/SchedulerService';
 import { SessionRegistry } from './services/SessionRegistry';
 import { TemplateService } from './services/TemplateService';
@@ -17,12 +18,29 @@ import { ResultService } from './services/ResultService';
 import { TabManager } from './browser/TabManager';
 import { IPC_CHANNELS } from '@shared/constants';
 import { AIService } from './ai/AIService';
+import { ContextManager } from './ai/ContextManager';
+import { ToolRegistry } from './ai/ToolRegistry';
 import { PluginLoader } from './plugin-loader/PluginLoader';
 import { PermissionChecker } from './plugin-loader/PermissionChecker';
+import { BatchService } from './services/BatchService';
 import { TaskService } from './services/TaskService';
 import { DataSourceManager } from '@engines/analytics/DataSourceManager';
 import { IndicatorLibrary } from '@engines/analytics/IndicatorLibrary';
+import { AutomationEngine } from '@engines/automation/AutomationEngine';
+import { FlowRunner } from '@engines/automation/FlowRunner';
 import { EVENTS } from '@shared/constants';
+import { getRendererUrl } from './utils/paths';
+import {
+  AIRepository,
+  AlertRepository,
+  BatchRepository,
+  ExecutionLogRepository,
+  PluginRepository,
+  ResultRepository,
+  SessionRepository,
+  TaskRepository,
+  TemplateRepository,
+} from './services/repositories';
 import type {
   AIChatRequest,
   AIConfig,
@@ -45,6 +63,7 @@ export class App {
   private logService: LogService;
   private trayService: TrayService;
   private updateService: UpdateService;
+  private featurePackageService: FeaturePackageService;
   private tabManager: TabManager;
   private aiService: AIService;
   private pluginLoader: PluginLoader;
@@ -63,36 +82,76 @@ export class App {
   private started = false;
 
   constructor() {
-    this.configService = new ConfigService();
+    this.eventBus = EventBus.getInstance();
+    this.configService = new ConfigService({ eventBus: this.eventBus });
+    this.featurePackageService = new FeaturePackageService({ configService: this.configService });
     this.windowManager = new WindowManager({
+      eventBus: this.eventBus,
       shouldCloseToTray: () => this.configService.getGeneral().closeToTray,
+      resolveRendererUrl: (module: string) => this.resolveRendererUrl(module),
     });
     this.ipcController = new IpcController();
-    this.eventBus = EventBus.getInstance();
     this.databaseService = new DatabaseService();
     this.logService = new LogService();
-    this.trayService = new TrayService(this.windowManager);
-    this.updateService = new UpdateService(this.logService);
+    const taskRepository = new TaskRepository(this.databaseService);
+    const pluginRepository = new PluginRepository(this.databaseService);
+    const aiRepository = new AIRepository(this.databaseService);
+    const sessionRepository = new SessionRepository(this.databaseService);
+    const templateRepository = new TemplateRepository(this.databaseService);
+    const alertRepository = new AlertRepository(this.databaseService);
+    const batchRepository = new BatchRepository(this.databaseService);
+    const executionLogRepository = new ExecutionLogRepository(this.databaseService);
+    const resultRepository = new ResultRepository(this.databaseService);
+    const contextManager = new ContextManager({
+      taskRepository,
+      pluginRepository,
+    });
+    this.trayService = new TrayService({
+      eventBus: this.eventBus,
+      windowManager: this.windowManager,
+    });
+    this.updateService = new UpdateService({
+      eventBus: this.eventBus,
+      logService: this.logService,
+    });
     this.tabManager = new TabManager({
+      eventBus: this.eventBus,
       sessionPartition: this.getBrowserSessionPartition(),
     });
     this.aiService = new AIService({
       config: this.configService.get('ai'),
       openWindow: (module: string) => this.windowManager.openWindow({ module }),
+      taskRepository,
+      aiRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
     });
-    this.pluginLoader = new PluginLoader();
     this.permissionChecker = new PermissionChecker();
-    this.taskService = new TaskService({ databaseService: this.databaseService });
+    this.pluginLoader = new PluginLoader({
+      eventBus: this.eventBus,
+      permissionChecker: this.permissionChecker,
+    });
+    const batchService = new BatchService({ batchRepository });
+    this.taskService = new TaskService({
+      taskRepository,
+      batchService,
+      eventBus: this.eventBus,
+      createRunner: () =>
+        new FlowRunner({
+          engine: new AutomationEngine(),
+          eventBus: this.eventBus,
+        }),
+    });
     this.schedulerService = new SchedulerService({ taskService: this.taskService });
-    this.sessionRegistry = new SessionRegistry({ databaseService: this.databaseService });
-    this.templateService = new TemplateService({ databaseService: this.databaseService });
-    this.executionLogService = new ExecutionLogService({ databaseService: this.databaseService });
+    this.sessionRegistry = new SessionRegistry({ sessionRepository });
+    this.templateService = new TemplateService({ templateRepository });
+    this.executionLogService = new ExecutionLogService({ executionLogRepository });
     this.alertService = new AlertService({
-      databaseService: this.databaseService,
+      alertRepository,
       executionLogService: this.executionLogService,
     });
-    this.resultService = new ResultService({ databaseService: this.databaseService });
-    this.dataSourceManager = new DataSourceManager();
+    this.resultService = new ResultService({ resultRepository });
+    this.dataSourceManager = new DataSourceManager({ eventBus: this.eventBus });
     this.indicatorLibrary = new IndicatorLibrary();
   }
 
@@ -163,7 +222,7 @@ export class App {
 
     // 配置
     this.ipcController.handle(IPC_CHANNELS.CONFIG_GET, (key: unknown) => {
-      const validKeys = ['general', 'modules', 'plugins', 'ai'] as const;
+      const validKeys = ['general', 'modules', 'plugins', 'ai', 'featurePackages'] as const;
       if (typeof key !== 'string' || !validKeys.includes(key as (typeof validKeys)[number])) {
         throw new Error(
           `Invalid config key: ${String(key)}. Expected one of: ${validKeys.join(', ')}`,
@@ -191,6 +250,15 @@ export class App {
 
     this.ipcController.handle(IPC_CHANNELS.CONFIG_IMPORT, (jsonString: unknown) => {
       this.configService.importConfig(jsonString as string);
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.FEATURE_PACKAGE_LIST, () => {
+      return this.featurePackageService.listPackages();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.FEATURE_PACKAGE_INSTALL, async (params: unknown) => {
+      const { id } = params as { id: string };
+      return this.featurePackageService.installPackage(id);
     });
 
     // 日志
@@ -735,5 +803,18 @@ export class App {
       throw new Error('No active browser tab available for task execution');
     }
     return view.webContents;
+  }
+
+  private resolveRendererUrl(module: string): string {
+    const installedFeatureUrl = this.featurePackageService.resolveRendererUrl(module);
+    if (installedFeatureUrl) {
+      return installedFeatureUrl;
+    }
+
+    if (process.env.NODE_ENV !== 'development' && this.featurePackageService.isManagedModule(module)) {
+      throw new Error(`Feature package "${module}" is not installed`);
+    }
+
+    return getRendererUrl(module);
   }
 }

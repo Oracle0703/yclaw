@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Space, Table, Tag, Typography } from 'antd';
+import { Button, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { EVENTS } from '@shared/constants';
 import type { TaskStatus } from '@shared/types';
@@ -32,10 +32,19 @@ export function TaskList({
     const requestSeq = requestSeqRef.current + 1;
     requestSeqRef.current = requestSeq;
     setLoading(true);
-    const res = await automation.listTasks() as TaskSummary[];
-    if (requestSeqRef.current === requestSeq) {
-      setTasks(res ?? []);
-      setLoading(false);
+    try {
+      const res = await automation.listTasks() as TaskSummary[];
+      if (requestSeqRef.current === requestSeq) {
+        setTasks(res ?? []);
+      }
+    } catch (error) {
+      if (requestSeqRef.current === requestSeq) {
+        message.error(error instanceof Error ? error.message : '加载任务失败');
+      }
+    } finally {
+      if (requestSeqRef.current === requestSeq) {
+        setLoading(false);
+      }
     }
   }, [automation]);
 
@@ -95,11 +104,25 @@ export function TaskList({
           <Button type="link" onClick={() => onSelect(record)}>
             打开
           </Button>
-          <Button type="link" onClick={() => void automation.startTask(record.id)}>
+          <Button
+            type="link"
+            onClick={() => {
+              void automation.startTask(record.id).catch((error) => {
+                message.error(error instanceof Error ? error.message : '启动任务失败');
+              });
+            }}
+          >
             启动
           </Button>
           {record.latestBatch?.status === 'failed' && (
-            <Button type="link" onClick={() => void automation.retryBatch(record.latestBatch!.id)}>
+            <Button
+              type="link"
+              onClick={() => {
+                void automation.retryBatch(record.latestBatch!.id).catch((error) => {
+                  message.error(error instanceof Error ? error.message : '复跑任务失败');
+                });
+              }}
+            >
               复跑
             </Button>
           )}

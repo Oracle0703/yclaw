@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+const { messageErrorMock } = vi.hoisted(() => ({
+  messageErrorMock: vi.fn(),
+}));
 
 vi.mock('antd', () => {
   function MockDescriptions({ children }: { children?: React.ReactNode }) {
@@ -34,10 +38,30 @@ vi.mock('antd', () => {
         {children}
       </button>
     ),
+    Card: ({
+      children,
+      title,
+      extra,
+    }: {
+      children?: React.ReactNode;
+      title?: React.ReactNode;
+      extra?: React.ReactNode;
+    }) => (
+      <section className="yclaw-panel-card">
+        <header>
+          <div>{title}</div>
+          <div>{extra}</div>
+        </header>
+        {children}
+      </section>
+    ),
     Descriptions: MockDescriptions,
     Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
     Typography: {
       Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    },
+    message: {
+      error: messageErrorMock,
     },
   };
 });
@@ -80,6 +104,18 @@ describe('InterventionPanel', () => {
     expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.INTERVENTION_RESUME, {
       taskId: 'task-1',
       batchId: 'batch-1',
+    });
+  });
+
+  it('shows an error when resuming automation fails', async () => {
+    vi.mocked(window.electronAPI.invoke).mockRejectedValueOnce(new Error('resume failed') as never);
+
+    render(<InterventionPanel state={state} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /恢复自动执行/ }));
+
+    await waitFor(() => {
+      expect(messageErrorMock).toHaveBeenCalledWith('resume failed');
     });
   });
 });

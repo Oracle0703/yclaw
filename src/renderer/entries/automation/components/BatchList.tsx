@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, List, Space, Tag, Typography } from 'antd';
+import { Button, List, Space, Tag, Typography, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import type { TaskBatch } from '@shared/types';
 import { useIpc } from '../../../shared/hooks';
@@ -24,11 +24,18 @@ export function BatchList({ taskId, onSelectBatch }: BatchListProps) {
       };
     }
 
-    void automation.listBatches(taskId).then((data) => {
-      if (isCurrent) {
-        setBatches((data as TaskBatch[]) ?? []);
-      }
-    });
+    void automation.listBatches(taskId)
+      .then((data) => {
+        if (isCurrent) {
+          setBatches((data as TaskBatch[]) ?? []);
+        }
+      })
+      .catch((error) => {
+        if (isCurrent) {
+          setBatches([]);
+          message.error(error instanceof Error ? error.message : '加载批次失败');
+        }
+      });
 
     return () => {
       isCurrent = false;

@@ -11,20 +11,24 @@ import type {
   ChatMessage,
   Conversation,
 } from '@shared/types';
-import { ContextManager } from './ContextManager';
+import type { ContextManager } from './ContextManager';
 import { OpenAIProvider, OllamaProvider } from './LLMProvider';
 import { ToolRegistry } from './ToolRegistry';
-import { taskListTool } from './tools/taskTools';
+import { createTaskListTool } from './tools/taskTools';
 import { systemStatusTool } from './tools/systemTools';
 import { navigateTool, createNavigateTool } from './tools/navigateTools';
 import type { LLMProvider } from './types';
-import { DatabaseService } from '../services/DatabaseService';
+import type { AIRepository, TaskRepository } from '../services/repositories';
 
 import crypto from 'crypto';
 
 export interface AIServiceOptions {
   config?: Partial<AIConfig>;
   openWindow?: (module: string) => void;
+  contextManager?: ContextManager;
+  toolRegistry?: ToolRegistry;
+  aiRepository?: Pick<AIRepository, 'saveAIConversation' | 'saveAIMessage' | 'deleteAIConversation'>;
+  taskRepository?: Pick<TaskRepository, 'getTasks'>;
 }
 
 export class AIService {
@@ -33,13 +37,11 @@ export class AIService {
   private toolRegistry: ToolRegistry;
   private conversations = new Map<string, Conversation>();
   private config: AIConfig;
-  private databaseService = DatabaseService.getInstance();
+  private aiRepository: Pick<AIRepository, 'saveAIConversation' | 'saveAIMessage' | 'deleteAIConversation'>;
+  private taskRepository: Pick<TaskRepository, 'getTasks'>;
 
   constructor(configOrOptions?: Partial<AIConfig> | AIServiceOptions) {
-    const opts: AIServiceOptions =
-      configOrOptions && ('openWindow' in configOrOptions || 'config' in configOrOptions)
-        ? (configOrOptions as AIServiceOptions)
-        : { config: configOrOptions as Partial<AIConfig> | undefined };
+    const opts = this.normalizeOptions(configOrOptions);
 
     this.config = {
       provider: 'openai',
@@ -49,18 +51,79 @@ export class AIService {
       ...opts.config,
     };
 
+    if (!opts.contextManager) {
+      throw new Error('contextManager is required');
+    }
+
+    if (!opts.aiRepository) {
+      throw new Error('aiRepository is required');
+    }
+
+    if (!opts.taskRepository) {
+      throw new Error('taskRepository is required');
+    }
+
+    if (!opts.toolRegistry) {
+      throw new Error('toolRegistry is required');
+    }
+
     this.provider = this.createProvider(this.config);
-    this.contextManager = new ContextManager();
-    this.toolRegistry = new ToolRegistry();
+    this.contextManager = opts.contextManager;
+    this.aiRepository = opts.aiRepository;
+    this.taskRepository = opts.taskRepository;
+    this.toolRegistry = opts.toolRegistry;
 
     // Register built-in tools
-    this.toolRegistry.register(taskListTool);
+    this.toolRegistry.register(createTaskListTool(this.taskRepository));
     this.toolRegistry.register(systemStatusTool);
     if (opts.openWindow) {
       this.toolRegistry.register(createNavigateTool(opts.openWindow));
     } else {
       this.toolRegistry.register(navigateTool);
     }
+  }
+
+  private normalizeOptions(configOrOptions?: Partial<AIConfig> | AIServiceOptions): AIServiceOptions {
+    if (!configOrOptions) {
+      return {};
+    }
+
+    const optionKeys: Array<keyof AIServiceOptions> = [
+      'config',
+      'openWindow',
+      'contextManager',
+      'toolRegistry',
+      'aiRepository',
+      'taskRepository',
+    ];
+    const hasOptionKeys = optionKeys.some((key) => key in configOrOptions);
+
+    if (!hasOptionKeys) {
+      return { config: configOrOptions as Partial<AIConfig> };
+    }
+
+    const rawOptions = configOrOptions as AIServiceOptions & Partial<AIConfig>;
+    const {
+      config,
+      openWindow,
+      contextManager,
+      toolRegistry,
+      aiRepository,
+      taskRepository,
+      ...directConfig
+    } = rawOptions;
+
+    return {
+      config: {
+        ...directConfig,
+        ...config,
+      },
+      openWindow,
+      contextManager,
+      toolRegistry,
+      aiRepository,
+      taskRepository,
+    };
   }
 
   private createProvider(config: AIConfig): LLMProvider {
@@ -120,7 +183,7 @@ export class AIService {
       timestamp: Date.now(),
     };
     conversation.messages.push(userMessage);
-    this.databaseService.saveAIMessage(conversationId, userMessage);
+    this.aiRepository.saveAIMessage(conversationId, userMessage);
 
     // Collect context and build system prompt
     const context = await this.contextManager.collectContext();
@@ -143,8 +206,8 @@ export class AIService {
     };
     conversation.messages.push(assistantMessage);
     conversation.updatedAt = Date.now();
-    this.databaseService.saveAIConversation(conversation);
-    this.databaseService.saveAIMessage(conversationId, assistantMessage);
+    this.aiRepository.saveAIConversation(conversation);
+    this.aiRepository.saveAIMessage(conversationId, assistantMessage);
 
     return {
       message: assistantMessage,
@@ -158,7 +221,7 @@ export class AIService {
 
   deleteConversation(id: string): boolean {
     const removed = this.conversations.delete(id);
-    const deletedFromDb = this.databaseService.deleteAIConversation(id);
+    const deletedFromDb = this.aiRepository.deleteAIConversation(id);
     return removed || deletedFromDb;
   }
 

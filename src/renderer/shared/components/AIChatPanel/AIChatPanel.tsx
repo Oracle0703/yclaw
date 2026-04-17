@@ -81,8 +81,17 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 }
 
 export default function AIChatPanel() {
-  const { messages, isOpen, isLoading, toggle, close, addMessage, setConversationId, setLoading } =
-    useAIChatStore();
+  const {
+    messages,
+    conversationId,
+    isOpen,
+    isLoading,
+    toggle,
+    close,
+    addMessage,
+    setConversationId,
+    setLoading,
+  } = useAIChatStore();
 
   const [inputValue, setInputValue] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -124,7 +133,10 @@ export default function AIChatPanel() {
       const response = await window.electronAPI.invoke<{
         message: ChatMessage;
         conversationId: string;
-      }>('ai:chat', { message: content });
+      }>('ai:chat', {
+        message: content,
+        conversationId: conversationId ?? undefined,
+      });
 
       if (response.success && response.data) {
         addMessage(response.data.message);
@@ -147,7 +159,7 @@ export default function AIChatPanel() {
     } finally {
       setLoading(false);
     }
-  }, [inputValue, isLoading, addMessage, setConversationId, setLoading]);
+  }, [inputValue, conversationId, isLoading, addMessage, setConversationId, setLoading]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

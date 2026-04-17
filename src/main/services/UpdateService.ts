@@ -1,5 +1,4 @@
 import { autoUpdater } from 'electron-updater';
-import { EventBus } from '../ipc/EventBus';
 import { LogService } from './LogService';
 import { EVENTS } from '@shared/constants';
 
@@ -9,17 +8,32 @@ export interface UpdateInfo {
   releaseNotes?: string;
 }
 
+interface UpdateServiceOptions {
+  logService?: LogService;
+  eventBus?: {
+    emit: (event: string, payload?: unknown) => void;
+  };
+}
+
 /**
  * 自动更新服务 — 基于 electron-updater
  */
 export class UpdateService {
-  private eventBus: EventBus;
+  private eventBus: NonNullable<UpdateServiceOptions['eventBus']>;
   private logService: LogService;
   private checking = false;
 
-  constructor(logService: LogService) {
-    this.eventBus = EventBus.getInstance();
-    this.logService = logService;
+  constructor(options: UpdateServiceOptions = {}) {
+    if (!options.logService) {
+      throw new Error('logService is required');
+    }
+
+    if (!options.eventBus) {
+      throw new Error('eventBus is required');
+    }
+
+    this.eventBus = options.eventBus;
+    this.logService = options.logService;
     this.setupListeners();
   }
 

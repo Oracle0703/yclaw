@@ -14,20 +14,16 @@ vi.mock('os', () => ({
   uptime: () => 7200,
 }));
 
-const mockDb = {
+const mockTaskRepository = {
   getTasks: vi.fn(() => [
     { id: 'task-1', name: '采集任务', status: 'running', updatedAt: '2026-04-15 10:00:00' },
   ]),
+};
+const mockPluginRepository = {
   getInstalledPlugins: vi.fn(() => [
     { name: 'OCR', version: '1.0.0', enabled: true },
   ]),
 };
-
-vi.mock('@main/services/DatabaseService', () => ({
-  DatabaseService: {
-    getInstance: vi.fn(() => mockDb),
-  },
-}));
 
 import { ContextManager } from '@main/ai/ContextManager';
 
@@ -35,7 +31,28 @@ describe('ContextManager', () => {
   let manager: ContextManager;
 
   beforeEach(() => {
-    manager = new ContextManager();
+    manager = new ContextManager({
+      taskRepository: mockTaskRepository,
+      pluginRepository: mockPluginRepository,
+    });
+  });
+
+  it('should require task repository injection', () => {
+    expect(
+      () =>
+        new ContextManager({
+          pluginRepository: mockPluginRepository,
+        }),
+    ).toThrowError('taskRepository is required');
+  });
+
+  it('should require plugin repository injection', () => {
+    expect(
+      () =>
+        new ContextManager({
+          taskRepository: mockTaskRepository,
+        }),
+    ).toThrowError('pluginRepository is required');
   });
 
   it('should collect system context', async () => {

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock electron ipcMain
 type MockHandler = (...args: unknown[]) => unknown | Promise<unknown>;
 const handlers = new Map<string, MockHandler>();
+const mockEventBusGetInstance = vi.hoisted(() => vi.fn());
 vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn((channel: string, handler: MockHandler) => {
@@ -13,10 +14,14 @@ vi.mock('electron', () => ({
     }),
   },
 }));
+vi.mock('@main/ipc/EventBus', () => ({
+  EventBus: {
+    getInstance: mockEventBusGetInstance,
+  },
+}));
 
 // Must import after mock
 import { IpcController } from '@main/ipc/IpcController';
-import { EventBus } from '@main/ipc/EventBus';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 
 describe('IpcController', () => {
@@ -24,8 +29,12 @@ describe('IpcController', () => {
 
   beforeEach(() => {
     handlers.clear();
-    (EventBus as unknown as { instance: undefined }).instance = undefined;
+    mockEventBusGetInstance.mockReset();
     controller = new IpcController();
+  });
+
+  it('does not depend on event bus initialization', () => {
+    expect(mockEventBusGetInstance).not.toHaveBeenCalled();
   });
 
   it('should register a handler for a channel', () => {

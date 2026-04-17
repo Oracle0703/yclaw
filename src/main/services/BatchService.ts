@@ -1,7 +1,6 @@
 import { randomUUID } from 'crypto';
-import type { DatabaseService } from './DatabaseService';
 import type { StepResult, TaskBatch, TaskBreakpoint } from '@shared/types';
-import { DatabaseService as DatabaseServiceSingleton } from './DatabaseService';
+import { BatchRepository } from './repositories';
 
 export interface CreateBatchOptions {
   sourceBatchId?: string;
@@ -9,14 +8,24 @@ export interface CreateBatchOptions {
 }
 
 export interface BatchServiceOptions {
-  databaseService?: Pick<DatabaseService, 'run' | 'get' | 'all'>;
+  batchRepository?: Pick<
+    BatchRepository,
+    'insertBatch' | 'startBatch' | 'finishBatch' | 'failBatch' | 'getBatch' | 'listBatchesByTask'
+  >;
 }
 
 export class BatchService {
-  private readonly databaseService: Pick<DatabaseService, 'run' | 'get' | 'all'>;
+  private readonly batchRepository: Pick<
+    BatchRepository,
+    'insertBatch' | 'startBatch' | 'finishBatch' | 'failBatch' | 'getBatch' | 'listBatchesByTask'
+  >;
 
   constructor(options: BatchServiceOptions = {}) {
-    this.databaseService = options.databaseService ?? DatabaseServiceSingleton.getInstance();
+    if (!options.batchRepository) {
+      throw new Error('batchRepository is required');
+    }
+
+    this.batchRepository = options.batchRepository;
   }
 
   createBatch(taskId: string, options: CreateBatchOptions = {}): TaskBatch {
@@ -28,139 +37,28 @@ export class BatchService {
       stepResults: [],
     };
 
-    this.databaseService.run(
-      `INSERT INTO task_batches (
-        id, task_id, status, step_results, error, breakpoint_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        batch.id,
-        batch.taskId,
-        batch.status,
-        JSON.stringify(batch.stepResults),
-        null,
-        options.reason || options.sourceBatchId
-          ? JSON.stringify({
-              reason: options.reason ?? null,
-              sourceBatchId: options.sourceBatchId ?? null,
-            })
-          : null,
-        batch.createdAt,
-      ],
-    );
+    this.batchRepository.insertBatch(batch, options);
 
     return batch;
   }
 
   startBatch(batchId: string): void {
-    this.databaseService.run('UPDATE task_batches SET status = ?, started_at = ? WHERE id = ?', [
-      'running',
-      new Date().toISOString(),
-      batchId,
-    ]);
+    this.batchRepository.startBatch(batchId, new Date().toISOString());
   }
 
   finishBatch(batchId: string, stepResults: StepResult[]): void {
-    this.databaseService.run(
-      'UPDATE task_batches SET status = ?, finished_at = ?, step_results = ? WHERE id = ?',
-      ['success', new Date().toISOString(), JSON.stringify(stepResults), batchId],
-    );
+    this.batchRepository.finishBatch(batchId, stepResults, new Date().toISOString());
   }
 
   failBatch(batchId: string, error: string, breakpoint?: TaskBreakpoint): void {
-    this.databaseService.run(
-      'UPDATE task_batches SET status = ?, finished_at = ?, error = ?, breakpoint_json = ? WHERE id = ?',
-      [
-        'failed',
-        new Date().toISOString(),
-        error,
-        breakpoint ? JSON.stringify(breakpoint) : null,
-        batchId,
-      ],
-    );
+    this.batchRepository.failBatch(batchId, error, breakpoint, new Date().toISOString());
   }
 
   getBatch(batchId: string): TaskBatch | null {
-    const row = this.databaseService.get<{
-      id: string;
-      task_id: string;
-      status: TaskBatch['status'];
-      started_at?: string | null;
-      finished_at?: string | null;
-      step_results: string;
-      error?: string | null;
-      breakpoint_json?: string | null;
-      created_at: string;
-    }>(
-      `SELECT
-        id,
-        task_id,
-        status,
-        started_at,
-        finished_at,
-        step_results,
-        error,
-        breakpoint_json,
-        created_at
-      FROM task_batches
-      WHERE id = ?`,
-      [batchId],
-    );
-
-    if (!row) {
-      return null;
-    }
-
-    return {
-      id: row.id,
-      taskId: row.task_id,
-      status: row.status,
-      startedAt: row.started_at ?? null,
-      finishedAt: row.finished_at ?? null,
-      stepResults: JSON.parse(row.step_results) as StepResult[],
-      error: row.error ?? null,
-      breakpoint: row.breakpoint_json ? (JSON.parse(row.breakpoint_json) as TaskBreakpoint) : null,
-      createdAt: row.created_at,
-    };
+    return this.batchRepository.getBatch(batchId);
   }
 
   listBatchesByTask(taskId: string): TaskBatch[] {
-    const rows = this.databaseService.all<{
-      id: string;
-      task_id: string;
-      status: TaskBatch['status'];
-      started_at?: string | null;
-      finished_at?: string | null;
-      step_results: string;
-      error?: string | null;
-      breakpoint_json?: string | null;
-      created_at: string;
-    }>(
-      `SELECT
-        id,
-        task_id,
-        status,
-        started_at,
-        finished_at,
-        step_results,
-        error,
-        breakpoint_json,
-        created_at
-      FROM task_batches
-      WHERE task_id = ?
-      ORDER BY created_at DESC`,
-      [taskId],
-    );
-
-    return rows.map((row) => ({
-      id: row.id,
-      taskId: row.task_id,
-      status: row.status,
-      startedAt: row.started_at ?? null,
-      finishedAt: row.finished_at ?? null,
-      stepResults: JSON.parse(row.step_results) as StepResult[],
-      error: row.error ?? null,
-      breakpoint: row.breakpoint_json ? (JSON.parse(row.breakpoint_json) as TaskBreakpoint) : null,
-      createdAt: row.created_at,
-    }));
+    return this.batchRepository.listBatchesByTask(taskId);
   }
 }

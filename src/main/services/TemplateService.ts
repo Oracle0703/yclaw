@@ -1,85 +1,52 @@
 import { randomUUID } from 'crypto';
-import type { DatabaseService } from './DatabaseService';
 import type { ExtractionTemplate } from '@shared/types';
-import { DatabaseService as DatabaseServiceSingleton } from './DatabaseService';
+import { TemplateRepository } from './repositories';
 
 export interface TemplateServiceOptions {
-  databaseService?: Pick<DatabaseService, 'run' | 'all' | 'get' | 'transaction'>;
+  templateRepository?: Pick<
+    TemplateRepository,
+    'getTemplateCreatedAt' | 'saveTemplate' | 'listTemplates' | 'deleteTemplate' | 'attachTemplateToTask'
+  >;
 }
 
 export class TemplateService {
-  private readonly databaseService: Pick<DatabaseService, 'run' | 'all' | 'get' | 'transaction'>;
+  private readonly templateRepository: Pick<
+    TemplateRepository,
+    'getTemplateCreatedAt' | 'saveTemplate' | 'listTemplates' | 'deleteTemplate' | 'attachTemplateToTask'
+  >;
 
   constructor(options: TemplateServiceOptions = {}) {
-    this.databaseService = options.databaseService ?? DatabaseServiceSingleton.getInstance();
+    if (!options.templateRepository) {
+      throw new Error('templateRepository is required');
+    }
+
+    this.templateRepository = options.templateRepository;
   }
 
   saveTemplate(
     template: Pick<ExtractionTemplate, 'name' | 'fields'> & Partial<Pick<ExtractionTemplate, 'id'>>,
   ): ExtractionTemplate {
     const now = new Date().toISOString();
-    const existing = template.id
-      ? this.databaseService.get<{ created_at: string }>(
-          'SELECT created_at FROM extraction_templates WHERE id = ?',
-          [template.id],
-        )
-      : undefined;
     const record: ExtractionTemplate = {
       id: template.id ?? randomUUID(),
       name: template.name,
       fields: template.fields,
-      createdAt: existing?.created_at ?? now,
+      createdAt: template.id ? (this.templateRepository.getTemplateCreatedAt(template.id) ?? now) : now,
       updatedAt: now,
     };
 
-    this.databaseService.run(
-      `INSERT INTO extraction_templates (id, name, fields, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET
-         name = excluded.name,
-         fields = excluded.fields,
-         updated_at = excluded.updated_at`,
-      [record.id, record.name, JSON.stringify(record.fields), record.createdAt, record.updatedAt],
-    );
-
-    return record;
+    return this.templateRepository.saveTemplate(record);
   }
 
   listTemplates(): ExtractionTemplate[] {
-    const rows = this.databaseService.all<{
-      id: string;
-      name: string;
-      fields: string;
-      created_at: string;
-      updated_at: string;
-    }>(
-      `SELECT id, name, fields, created_at, updated_at
-       FROM extraction_templates
-       ORDER BY updated_at DESC`,
-    );
-
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      fields: JSON.parse(row.fields) as ExtractionTemplate['fields'],
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    return this.templateRepository.listTemplates();
   }
 
   deleteTemplate(templateId: string): void {
-    this.databaseService.transaction(() => {
-      this.databaseService.run('UPDATE tasks SET template_id = NULL WHERE template_id = ?', [
-        templateId,
-      ]);
-      this.databaseService.run('DELETE FROM extraction_templates WHERE id = ?', [templateId]);
-    });
+    this.templateRepository.deleteTemplate(templateId);
   }
 
   attachTemplateToTask(taskId: string, templateId: string): void {
-    this.databaseService.run(
-      "UPDATE tasks SET template_id = ?, updated_at = datetime('now') WHERE id = ?",
-      [templateId, taskId],
-    );
+    this.templateRepository.attachTemplateToTask(taskId, templateId);
   }
 }

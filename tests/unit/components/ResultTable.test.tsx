@@ -20,6 +20,9 @@ vi.mock('antd', () => ({
   Typography: {
     Paragraph: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   },
+  message: {
+    error: vi.fn(),
+  },
   Table: ({
     dataSource = [],
     columns = [],
@@ -101,6 +104,46 @@ describe('ResultTable', () => {
     });
   });
 
+  it('shows an error message when export fails', async () => {
+    const { message } = await import('antd');
+
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.RESULT_LIST) {
+        return {
+          success: true,
+          data: [
+            {
+              id: 'result-1',
+              taskId: 'task-1',
+              batchId: 'batch-1',
+              data: { price: 123 },
+              status: 'normal',
+              createdAt: '2026-04-15T10:00:00.000Z',
+            },
+          ],
+        };
+      }
+
+      if (channel === IPC_CHANNELS.RESULT_EXPORT) {
+        return Promise.reject(new Error('export failed')) as never;
+      }
+
+      return {
+        success: true,
+        data: { path: 'C:\\temp\\results.csv' },
+      };
+    });
+
+    render(<ResultTable taskId="task-1" batchId="batch-1" />);
+
+    await screen.findByText('result-1');
+    fireEvent.click(screen.getByRole('button', { name: /导出 CSV/ }));
+
+    await waitFor(() => {
+      expect(message.error).toHaveBeenCalledWith('export failed');
+    });
+  });
+
   it('ignores stale result responses after task changes', async () => {
     let resolveTask1: (value: unknown) => void = () => {};
     let resolveTask2: (value: unknown) => void = () => {};
@@ -160,5 +203,25 @@ describe('ResultTable', () => {
 
     expect(screen.queryByText('result-task-1')).toBeNull();
     expect(screen.getByText('result-task-2')).toBeDefined();
+  });
+
+  it('handles result loading failures without unhandled rejection', async () => {
+    const { message } = await import('antd');
+
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel) => {
+      if (channel === IPC_CHANNELS.RESULT_LIST) {
+        return Promise.reject(new Error('load results failed')) as never;
+      }
+
+      return { success: true, data: { path: 'C:\\temp\\results.csv' } };
+    });
+
+    render(<ResultTable taskId="task-1" batchId="batch-1" />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(message.error).toHaveBeenCalledWith('load results failed');
   });
 });

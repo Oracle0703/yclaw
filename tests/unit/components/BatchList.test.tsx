@@ -45,6 +45,9 @@ vi.mock('antd', () => {
     Typography: {
       Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
     },
+    message: {
+      error: vi.fn(),
+    },
   };
 });
 
@@ -149,5 +152,21 @@ describe('BatchList', () => {
 
     expect(screen.queryByText('batch-task-1')).toBeNull();
     expect(screen.getByText('batch-task-2')).toBeDefined();
+  });
+
+  it('handles batch loading failures without unhandled rejection', async () => {
+    const { message } = await import('antd');
+
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async () => {
+      return Promise.reject(new Error('load batches failed')) as never;
+    });
+
+    render(<BatchList taskId="task-1" onSelectBatch={vi.fn()} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(message.error).toHaveBeenCalledWith('load batches failed');
   });
 });

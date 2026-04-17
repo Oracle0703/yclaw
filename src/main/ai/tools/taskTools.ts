@@ -3,33 +3,36 @@
  */
 
 import type { AITool } from '../types';
+import type { TaskRepository } from '../../services/repositories';
 
-export const taskListTool: AITool = {
-  name: 'task_list',
-  description: '列出所有自动化任务及其状态',
-  parameters: {},
-  confirmationLevel: 0,
-  async execute() {
-    try {
-      const { DatabaseService } = await import('../../services/DatabaseService');
-      const db = DatabaseService.getInstance();
-      const tasks = db.getTasks();
-      const summary = {
-        total: tasks.length,
-        success: tasks.filter((t) => t.status === 'completed' || t.status === 'idle').length,
-        failed: tasks.filter((t) => t.status === 'failed').length,
-        running: tasks.filter((t) => t.status === 'running').length,
-        partial: tasks.filter((t) => t.status === 'partial').length,
-      };
-      return {
-        success: true,
-        data: { tasks, summary },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch tasks',
-      };
-    }
-  },
-};
+export function createTaskListTool(
+  taskRepository: Pick<TaskRepository, 'getTasks'>,
+): AITool {
+  return {
+    name: 'task_list',
+    description: '列出所有自动化任务及其状态',
+    parameters: {},
+    confirmationLevel: 0,
+    async execute() {
+      try {
+        const tasks = taskRepository.getTasks();
+        const summary = {
+          total: tasks.length,
+          success: tasks.filter((t) => t.status === 'completed' || t.status === 'idle').length,
+          failed: tasks.filter((t) => t.status === 'failed').length,
+          running: tasks.filter((t) => t.status === 'running').length,
+          partial: tasks.filter((t) => t.status === 'partial').length,
+        };
+        return {
+          success: true,
+          data: { tasks, summary },
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch tasks',
+        };
+      }
+    },
+  };
+}

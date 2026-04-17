@@ -6,6 +6,7 @@ import type { Tab } from '@shared/types/browser';
 export type TabInfo = Tab;
 
 export interface TabManagerOptions {
+  eventBus?: Pick<EventBus, 'emit'>;
   /** 隔离会话名（默认 default） */
   sessionPartition?: string;
   /** 最大标签页数 */
@@ -26,7 +27,11 @@ export class TabManager {
   private readonly maxTabs: number;
 
   constructor(options: TabManagerOptions = {}) {
-    this.eventBus = EventBus.getInstance();
+    if (!options.eventBus) {
+      throw new Error('eventBus is required');
+    }
+
+    this.eventBus = options.eventBus as EventBus;
     this.maxTabs = options.maxTabs ?? 20;
     this.sessionPartition = options.sessionPartition
       ? `persist:${options.sessionPartition}`

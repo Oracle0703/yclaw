@@ -28,6 +28,10 @@ export function getPluginsPath(): string {
   return path.join(getUserDataPath(), 'plugins');
 }
 
+export function getFeaturePackagesPath(): string {
+  return path.join(getUserDataPath(), 'features');
+}
+
 export function getRendererUrl(entry: string): string {
   if (process.env.NODE_ENV === 'development') {
     const devServerUrl = (process.env.ELECTRON_RENDERER_URL ?? 'http://localhost:5173').replace(/\/$/, '');

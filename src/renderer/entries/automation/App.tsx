@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Input, Space, Tag } from 'antd';
+import { Button, Input, Space, Tag, message } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
 import { EVENTS, IPC_CHANNELS } from '@shared/constants';
@@ -80,7 +80,7 @@ export default function App() {
       setTaskName(saved.name);
       setSteps(saved.steps);
     } catch (err) {
-      console.error('保存任务失败', err);
+      message.error(err instanceof Error ? err.message : '保存任务失败');
     }
   };
 

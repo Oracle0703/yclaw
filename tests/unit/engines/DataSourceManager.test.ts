@@ -1,19 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Must use vi.hoisted for variables referenced in vi.mock factories
-const { mockEmit } = vi.hoisted(() => ({ mockEmit: vi.fn() }));
-
-// Mock EventBus
-vi.mock('@main/ipc/EventBus', () => ({
-  EventBus: {
-    getInstance: vi.fn().mockReturnValue({
-      emit: mockEmit,
-      on: vi.fn(),
-      off: vi.fn(),
-    }),
-  },
-}));
-
 // Mock global fetch
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
@@ -52,9 +38,13 @@ class MockWebSocket {
 
 import { DataSourceManager } from '@engines/analytics/DataSourceManager';
 import type { DataSourceConfig } from '@shared/types';
+import { EVENTS } from '@shared/constants';
 
 describe('DataSourceManager', () => {
   let manager: DataSourceManager;
+  const mockEventBus = {
+    emit: vi.fn(),
+  };
 
   const restConfig: DataSourceConfig = {
     id: 'rest-1',
@@ -73,7 +63,7 @@ describe('DataSourceManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     MockWebSocket.instances = [];
-    manager = new DataSourceManager();
+    manager = new DataSourceManager({ eventBus: mockEventBus });
   });
 
   afterEach(() => {
@@ -81,6 +71,10 @@ describe('DataSourceManager', () => {
   });
 
   describe('fetchHistory', () => {
+    it('requires event bus injection', () => {
+      expect(() => new DataSourceManager()).toThrowError('eventBus is required');
+    });
+
     it('should fetch and normalize OHLCV data', async () => {
       const mockData = [
         { time: 1000, open: 10, high: 15, low: 8, close: 12, volume: 100 },
@@ -165,6 +159,16 @@ describe('DataSourceManager', () => {
       const conn = manager.getConnection('ws-1');
       expect(conn).toBeDefined();
       expect(conn!.type).toBe('websocket');
+    });
+
+    it('emits realtime ticks through injected event bus', () => {
+      manager.connectRealtime(wsConfig, ['AAPL']);
+      MockWebSocket.instances[0].simulateMessage({ symbol: 'AAPL', price: 200 });
+
+      expect(mockEventBus.emit).toHaveBeenCalledWith(EVENTS.STOCK_REALTIME_TICK, {
+        sourceId: 'ws-1',
+        data: { symbol: 'AAPL', price: 200 },
+      });
     });
   });
 

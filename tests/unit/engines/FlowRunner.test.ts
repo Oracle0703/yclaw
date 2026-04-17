@@ -1,23 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Must use vi.hoisted for variables referenced in vi.mock factories
-const { mockEmit } = vi.hoisted(() => ({ mockEmit: vi.fn() }));
-
-// Mock EventBus
-vi.mock('@main/ipc/EventBus', () => ({
-  EventBus: {
-    getInstance: vi.fn().mockReturnValue({
-      emit: mockEmit,
-      on: vi.fn(),
-      off: vi.fn(),
-    }),
-  },
-}));
-
 import { FlowRunner } from '@engines/automation/FlowRunner';
 import type { TaskFlow, TaskStep } from '@shared/types';
 import { EVENTS } from '@shared/constants';
 import { ExecutionLogService } from '@main/services/ExecutionLogService';
+import type { AutomationEngine } from '@engines/automation/AutomationEngine';
 
 interface MockWebContents {
   executeJavaScript: ReturnType<typeof vi.fn>;
@@ -52,11 +39,23 @@ describe('FlowRunner', () => {
   let runner: FlowRunner;
   let wc: ReturnType<typeof createMockWebContents>;
   let appendLog: ReturnType<typeof vi.fn>;
+  let mockEngine: Pick<AutomationEngine, 'execute'>;
+  const mockEventBus = {
+    emit: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     appendLog = vi.fn();
+    mockEngine = {
+      execute: vi.fn().mockResolvedValue({
+        success: true,
+        data: undefined,
+      }),
+    };
     runner = new FlowRunner({
+      engine: mockEngine,
+      eventBus: mockEventBus,
       defaultRetryCount: 0,
       defaultRetryDelay: 10,
       executionLogService: {
@@ -64,6 +63,14 @@ describe('FlowRunner', () => {
       } as unknown as ExecutionLogService,
     });
     wc = createMockWebContents();
+  });
+
+  it('requires event bus injection', () => {
+    expect(() => new FlowRunner({ engine: mockEngine })).toThrowError('eventBus is required');
+  });
+
+  it('requires automation engine injection', () => {
+    expect(() => new FlowRunner({ eventBus: mockEventBus })).toThrowError('engine is required');
   });
 
   describe('run', () => {
@@ -78,13 +85,13 @@ describe('FlowRunner', () => {
     it('should emit task started event', async () => {
       const flow = createFlow([{}]);
       await runner.run(flow, wc);
-      expect(mockEmit).toHaveBeenCalledWith(EVENTS.TASK_STARTED, { flowId: 'flow-1' });
+      expect(mockEventBus.emit).toHaveBeenCalledWith(EVENTS.TASK_STARTED, { flowId: 'flow-1' });
     });
 
     it('should emit step completed events', async () => {
       const flow = createFlow([{}, {}]);
       await runner.run(flow, wc);
-      const stepCompletedCalls = mockEmit.mock.calls.filter(
+      const stepCompletedCalls = mockEventBus.emit.mock.calls.filter(
         ([event]: [string]) => event === EVENTS.TASK_STEP_COMPLETED,
       );
       expect(stepCompletedCalls).toHaveLength(2);
@@ -93,11 +100,14 @@ describe('FlowRunner', () => {
     it('should emit task completed event on success', async () => {
       const flow = createFlow([{}]);
       await runner.run(flow, wc);
-      expect(mockEmit).toHaveBeenCalledWith(EVENTS.TASK_COMPLETED, { flowId: 'flow-1' });
+      expect(mockEventBus.emit).toHaveBeenCalledWith(EVENTS.TASK_COMPLETED, { flowId: 'flow-1' });
     });
 
     it('should handle step failure and save breakpoint', async () => {
-      wc.executeJavaScript.mockRejectedValueOnce(new Error('Element not found'));
+      vi.mocked(mockEngine.execute).mockResolvedValueOnce({
+        success: false,
+        error: 'Element not found',
+      });
       const flow = createFlow([{}]);
       const result = await runner.run(flow, wc);
       expect(result.success).toBe(false);
@@ -107,17 +117,17 @@ describe('FlowRunner', () => {
     });
 
     it('should emit task failed event on failure', async () => {
-      wc.executeJavaScript.mockRejectedValueOnce(new Error('fail'));
+      vi.mocked(mockEngine.execute).mockResolvedValueOnce({ success: false, error: 'fail' });
       const flow = createFlow([{}]);
       await runner.run(flow, wc);
-      expect(mockEmit).toHaveBeenCalledWith(
+      expect(mockEventBus.emit).toHaveBeenCalledWith(
         EVENTS.TASK_FAILED,
         expect.objectContaining({ flowId: 'flow-1', error: expect.stringContaining('fail') }),
       );
     });
 
     it('writes structured logs for step start and failure', async () => {
-      wc.executeJavaScript.mockRejectedValueOnce(new Error('fail'));
+      vi.mocked(mockEngine.execute).mockResolvedValueOnce({ success: false, error: 'fail' });
       const flow = createFlow([{}]);
 
       await runner.run(flow, wc);
@@ -176,13 +186,13 @@ describe('FlowRunner', () => {
     it('should abort execution mid-flow', async () => {
       // First step succeeds, then we abort before second step executes
       let callCount = 0;
-      wc.executeJavaScript.mockImplementation(async () => {
+      vi.mocked(mockEngine.execute).mockImplementation(async () => {
         callCount++;
         if (callCount === 1) {
           // After first step completes, trigger abort
           runner.abort();
         }
-        return undefined;
+        return { success: true };
       });
       const flow = createFlow([{}, {}, {}]);
       const result = await runner.run(flow, wc);
@@ -194,16 +204,16 @@ describe('FlowRunner', () => {
   describe('resume', () => {
     it('should resume from breakpoint', async () => {
       // First run: fail at step 1
-      wc.executeJavaScript
-        .mockResolvedValueOnce(undefined)  // step 0 success
-        .mockRejectedValueOnce(new Error('fail'));  // step 1 fails
+      vi.mocked(mockEngine.execute)
+        .mockResolvedValueOnce({ success: true })
+        .mockResolvedValueOnce({ success: false, error: 'fail' });
       const flow = createFlow([{}, {}, {}]);
       const result1 = await runner.run(flow, wc);
       expect(result1.success).toBe(false);
       expect(runner.getBreakpoint()?.stepIndex).toBe(1);
 
       // Reset mock to succeed
-      wc.executeJavaScript.mockResolvedValue(undefined);
+      vi.mocked(mockEngine.execute).mockResolvedValue({ success: true });
       const result2 = await runner.resume(flow, wc);
       // Should resume from step 1
       expect(result2.success).toBe(true);
@@ -220,7 +230,7 @@ describe('FlowRunner', () => {
     });
 
     it('should be failed after step failure', async () => {
-      wc.executeJavaScript.mockRejectedValueOnce(new Error('fail'));
+      vi.mocked(mockEngine.execute).mockResolvedValueOnce({ success: false, error: 'fail' });
       const flow = createFlow([{}]);
       await runner.run(flow, wc);
       expect(runner.getStatus()).toBe('failed');

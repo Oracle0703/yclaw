@@ -31,6 +31,23 @@ vi.mock('antd', () => {
         {children}
       </button>
     ),
+    Card: ({
+      children,
+      title,
+      extra,
+    }: {
+      children?: React.ReactNode;
+      title?: React.ReactNode;
+      extra?: React.ReactNode;
+    }) => (
+      <section className="yclaw-panel-card">
+        <header>
+          <div>{title}</div>
+          <div>{extra}</div>
+        </header>
+        {children}
+      </section>
+    ),
     List: MockList,
     Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,

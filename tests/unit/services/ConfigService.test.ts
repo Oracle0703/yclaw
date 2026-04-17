@@ -9,30 +9,20 @@ vi.mock('@main/utils/paths', () => ({
   getConfigPath: () => testDir,
 }));
 
-// Mock EventBus
-vi.mock('@main/ipc/EventBus', () => {
-  const emitFn = vi.fn();
-  return {
-    EventBus: {
-      getInstance: () => ({
-        emit: emitFn,
-        on: vi.fn(),
-        off: vi.fn(),
-      }),
-      _emit: emitFn,
-    },
-  };
-});
-
 import { ConfigService } from '@main/services/ConfigService';
-import { EventBus } from '@main/ipc/EventBus';
 
 describe('ConfigService', () => {
   let service: ConfigService;
+  const mockEventBus = {
+    emit: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+  };
 
   beforeEach(() => {
+    vi.clearAllMocks();
     fs.mkdirSync(testDir, { recursive: true });
-    service = new ConfigService();
+    service = new ConfigService({ eventBus: mockEventBus as never });
   });
 
   afterEach(() => {
@@ -97,14 +87,13 @@ describe('ConfigService', () => {
   });
 
   it('should emit CONFIG_CHANGED event on set', () => {
-    const bus = EventBus.getInstance();
     service.set('general', {
       theme: 'light',
       language: 'zh-CN',
       startupBehavior: 'showWorkbench',
       closeToTray: false,
     });
-    expect(bus.emit).toHaveBeenCalled();
+    expect(mockEventBus.emit).toHaveBeenCalled();
   });
 
   it('should partially update general config', () => {
@@ -157,7 +146,11 @@ describe('ConfigService', () => {
   it('should survive corrupt config file', () => {
     const filePath = path.join(testDir, 'settings.json');
     fs.writeFileSync(filePath, 'corrupt{{{', 'utf-8');
-    const newService = new ConfigService();
+    const newService = new ConfigService({ eventBus: mockEventBus as never });
     expect(newService.getAll().general.theme).toBe('system');
+  });
+
+  it('should require event bus injection', () => {
+    expect(() => new ConfigService()).toThrowError('eventBus is required');
   });
 });

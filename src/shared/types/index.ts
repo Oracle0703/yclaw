@@ -22,6 +22,14 @@ export type { OHLCVData, DataSourceConfig, IndicatorParams, IndicatorResult } fr
 export type { IndicatorType } from './stock';
 export type { AppConfig, GeneralConfig, ModuleConfig, PluginConfig } from './config';
 export type {
+  FeaturePackageFile,
+  FeaturePackageManifestEntry,
+  FeaturePackageManifestDocument,
+  FeaturePackageInstallState,
+  FeaturePackageCatalogItem,
+  FeaturePackageInstallResult,
+} from './features';
+export type {
   ChatMessage,
   Conversation,
   AIConfig,

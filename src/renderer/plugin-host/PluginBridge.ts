@@ -20,6 +20,20 @@ export interface PluginAPI {
 
 // 初始化桥接
 function initPluginBridge(): void {
+  const writePluginLog = (level: 'info' | 'warn' | 'error', message: string) => {
+    void window.electronAPI
+      .invoke('log:write', {
+        level,
+        source: 'plugin',
+        message,
+      })
+      .catch((error: unknown) => {
+        if (import.meta.env.DEV) {
+          console.error('[PluginBridge] Failed to write log', error);
+        }
+      });
+  };
+
   const api: PluginAPI = {
     getManifest: async () => {
       return window.electronAPI.invoke('plugin:manifest');
@@ -34,9 +48,9 @@ function initPluginBridge(): void {
       },
     },
     log: {
-      info: (message: string) => console.log(`[Plugin] ${message}`),
-      warn: (message: string) => console.warn(`[Plugin] ${message}`),
-      error: (message: string) => console.error(`[Plugin] ${message}`),
+      info: (message: string) => writePluginLog('info', message),
+      warn: (message: string) => writePluginLog('warn', message),
+      error: (message: string) => writePluginLog('error', message),
     },
   };
 

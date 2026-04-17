@@ -19,7 +19,9 @@ interface WindowConfig {
 }
 
 interface WindowManagerOptions {
+  eventBus?: Pick<EventBus, 'emit'>;
   shouldCloseToTray?: () => boolean;
+  resolveRendererUrl?: (module: string) => string;
 }
 
 /**
@@ -32,11 +34,17 @@ export class WindowManager {
   private eventBus: EventBus;
   private readonly maxWindows = 10;
   private readonly shouldCloseToTray: () => boolean;
+  private readonly resolveRendererUrl?: (module: string) => string;
   private allowWindowClose = false;
 
   constructor(options: WindowManagerOptions = {}) {
-    this.eventBus = EventBus.getInstance();
+    if (!options.eventBus) {
+      throw new Error('eventBus is required');
+    }
+
+    this.eventBus = options.eventBus as EventBus;
     this.shouldCloseToTray = options.shouldCloseToTray ?? (() => false);
+    this.resolveRendererUrl = options.resolveRendererUrl;
   }
 
   private getPreloadPath(): string {
@@ -135,7 +143,7 @@ export class WindowManager {
     });
 
     // 加载入口 URL
-    const url = getRendererUrl(module);
+    const url = this.resolveRendererUrl?.(module) ?? getRendererUrl(module);
     win.loadURL(url);
 
     // 等待首次渲染完成后再显示，消除白屏闪烁
@@ -282,14 +290,6 @@ export class WindowManager {
         });
       },
     );
-
-    win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-      console.log('[renderer]', { module, level, message, line, sourceId });
-    });
-
-    win.webContents.on('did-finish-load', () => {
-      console.log('[window] did-finish-load', { module, url: win.webContents.getURL() });
-    });
 
     win.webContents.on('render-process-gone', (_event, details) => {
       console.error('[window] render-process-gone', { module, details });

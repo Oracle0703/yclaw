@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Space, Table, Typography } from 'antd';
+import { Button, Space, Table, Typography, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import type { ExtractionResult } from '@shared/types';
 import { useIpc } from '../../../shared/hooks';
@@ -23,11 +23,18 @@ export function ResultTable({ taskId, batchId }: ResultTableProps) {
       };
     }
 
-    void automation.listResults(taskId, batchId ?? undefined).then((data) => {
-      if (isCurrent) {
-        setResults((data as ExtractionResult[]) ?? []);
-      }
-    });
+    void automation.listResults(taskId, batchId ?? undefined)
+      .then((data) => {
+        if (isCurrent) {
+          setResults((data as ExtractionResult[]) ?? []);
+        }
+      })
+      .catch((error) => {
+        if (isCurrent) {
+          setResults([]);
+          message.error(error instanceof Error ? error.message : '加载结果失败');
+        }
+      });
 
     return () => {
       isCurrent = false;
@@ -43,9 +50,15 @@ export function ResultTable({ taskId, batchId }: ResultTableProps) {
           <Button
             size="small"
             disabled={!taskId}
-            onClick={() =>
-              taskId && void automation.exportResults(taskId, batchId ?? undefined, 'csv')
-            }
+            onClick={() => {
+              if (!taskId) {
+                return;
+              }
+
+              void automation.exportResults(taskId, batchId ?? undefined, 'csv').catch((error) => {
+                message.error(error instanceof Error ? error.message : '导出结果失败');
+              });
+            }}
           >
             导出 CSV
           </Button>

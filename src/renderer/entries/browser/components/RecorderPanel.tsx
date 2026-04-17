@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Button, List, Space, Tag, Typography, message } from 'antd';
-import { ProCard } from '@ant-design/pro-components';
+import { Button, Card, List, Space, Tag, Typography, message } from 'antd';
 import { IPC_CHANNELS } from '@shared/constants';
 import { useIpc } from '../../../shared/hooks';
 import type { TaskStep } from '@shared/types';
@@ -51,11 +50,7 @@ export function RecorderPanel({ tabId, onRecorded }: RecorderPanelProps) {
   };
 
   return (
-    <ProCard
-      className="yclaw-panel-card"
-      title="录制器"
-      extra={<Tag color={recording ? 'processing' : 'default'}>{recording ? '录制中' : '待机'}</Tag>}
-    >
+    <Card className="yclaw-panel-card" title="录制器" extra={<Tag color={recording ? 'processing' : 'default'}>{recording ? '录制中' : '待机'}</Tag>}>
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <Space wrap>
           <Button
@@ -89,6 +84,6 @@ export function RecorderPanel({ tabId, onRecorded }: RecorderPanelProps) {
           )}
         />
       </Space>
-    </ProCard>
+    </Card>
   );
 }

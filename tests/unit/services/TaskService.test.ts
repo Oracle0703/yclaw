@@ -2,17 +2,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TaskFlow } from '@shared/types';
 import type { TaskBatch } from '@shared/types';
 
-const mockDb = {
+const mockTaskRepository = {
   getTasks: vi.fn(),
   getTaskFlow: vi.fn(),
   saveTaskFlow: vi.fn(),
   updateTaskStatus: vi.fn(),
+  createTask: vi.fn(),
+  updateTask: vi.fn(),
+  deleteTask: vi.fn(),
 };
 
 const mockBatchService = {
   createBatch: vi.fn(),
   getBatch: vi.fn(),
   listBatchesByTask: vi.fn(),
+};
+
+const mockEventBus = {
+  emit: vi.fn(),
 };
 
 const mockRunner = {
@@ -24,12 +31,6 @@ const mockRunner = {
   getBreakpoint: vi.fn(),
   resume: vi.fn(),
 };
-
-vi.mock('@main/services/DatabaseService', () => ({
-  DatabaseService: {
-    getInstance: vi.fn(() => mockDb),
-  },
-}));
 
 import { TaskService } from '@main/services/TaskService';
 
@@ -56,7 +57,7 @@ describe('TaskService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDb.getTasks.mockReturnValue([
+    mockTaskRepository.getTasks.mockReturnValue([
       {
         id: 'task-1',
         name: '采集任务',
@@ -64,7 +65,7 @@ describe('TaskService', () => {
         updatedAt: '2026-04-15 10:00:00',
       },
     ]);
-    mockDb.getTaskFlow.mockReturnValue(sampleFlow);
+    mockTaskRepository.getTaskFlow.mockReturnValue(sampleFlow);
     mockRunner.getStatus.mockReturnValue('running');
     mockBatchService.createBatch.mockReturnValue({
       id: 'batch-created',
@@ -74,9 +75,44 @@ describe('TaskService', () => {
       stepResults: [],
     } satisfies TaskBatch);
     service = new TaskService({
+      taskRepository: mockTaskRepository as never,
       createRunner: () => mockRunner as never,
+      eventBus: mockEventBus as never,
       batchService: mockBatchService as never,
     });
+  });
+
+  it('requires task repository injection', () => {
+    expect(() => new TaskService({ batchService: mockBatchService as never })).toThrowError(
+      'taskRepository is required',
+    );
+  });
+
+  it('requires batch service injection', () => {
+    expect(() => new TaskService({ taskRepository: mockTaskRepository as never })).toThrowError(
+      'batchService is required',
+    );
+  });
+
+  it('requires event bus injection', () => {
+    expect(
+      () =>
+        new TaskService({
+          taskRepository: mockTaskRepository as never,
+          batchService: mockBatchService as never,
+        }),
+    ).toThrowError('eventBus is required');
+  });
+
+  it('requires runner factory injection', () => {
+    expect(
+      () =>
+        new TaskService({
+          taskRepository: mockTaskRepository as never,
+          eventBus: mockEventBus as never,
+          batchService: mockBatchService as never,
+        }),
+    ).toThrowError('createRunner is required');
   });
 
   it('lists persisted tasks from database', () => {
@@ -92,7 +128,7 @@ describe('TaskService', () => {
 
   it('returns persisted task flow details by id', () => {
     expect(service.getTaskFlow('task-1')).toEqual(sampleFlow);
-    expect(mockDb.getTaskFlow).toHaveBeenCalledWith('task-1');
+    expect(mockTaskRepository.getTaskFlow).toHaveBeenCalledWith('task-1');
   });
 
   it('saves updated task steps back to persistence', () => {
@@ -110,7 +146,7 @@ describe('TaskService', () => {
 
     const result = service.saveTaskSteps('task-1', nextSteps);
 
-    expect(mockDb.saveTaskFlow).toHaveBeenCalledWith(
+    expect(mockTaskRepository.saveTaskFlow).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'task-1',
         name: '采集任务',
@@ -137,7 +173,7 @@ describe('TaskService', () => {
 
     service.saveTaskSteps('task-1', nextSteps);
 
-    expect(mockDb.saveTaskFlow).toHaveBeenCalledWith(
+    expect(mockTaskRepository.saveTaskFlow).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'task-1',
         name: '采集任务',
@@ -163,7 +199,7 @@ describe('TaskService', () => {
       steps: nextSteps,
     });
 
-    expect(mockDb.saveTaskFlow).toHaveBeenCalledWith(
+    expect(mockTaskRepository.saveTaskFlow).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'task-1',
         name: '价格采集任务',
@@ -194,7 +230,7 @@ describe('TaskService', () => {
       ],
     });
 
-    expect(mockDb.saveTaskFlow).toHaveBeenCalledWith(
+    expect(mockTaskRepository.saveTaskFlow).toHaveBeenCalledWith(
       expect.objectContaining({
         id: expect.any(String),
         name: '未命名任务',
@@ -217,7 +253,7 @@ describe('TaskService', () => {
 
     const result = service.saveTaskSteps(null, newSteps);
 
-    expect(mockDb.saveTaskFlow).toHaveBeenCalledWith(
+    expect(mockTaskRepository.saveTaskFlow).toHaveBeenCalledWith(
       expect.objectContaining({
         id: expect.any(String),
         name: '未命名任务',
@@ -238,7 +274,7 @@ describe('TaskService', () => {
 
     const result = await service.startTask('task-1', webContents);
 
-    expect(mockDb.getTaskFlow).toHaveBeenCalledWith('task-1');
+    expect(mockTaskRepository.getTaskFlow).toHaveBeenCalledWith('task-1');
     expect(mockRunner.run).toHaveBeenCalledWith(sampleFlow, webContents, 0);
     expect(result).toEqual({ taskId: 'task-1', status: 'running' });
   });
@@ -272,7 +308,7 @@ describe('TaskService', () => {
   });
 
   it('stores schedule and batch metadata on task records', () => {
-    mockDb.getTasks.mockReturnValueOnce([
+    mockTaskRepository.getTasks.mockReturnValueOnce([
       {
         id: 'task-1',
         name: '采集任务',

@@ -4,14 +4,29 @@
 
 import type { AIServiceContext } from '@shared/types';
 import os from 'os';
-import { DatabaseService } from '../services/DatabaseService';
+import type { PluginRepository, TaskRepository } from '../services/repositories';
+
+export interface ContextManagerOptions {
+  taskRepository?: Pick<TaskRepository, 'getTasks'>;
+  pluginRepository?: Pick<PluginRepository, 'getInstalledPlugins'>;
+}
 
 export class ContextManager {
   private currentModule = 'workbench';
-  private databaseService: Pick<DatabaseService, 'getTasks' | 'getInstalledPlugins'>;
+  private taskRepository: Pick<TaskRepository, 'getTasks'>;
+  private pluginRepository: Pick<PluginRepository, 'getInstalledPlugins'>;
 
-  constructor(databaseService?: Pick<DatabaseService, 'getTasks' | 'getInstalledPlugins'>) {
-    this.databaseService = databaseService ?? DatabaseService.getInstance();
+  constructor(options: ContextManagerOptions = {}) {
+    if (!options.taskRepository) {
+      throw new Error('taskRepository is required');
+    }
+
+    if (!options.pluginRepository) {
+      throw new Error('pluginRepository is required');
+    }
+
+    this.taskRepository = options.taskRepository;
+    this.pluginRepository = options.pluginRepository;
   }
 
   setCurrentModule(module: string): void {
@@ -22,7 +37,7 @@ export class ContextManager {
     const cpus = os.cpus();
     const totalMemory = os.totalmem();
     const freeMemory = os.freemem();
-    const recentTasks = this.databaseService
+    const recentTasks = this.taskRepository
       .getTasks()
       .slice(0, 5)
       .map((task) => ({
@@ -30,7 +45,7 @@ export class ContextManager {
         status: task.status,
         updatedAt: task.updatedAt,
       }));
-    const installedPlugins = this.databaseService.getInstalledPlugins().slice(0, 5);
+    const installedPlugins = this.pluginRepository.getInstalledPlugins().slice(0, 5);
 
     return {
       currentModule: this.currentModule,

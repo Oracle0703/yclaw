@@ -38,9 +38,17 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [indicatorWarning, setIndicatorWarning] = useState<string | null>(null);
   const activeIndicatorsRef = useRef<IndicatorType[]>(activeIndicators);
+  const dataRequestSeqRef = useRef(0);
+  const indicatorRequestSeqRef = useRef(0);
 
   const calculateIndicators = useCallback(
-    async (series: OHLCVData[], nextIndicators: IndicatorType[]) => {
+    async (
+      series: OHLCVData[],
+      nextIndicators: IndicatorType[],
+      dataRequestSeq?: number,
+    ) => {
+      const indicatorRequestSeq = indicatorRequestSeqRef.current + 1;
+      indicatorRequestSeqRef.current = indicatorRequestSeq;
       const settled = await Promise.allSettled(
         nextIndicators.map((type) =>
           invoke<IndicatorResult>(IPC_CHANNELS.STOCK_INDICATOR_CALC, {
@@ -60,6 +68,14 @@ export default function App() {
         failedTypes.push(nextIndicators[index]);
       });
 
+      if (indicatorRequestSeqRef.current !== indicatorRequestSeq) {
+        return;
+      }
+
+      if (dataRequestSeq !== undefined && dataRequestSeqRef.current !== dataRequestSeq) {
+        return;
+      }
+
       setIndicators(results);
       setIndicatorWarning(
         failedTypes.length > 0
@@ -75,19 +91,28 @@ export default function App() {
   }, [activeIndicators]);
 
   const fetchData = useCallback(async () => {
+    const dataRequestSeq = dataRequestSeqRef.current + 1;
+    dataRequestSeqRef.current = dataRequestSeq;
     setLoading(true);
     setError(null);
     try {
       const result = await invoke<OHLCVData[]>(IPC_CHANNELS.STOCK_DATA, { symbol, timeframe });
+      if (dataRequestSeqRef.current !== dataRequestSeq) {
+        return;
+      }
       setDataMode('demo');
       setData(result ?? []);
-      await calculateIndicators(result ?? [], activeIndicatorsRef.current);
+      await calculateIndicators(result ?? [], activeIndicatorsRef.current, dataRequestSeq);
     } catch (fetchError) {
-      setData([]);
-      setIndicators([]);
-      setError(fetchError instanceof Error ? fetchError.message : '获取股票数据失败');
+      if (dataRequestSeqRef.current === dataRequestSeq) {
+        setData([]);
+        setIndicators([]);
+        setError(fetchError instanceof Error ? fetchError.message : '获取股票数据失败');
+      }
     } finally {
-      setLoading(false);
+      if (dataRequestSeqRef.current === dataRequestSeq) {
+        setLoading(false);
+      }
     }
   }, [calculateIndicators, invoke, symbol, timeframe]);
 
@@ -98,9 +123,13 @@ export default function App() {
   useIpcEvent(EVENTS.STOCK_DATA_UPDATE, (payload: unknown) => {
     const p = payload as { data: OHLCVData[]; source?: 'demo' | 'live' };
     if (p.data) {
+      const dataRequestSeq = dataRequestSeqRef.current + 1;
+      dataRequestSeqRef.current = dataRequestSeq;
       setData(p.data);
       setDataMode(p.source ?? 'live');
-      void calculateIndicators(p.data, activeIndicators);
+      setError(null);
+      setLoading(false);
+      void calculateIndicators(p.data, activeIndicators, dataRequestSeq);
     }
   });
 

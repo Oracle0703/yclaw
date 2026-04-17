@@ -3,11 +3,11 @@ import type { WebContents } from 'electron';
 import type { TaskBatch, TaskFlow, TaskStatus } from '@shared/types';
 import { TaskStatus as TaskStatusEnum } from '@shared/types';
 import { EVENTS } from '@shared/constants';
-import { FlowRunner } from '@engines/automation/FlowRunner';
+import type { FlowRunner } from '@engines/automation/FlowRunner';
 import { EventBus } from '@main/ipc/EventBus';
-import { DatabaseService } from './DatabaseService';
 import { BatchService } from './BatchService';
 import { randomUUID } from 'crypto';
+import { TaskRepository } from './repositories';
 
 export interface TaskSummary {
   id: string;
@@ -38,8 +38,8 @@ export interface TaskState {
 }
 
 export interface TaskServiceOptions {
-  databaseService?: Pick<
-    DatabaseService,
+  taskRepository?: Pick<
+    TaskRepository,
     'getTasks' | 'getTaskFlow' | 'saveTaskFlow' | 'updateTaskStatus' | 'createTask' | 'updateTask' | 'deleteTask'
   >;
   createRunner?: () => FlowRunner;
@@ -58,8 +58,8 @@ interface ActiveTask {
 }
 
 export class TaskService {
-  private readonly databaseService: Pick<
-    DatabaseService,
+  private readonly taskRepository: Pick<
+    TaskRepository,
     'getTasks' | 'getTaskFlow' | 'saveTaskFlow' | 'updateTaskStatus' | 'createTask' | 'updateTask' | 'deleteTask'
   >;
   private readonly createRunner: () => FlowRunner;
@@ -68,18 +68,34 @@ export class TaskService {
   private readonly activeTasks = new Map<string, ActiveTask>();
 
   constructor(options: TaskServiceOptions = {}) {
-    this.databaseService = options.databaseService ?? DatabaseService.getInstance();
-    this.createRunner = options.createRunner ?? (() => new FlowRunner());
-    this.eventBus = options.eventBus ?? EventBus.getInstance();
+    if (!options.taskRepository) {
+      throw new Error('taskRepository is required');
+    }
+
+    if (!options.batchService) {
+      throw new Error('batchService is required');
+    }
+
+    if (!options.eventBus) {
+      throw new Error('eventBus is required');
+    }
+
+    if (!options.createRunner) {
+      throw new Error('createRunner is required');
+    }
+
+    this.taskRepository = options.taskRepository;
+    this.eventBus = options.eventBus;
+    this.createRunner = options.createRunner;
     this.batchService = options.batchService;
   }
 
   listTasks(): TaskSummary[] {
-    return this.databaseService.getTasks();
+    return this.taskRepository.getTasks();
   }
 
   getTaskFlow(taskId: string): TaskFlow {
-    const flow = this.databaseService.getTaskFlow(taskId);
+    const flow = this.taskRepository.getTaskFlow(taskId);
     if (!flow) {
       throw new Error(`Task "${taskId}" not found`);
     }
@@ -111,7 +127,7 @@ export class TaskService {
       steps: payload.steps,
       updatedAt: now,
     };
-    this.databaseService.saveTaskFlow(nextFlow);
+    this.taskRepository.saveTaskFlow(nextFlow);
     return nextFlow;
   }
 
@@ -239,7 +255,7 @@ export class TaskService {
       createdAt: now,
       updatedAt: now,
     };
-    this.databaseService.createTask({
+    this.taskRepository.createTask({
       id,
       name: payload.name,
       description: payload.description,
@@ -263,7 +279,7 @@ export class TaskService {
       templateId?: string | null;
     },
   ): TaskFlow | null {
-    const existing = this.databaseService.getTaskFlow(taskId);
+    const existing = this.taskRepository.getTaskFlow(taskId);
     if (!existing) throw new Error(`Task "${taskId}" not found`);
     const flowJson =
       payload.steps || payload.entryUrl !== undefined
@@ -272,7 +288,7 @@ export class TaskService {
             entryUrl: payload.entryUrl ?? existing.entryUrl,
           })
         : undefined;
-    this.databaseService.updateTask(taskId, {
+    this.taskRepository.updateTask(taskId, {
       name: payload.name,
       description: payload.description,
       flowJson,
@@ -280,20 +296,20 @@ export class TaskService {
       sessionId: payload.sessionId,
       templateId: payload.templateId,
     });
-    return this.databaseService.getTaskFlow(taskId);
+    return this.taskRepository.getTaskFlow(taskId);
   }
 
   deleteTask(taskId: string): void {
     this.activeTasks.delete(taskId);
-    this.databaseService.deleteTask(taskId);
+    this.taskRepository.deleteTask(taskId);
   }
 
   getTaskDetail(taskId: string): TaskFlow | null {
-    return this.databaseService.getTaskFlow(taskId);
+    return this.taskRepository.getTaskFlow(taskId);
   }
 
   cloneTask(taskId: string): TaskFlow {
-    const source = this.databaseService.getTaskFlow(taskId);
+    const source = this.taskRepository.getTaskFlow(taskId);
     if (!source) throw new Error(`Task "${taskId}" not found`);
     return this.createTask({
       name: `${source.name} (副本)`,
@@ -307,10 +323,7 @@ export class TaskService {
   }
 
   private getBatchService(): Pick<BatchService, 'createBatch' | 'getBatch' | 'listBatchesByTask'> {
-    if (!this.batchService) {
-      this.batchService = new BatchService();
-    }
-    return this.batchService;
+    return this.batchService!;
   }
 
   private getActiveTask(taskId: string): ActiveTask {
@@ -322,7 +335,7 @@ export class TaskService {
   }
 
   private updateStatus(taskId: string, status: TaskStatus, flowId: string): void {
-    this.databaseService.updateTaskStatus(taskId, status);
+    this.taskRepository.updateTaskStatus(taskId, status);
     this.eventBus.emit(EVENTS.TASK_STATUS_CHANGED, { flowId, taskId, status });
   }
 }

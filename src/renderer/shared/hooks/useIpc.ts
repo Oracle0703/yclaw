@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import type { IpcResponse } from '@shared/types';
+import type { FeaturePackageCatalogItem, FeaturePackageInstallResult, IpcResponse } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/constants';
 
 /**
@@ -40,7 +40,16 @@ export function useIpc() {
     [invoke],
   );
 
-  return { invoke, automation };
+  const featurePackages = useMemo(
+    () => ({
+      listPackages: () => invoke<FeaturePackageCatalogItem[]>(IPC_CHANNELS.FEATURE_PACKAGE_LIST),
+      installPackage: (id: string) =>
+        invoke<FeaturePackageInstallResult>(IPC_CHANNELS.FEATURE_PACKAGE_INSTALL, { id }),
+    }),
+    [invoke],
+  );
+
+  return { invoke, automation, featurePackages };
 }
 
 /**

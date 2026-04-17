@@ -6,6 +6,10 @@ const { invokeMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
 }));
 
+const { messageErrorMock } = vi.hoisted(() => ({
+  messageErrorMock: vi.fn(),
+}));
+
 vi.mock('antd', () => ({
   Button: ({
     children,
@@ -38,6 +42,9 @@ vi.mock('antd', () => ({
   ),
   Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+  message: {
+    error: messageErrorMock,
+  },
 }));
 
 vi.mock('@ant-design/icons', () => ({
@@ -283,6 +290,34 @@ describe('Automation App', () => {
           name: '新任务名称',
         }),
       );
+    });
+  });
+
+  it('shows an error when saving a task fails', async () => {
+    invokeMock.mockResolvedValueOnce({
+      id: 'task-1',
+      name: '采集任务',
+      steps: [
+        {
+          id: 'step-1',
+          name: '打开页面',
+          action: { type: 'click', selector: '#open' },
+        },
+      ],
+      createdAt: '2026-04-16T00:00:00.000Z',
+      updatedAt: '2026-04-16T00:00:00.000Z',
+    });
+    invokeMock.mockRejectedValueOnce(new Error('save task failed'));
+
+    render(<AutomationApp />);
+
+    fireEvent.click(screen.getByRole('button', { name: '选择任务' }));
+    await screen.findByText('编辑器步骤数:1');
+
+    fireEvent.click(screen.getByRole('button', { name: '保存任务' }));
+
+    await waitFor(() => {
+      expect(messageErrorMock).toHaveBeenCalledWith('save task failed');
     });
   });
 });

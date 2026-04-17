@@ -21,17 +21,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock EventBus
-vi.mock('@main/ipc/EventBus', () => ({
-  EventBus: {
-    getInstance: vi.fn().mockReturnValue({
-      emit: vi.fn(),
-      on: vi.fn(),
-      off: vi.fn(),
-    }),
-  },
-}));
-
 // Mock WindowManager
 const mockWindowManager = {
   openWindow: vi.fn(),
@@ -57,10 +46,27 @@ function getTrayInstance(index = 0): MockTrayInstance {
 
 describe('TrayService', () => {
   let service: TrayService;
+  const mockEventBus = {
+    emit: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new TrayService(mockWindowManager as unknown as WindowManager);
+    service = new TrayService({
+      eventBus: mockEventBus as never,
+      windowManager: mockWindowManager as unknown as WindowManager,
+    });
+  });
+
+  it('should require event bus injection', () => {
+    expect(
+      () =>
+        new TrayService({
+          windowManager: mockWindowManager as unknown as WindowManager,
+        } as never),
+    ).toThrowError('eventBus is required');
   });
 
   describe('create', () => {

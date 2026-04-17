@@ -20,6 +20,10 @@ describe('SchedulerService', () => {
     vi.clearAllMocks();
   });
 
+  it('requires task service injection', () => {
+    expect(() => new SchedulerService()).toThrowError('taskService is required');
+  });
+
   it('registers enabled cron tasks on start', () => {
     mockTaskService.listTasks.mockReturnValue([
       makeTask('task-1'),

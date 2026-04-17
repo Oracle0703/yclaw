@@ -1,17 +1,26 @@
 import { randomUUID } from 'crypto';
 import type { BrowserSession } from '@shared/types';
-import type { DatabaseService } from './DatabaseService';
-import { DatabaseService as DatabaseServiceSingleton } from './DatabaseService';
+import { SessionRepository } from './repositories';
 
 export interface SessionRegistryOptions {
-  databaseService?: Pick<DatabaseService, 'run' | 'all'>;
+  sessionRepository?: Pick<
+    SessionRepository,
+    'createSession' | 'listSessions' | 'bindTaskSession' | 'deleteSession'
+  >;
 }
 
 export class SessionRegistry {
-  private readonly databaseService: Pick<DatabaseService, 'run' | 'all'>;
+  private readonly sessionRepository: Pick<
+    SessionRepository,
+    'createSession' | 'listSessions' | 'bindTaskSession' | 'deleteSession'
+  >;
 
   constructor(options: SessionRegistryOptions = {}) {
-    this.databaseService = options.databaseService ?? DatabaseServiceSingleton.getInstance();
+    if (!options.sessionRepository) {
+      throw new Error('sessionRepository is required');
+    }
+
+    this.sessionRepository = options.sessionRepository;
   }
 
   createSession(name: string, domain: string): BrowserSession {
@@ -24,47 +33,20 @@ export class SessionRegistry {
       updatedAt: new Date().toISOString(),
     };
 
-    this.databaseService.run(
-      `INSERT INTO sessions (id, name, domain, partition, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [session.id, session.name, session.domain, session.partition, session.createdAt, session.updatedAt],
-    );
+    this.sessionRepository.createSession(session);
 
     return session;
   }
 
   listSessions(): BrowserSession[] {
-    const rows = this.databaseService.all<{
-      id: string;
-      name: string;
-      domain: string;
-      partition: string;
-      created_at: string;
-      updated_at: string;
-    }>(
-      `SELECT id, name, domain, partition, created_at, updated_at
-       FROM sessions
-       ORDER BY updated_at DESC`,
-    );
-
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      domain: row.domain,
-      partition: row.partition,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    return this.sessionRepository.listSessions();
   }
 
   bindTaskSession(taskId: string, sessionId: string): void {
-    this.databaseService.run(
-      'UPDATE tasks SET session_id = ?, updated_at = datetime(\'now\') WHERE id = ?',
-      [sessionId, taskId],
-    );
+    this.sessionRepository.bindTaskSession(taskId, sessionId);
   }
 
   deleteSession(sessionId: string): void {
-    this.databaseService.run('DELETE FROM sessions WHERE id = ?', [sessionId]);
+    this.sessionRepository.deleteSession(sessionId);
   }
 }

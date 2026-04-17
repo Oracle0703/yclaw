@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('antd', () => {
   const Space = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
@@ -129,5 +129,92 @@ describe('TemplateManager', () => {
     fireEvent.click(screen.getByRole('button', { name: /使用模板/ }));
 
     expect(onSelectTemplate).toHaveBeenCalledWith('template-1');
+  });
+
+  it('ignores stale template responses after saving refreshes the list', async () => {
+    let resolveInitialList: (value: unknown) => void = () => {};
+    let resolveRefreshList: (value: unknown) => void = () => {};
+    let listCallCount = 0;
+
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.TEMPLATE_SAVE) {
+        return { success: true, data: null };
+      }
+
+      if (channel !== IPC_CHANNELS.TEMPLATE_LIST) {
+        return { success: true, data: null };
+      }
+
+      listCallCount += 1;
+      if (listCallCount === 1) {
+        return new Promise((resolve) => {
+          resolveInitialList = resolve;
+        }) as never;
+      }
+
+      return new Promise((resolve) => {
+        resolveRefreshList = resolve;
+      }) as never;
+    });
+
+    render(
+      <TemplateManager
+        onSelectTemplate={vi.fn()}
+        draftFields={[{ name: 'price', selector: '.price', attribute: 'textContent' }]}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('输入模板名称'), {
+      target: { value: '最新模板' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /保存模板/ }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.TEMPLATE_SAVE, {
+        name: '最新模板',
+        fields: [{ name: 'price', selector: '.price', attribute: 'textContent' }],
+      });
+    });
+
+    await waitFor(() => {
+      expect(listCallCount).toBe(2);
+    });
+
+    await act(async () => {
+      resolveRefreshList({
+        success: true,
+        data: [
+          {
+            id: 'template-new',
+            name: '最新模板',
+            fields: [{ name: 'price', selector: '.price', attribute: 'textContent' }],
+            createdAt: '2026-04-15T00:01:00.000Z',
+            updatedAt: '2026-04-15T00:01:00.000Z',
+          },
+        ],
+      });
+    });
+
+    expect(await screen.findByText('最新模板')).toBeDefined();
+
+    await act(async () => {
+      resolveInitialList({
+        success: true,
+        data: [
+          {
+            id: 'template-old',
+            name: '旧模板',
+            fields: [{ name: 'title', selector: '.title', attribute: 'textContent' }],
+            createdAt: '2026-04-15T00:00:00.000Z',
+            updatedAt: '2026-04-15T00:00:00.000Z',
+          },
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('旧模板')).toBeNull();
+    });
+    expect(screen.getByText('最新模板')).toBeDefined();
   });
 });

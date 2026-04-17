@@ -22,20 +22,36 @@ interface PendingInstall {
   manifest: PluginManifest;
 }
 
+interface PluginLoaderOptions {
+  eventBus?: Pick<EventBus, 'emit'>;
+  permissionChecker?: Pick<
+    PermissionChecker,
+    'validateManifest' | 'requiresUserConfirmation'
+  >;
+}
+
 /**
  * 插件加载器 — 扫描、校验、加载插件
  */
 export class PluginLoader {
   private registry = new Map<string, PluginRegistryEntry>();
   private pendingInstalls = new Map<string, PendingInstall>();
-  private eventBus: EventBus;
+  private eventBus: Pick<EventBus, 'emit'>;
   private pluginsDir: string;
-  private permissionChecker: PermissionChecker;
+  private permissionChecker: NonNullable<PluginLoaderOptions['permissionChecker']>;
 
-  constructor() {
-    this.eventBus = EventBus.getInstance();
+  constructor(options: PluginLoaderOptions = {}) {
+    if (!options.eventBus) {
+      throw new Error('eventBus is required');
+    }
+
+    if (!options.permissionChecker) {
+      throw new Error('permissionChecker is required');
+    }
+
+    this.eventBus = options.eventBus;
     this.pluginsDir = getPluginsPath();
-    this.permissionChecker = new PermissionChecker();
+    this.permissionChecker = options.permissionChecker;
     fs.mkdirSync(this.pluginsDir, { recursive: true });
   }
 

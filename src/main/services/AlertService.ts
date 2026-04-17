@@ -1,9 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { AlertRecord } from '@shared/types';
-import type { DatabaseService } from './DatabaseService';
 import type { ExecutionLogService } from './ExecutionLogService';
-import { DatabaseService as DatabaseServiceSingleton } from './DatabaseService';
-import { ExecutionLogService as ExecutionLogServiceSingleton } from './ExecutionLogService';
+import { AlertRepository } from './repositories';
 
 export interface AlertQuery {
   unreadOnly?: boolean;
@@ -11,57 +9,29 @@ export interface AlertQuery {
 }
 
 export interface AlertServiceOptions {
-  databaseService?: Pick<DatabaseService, 'run' | 'all'>;
   executionLogService?: Pick<ExecutionLogService, 'query'>;
+  alertRepository?: Pick<AlertRepository, 'listAlerts' | 'pushAlert' | 'dismissAlert'>;
 }
 
 export class AlertService {
-  private readonly databaseService: Pick<DatabaseService, 'run' | 'all'>;
+  private readonly alertRepository: Pick<AlertRepository, 'listAlerts' | 'pushAlert' | 'dismissAlert'>;
   private readonly executionLogService: Pick<ExecutionLogService, 'query'>;
 
   constructor(options: AlertServiceOptions = {}) {
-    this.databaseService = options.databaseService ?? DatabaseServiceSingleton.getInstance();
-    this.executionLogService = options.executionLogService ?? new ExecutionLogServiceSingleton();
+    if (!options.alertRepository) {
+      throw new Error('alertRepository is required');
+    }
+
+    if (!options.executionLogService) {
+      throw new Error('executionLogService is required');
+    }
+
+    this.alertRepository = options.alertRepository;
+    this.executionLogService = options.executionLogService;
   }
 
   listAlerts(query: AlertQuery = {}): AlertRecord[] {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-
-    if (query.taskId) {
-      conditions.push('task_id = ?');
-      params.push(query.taskId);
-    }
-    if (query.unreadOnly) {
-      conditions.push('read = 0');
-    }
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const rows = this.databaseService.all<{
-      id: string;
-      task_id: string;
-      batch_id?: string | null;
-      message: string;
-      created_at: string;
-      read: number;
-    }>(
-      `SELECT id, task_id, batch_id, message, created_at, read
-       FROM alerts
-       ${whereClause}
-       ORDER BY created_at DESC`,
-      params,
-    );
-
-    return rows
-      .map((row) => ({
-        id: row.id,
-        taskId: row.task_id,
-        batchId: row.batch_id ?? undefined,
-        message: row.message,
-        createdAt: row.created_at,
-        read: Boolean(row.read),
-      }))
-      .filter((alert) => !query.unreadOnly || !alert.read);
+    return this.alertRepository.listAlerts(query);
   }
 
   pushAlert(
@@ -76,24 +46,13 @@ export class AlertService {
       read: alert.read ?? false,
     };
 
-    this.databaseService.run(
-      `INSERT INTO alerts (id, task_id, batch_id, message, created_at, read)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        record.id,
-        record.taskId,
-        record.batchId ?? null,
-        record.message,
-        record.createdAt,
-        record.read ? 1 : 0,
-      ],
-    );
+    this.alertRepository.pushAlert(record);
 
     return record;
   }
 
   dismissAlert(alertId: string): void {
-    this.databaseService.run('UPDATE alerts SET read = 1 WHERE id = ?', [alertId]);
+    this.alertRepository.dismissAlert(alertId);
   }
 
   aggregateFromExecutionLogs(minutes = 10): AlertRecord[] {

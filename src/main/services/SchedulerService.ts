@@ -36,7 +36,11 @@ export class SchedulerService {
   private started = false;
 
   constructor(options: SchedulerServiceOptions = {}) {
-    this.taskService = options.taskService ?? new TaskService();
+    if (!options.taskService) {
+      throw new Error('taskService is required');
+    }
+
+    this.taskService = options.taskService;
     this.executeTask = options.executeTask ?? (async (_taskId: string) => undefined);
     this.maxConcurrency = options.maxConcurrency ?? 3;
   }
