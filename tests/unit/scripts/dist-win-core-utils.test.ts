@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { join } from 'path';
 import { buildCoreDistPaths, createCoreDistRunId } from '../../../scripts/dist-win-core-utils';
 
 describe('dist-win-core-utils', () => {
@@ -9,11 +10,12 @@ describe('dist-win-core-utils', () => {
   });
 
   it('为临时输出和稳定产物生成分离路径', () => {
-    const paths = buildCoreDistPaths('E:\\allsite\\yclaw', '20260417-060809');
+    const projectRoot = join('E:\\', 'allsite', 'yclaw');
+    const paths = buildCoreDistPaths(projectRoot, '20260417-060809');
 
-    expect(paths.tempOutputDir).toBe('E:\\allsite\\yclaw\\release-core\\20260417-060809');
-    expect(paths.stableReleaseDir).toBe('E:\\allsite\\yclaw\\release');
-    expect(paths.stableNsisWebDir).toBe('E:\\allsite\\yclaw\\release\\nsis-web');
-    expect(paths.latestMetadataFile).toBe('E:\\allsite\\yclaw\\release\\core-latest.json');
+    expect(paths.tempOutputDir).toBe(join(projectRoot, 'release-core', '20260417-060809'));
+    expect(paths.stableReleaseDir).toBe(join(projectRoot, 'release'));
+    expect(paths.stableNsisWebDir).toBe(join(projectRoot, 'release', 'nsis-web'));
+    expect(paths.latestMetadataFile).toBe(join(projectRoot, 'release', 'core-latest.json'));
   });
 });
