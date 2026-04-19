@@ -120,8 +120,8 @@
 
 | File                                      | Action | Responsibility                       |
 | ----------------------------------------- | ------ | ------------------------------------ |
-| `docs/plan-automation-browser-ops-v1.md`  | Modify | 回写实际里程碑、实施状态             |
-| `docs/specs-automation-browser-ops-v1.md` | Modify | 回写已实现字段、状态机和限制         |
+| `docs/plans/automation-browser-ops-v1.md`  | Modify | 回写实际里程碑、实施状态             |
+| `docs/specs/automation-browser-ops-v1.md` | Modify | 回写已实现字段、状态机和限制         |
 | `README.md`                               | Modify | 补充 V1 功能入口、测试命令、限制说明 |
 
 ---
@@ -761,8 +761,8 @@ git commit -m "feat: add alert aggregation workflow"
 **Files:**
 
 - Create: `tests/e2e/automation-browser-ops.spec.ts`
-- Modify: `docs/plan-automation-browser-ops-v1.md`
-- Modify: `docs/specs-automation-browser-ops-v1.md`
+- Modify: `docs/plans/automation-browser-ops-v1.md`
+- Modify: `docs/specs/automation-browser-ops-v1.md`
 - Modify: `README.md`
 
 - [ ] **Step 1: 创建 E2E 基础设施与场景**
@@ -785,7 +785,7 @@ Expected: FAIL，提示页面元素或功能未实现
 
 - [ ] **Step 3: 按 Checklist 补齐遗漏**
 
-对照 `docs/specs-automation-browser-ops-v1.md` 中的验收 checklist 修正实现或文档
+对照 `docs/specs/automation-browser-ops-v1.md` 中的验收 checklist 修正实现或文档
 
 - [ ] **Step 4: 回写文档**
 
@@ -811,7 +811,7 @@ Expected: 全部通过（单元测试基线：现有 393 + 新增测试全部 pa
 - [ ] **Step 6: 提交**
 
 ```bash
-git add tests/e2e/automation-browser-ops.spec.ts docs/plan-automation-browser-ops-v1.md docs/specs-automation-browser-ops-v1.md README.md
+git add tests/e2e/automation-browser-ops.spec.ts docs/plans/automation-browser-ops-v1.md docs/specs/automation-browser-ops-v1.md README.md
 git commit -m "docs: finalize automation browser ops v1 acceptance"
 ```
 
@@ -852,6 +852,6 @@ git commit -m "docs: finalize automation browser ops v1 acceptance"
 
 - 如果只允许单人串行开发，按 `Chunk 1 → 4` 执行即可
 - 如果要并行，建议只在 `Chunk 2` 和 `Chunk 3` 做受控并行，避免多人同时改 `FlowRunner` / `TabManager`
-- 开发过程中若发现 `SPEC-A03` 或 `SPEC-A08` 的状态机与实现冲突，优先回写 `docs/specs-automation-browser-ops-v1.md`，不要口头约定
+- 开发过程中若发现 `SPEC-A03` 或 `SPEC-A08` 的状态机与实现冲突，优先回写 `docs/specs/automation-browser-ops-v1.md`，不要口头约定
 - **分支策略**：建议从当前 `fix/code-review-remediation` 分支切出新分支 `feature/automation-browser-ops-v1`，按 Phase 提交，每个 Phase 结束可合回主分支
 - **现有测试基线**：40 文件 / 393 测试 —— 任何时候运行 `npm test` 都不应有回归

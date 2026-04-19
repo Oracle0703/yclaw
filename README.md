@@ -131,16 +131,16 @@ npm run dist:linux
 
 | 文档 | 说明 |
 | --- | --- |
-| `docs/current-status.md` | 当前实现现状、已知限制、阅读建议 |
-| `docs/index.md` | `docs/` 文档总索引 |
-| `docs/architecture.md` | 技术架构、进程模型、核心调用链路 |
-| `docs/structure.md` | 实际目录结构与模块职责 |
-| `docs/prd.md` | 产品愿景与核心场景 |
-| `docs/plan.md` | 可行性分析与阶段计划 |
-| `docs/specs.md` | 基线规格与验收目标 |
-| `docs/specs-enhancements.md` | 增强项规格 |
-| `docs/specs-automation-browser-ops-v1.md` | 自动化 Browser Ops 专项规格 |
-| `docs/roadmap-next.md` | 近期演进路线 |
+| `docs/overview/current-status.md` | 当前实现现状、已知限制、阅读建议 |
+| `docs/README.md` | `docs/` 文档总索引 |
+| `docs/architecture/architecture.md` | 技术架构、进程模型、核心调用链路 |
+| `docs/architecture/structure.md` | 实际目录结构与模块职责 |
+| `docs/product/prd.md` | 产品愿景与核心场景 |
+| `docs/product/plan.md` | 可行性分析与阶段计划 |
+| `docs/specs/v1.0-baseline.md` | 基线规格与验收目标 |
+| `docs/specs/v1.1-enhancements.md` | 增强项规格 |
+| `docs/specs/automation-browser-ops-v1.md` | 自动化 Browser Ops 专项规格 |
+| `docs/overview/roadmap.md` | 近期演进路线 |
 
 ## 目录概览
 
@@ -162,7 +162,7 @@ tests/
 docs/                   产品、架构、规格、现状与专项文档
 ```
 
-更详细的目录说明见 `docs/structure.md`。
+更详细的目录说明见 `docs/architecture/structure.md`。
 
 ## 工程质量基线
 

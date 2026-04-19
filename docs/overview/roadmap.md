@@ -1,6 +1,6 @@
 # YClaw 后续拓展方向与推进逻辑
 
-> 基于 `docs/prd.md`、`docs/plan.md`、`docs/specs.md`、`docs/specs-enhancements.md`、`docs/plan-automation-browser-ops-v1.md`、`docs/specs-automation-browser-ops-v1.md` 以及现有审查/整改计划整理。
+> 基于 `docs/product/prd.md`、`docs/product/plan.md`、`docs/specs/v1.0-baseline.md`、`docs/specs/v1.1-enhancements.md`、`docs/plans/automation-browser-ops-v1.md`、`docs/specs/automation-browser-ops-v1.md` 以及现有审查/整改计划整理。
 
 ---
 

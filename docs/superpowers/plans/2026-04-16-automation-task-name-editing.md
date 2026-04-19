@@ -439,6 +439,6 @@ git commit -m "fix: stabilize automation task name editing"
 | Topic | Decision |
 |---|---|
 | Plan review | In this Codex session, subagent review is only available if the user explicitly requests delegation. If requested, dispatch a plan-document-reviewer with the spec path and this plan path. |
-| Existing untracked docs | Do not accidentally stage `docs/roadmap-next.md` or `docs/superpowers/plans/2026-04-15-automation-mainline-near-term.md` unless explicitly requested. |
+| Existing untracked docs | Do not accidentally stage `docs/overview/roadmap.md` or `docs/superpowers/plans/2026-04-15-automation-mainline-near-term.md` unless explicitly requested. |
 | Database tests | Avoid adding real `better-sqlite3` unit tests in this task because the local native module has previously shown Node ABI mismatch issues. |
 

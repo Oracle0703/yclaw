@@ -28,7 +28,7 @@
 | 插件 | `src/main/plugin-loader/PluginLoader.ts`, `src/main/plugin-loader/PermissionChecker.ts`, `src/renderer/plugin-host/PluginBridge.ts` |
 | 浏览器 | `src/main/browser/TabManager.ts`, `src/renderer/entries/browser/App.tsx`, `src/renderer/entries/browser/components/WebViewContainer.tsx` |
 | 渲染端业务页 | `src/renderer/entries/stock/App.tsx`, `src/renderer/entries/automation/App.tsx`, `src/renderer/entries/plugin-center/App.tsx`, `src/renderer/shared/components/AIChatPanel/AIChatPanel.tsx` |
-| 文档 | `docs/specs.md`, `docs/specs-enhancements.md`, `docs/structure.md`, `README.md` |
+| 文档 | `docs/specs/v1.0-baseline.md`, `docs/specs/v1.1-enhancements.md`, `docs/architecture/structure.md`, `README.md` |
 | 测试 | `tests/unit/services/*`, `tests/unit/components/*`, 必要时新增 `tests/unit/services/AppIpcIntegration.test.ts` |
 
 ### Task 1: 主进程装配与缺失 IPC 注册
@@ -361,9 +361,9 @@ git commit -m "feat: align window and tray runtime behavior"
 ### Task 7: 文档回写与质量收尾
 
 **Files:**
-- Modify: `docs/specs.md`
-- Modify: `docs/specs-enhancements.md`
-- Modify: `docs/structure.md`
+- Modify: `docs/specs/v1.0-baseline.md`
+- Modify: `docs/specs/v1.1-enhancements.md`
+- Modify: `docs/architecture/structure.md`
 - Modify: `README.md`
 - Modify: `src/renderer/entries/stock/components/KLineChart.tsx`
 - Modify: `tests/unit/components/BrowserApp.regression.test.tsx`
@@ -401,7 +401,7 @@ Expected:
 - [ ] **Step 4: 提交**
 
 ```bash
-git add docs/specs.md docs/specs-enhancements.md docs/structure.md README.md src/renderer/entries/stock/components/KLineChart.tsx tests/unit/components/BrowserApp.regression.test.tsx tests/unit/components/LoadingRegression.test.tsx
+git add docs/specs/v1.0-baseline.md docs/specs/v1.1-enhancements.md docs/architecture/structure.md README.md src/renderer/entries/stock/components/KLineChart.tsx tests/unit/components/BrowserApp.regression.test.tsx tests/unit/components/LoadingRegression.test.tsx
 git commit -m "docs: align specs with verified implementation status"
 ```
 

@@ -4,13 +4,13 @@
 
 This repository is currently a planning workspace. The only committed content lives in `docs/`:
 
-- `docs/prd.md`: product scope and user scenarios
-- `docs/plan.md`: feasibility, milestones, and success metrics
-- `docs/architecture.md`: process model and system design
-- `docs/structure.md`: target directory layout
-- `docs/specs.md`: implementation specs and acceptance criteria
+- `docs/product/prd.md`: product scope and user scenarios
+- `docs/product/plan.md`: feasibility, milestones, and success metrics
+- `docs/architecture/architecture.md`: process model and system design
+- `docs/architecture/structure.md`: target directory layout
+- `docs/specs/v1.0-baseline.md`: implementation specs and acceptance criteria
 
-When code is scaffolded, follow the planned layout in `docs/structure.md`: `src/main/` for Electron main-process code, `src/renderer/entries/` for Vite multi-entry apps, `src/shared/` for cross-process types/utilities, `src/engines/` for automation and analytics engines, `plugins/` for plugin packages, `resources/` for app assets, `scripts/` for tooling, and `tests/` for unit, integration, and e2e coverage.
+When code is scaffolded, follow the planned layout in `docs/architecture/structure.md`: `src/main/` for Electron main-process code, `src/renderer/entries/` for Vite multi-entry apps, `src/shared/` for cross-process types/utilities, `src/engines/` for automation and analytics engines, `plugins/` for plugin packages, `resources/` for app assets, `scripts/` for tooling, and `tests/` for unit, integration, and e2e coverage.
 
 ## Build, Test, and Development Commands
 
@@ -27,11 +27,11 @@ Only document commands that actually exist in the repo.
 
 ## Coding Style & Naming Conventions
 
-Write new docs in concise Markdown with clear headings and short paragraphs. For planned TypeScript code, follow the naming already defined in `docs/structure.md`: PascalCase for classes and React components (`WindowManager.ts`, `PluginCard.tsx`), camelCase for functions/hooks/stores (`useIpc.ts`, `stockStore.ts`), and kebab-case for directory names such as `plugin-center/`.
+Write new docs in concise Markdown with clear headings and short paragraphs. For planned TypeScript code, follow the naming already defined in `docs/architecture/structure.md`: PascalCase for classes and React components (`WindowManager.ts`, `PluginCard.tsx`), camelCase for functions/hooks/stores (`useIpc.ts`, `stockStore.ts`), and kebab-case for directory names such as `plugin-center/`.
 
 ## Testing Guidelines
 
-Use `docs/specs.md` acceptance criteria as the baseline for review. Planned test layout is `tests/unit/`, `tests/integration/`, and `tests/e2e/`. Name end-to-end specs `*.spec.ts` and keep test scope aligned to one module or service per file.
+Use `docs/specs/v1.0-baseline.md` acceptance criteria as the baseline for review. Planned test layout is `tests/unit/`, `tests/integration/`, and `tests/e2e/`. Name end-to-end specs `*.spec.ts` and keep test scope aligned to one module or service per file.
 
 ## Commit & Pull Request Guidelines
 

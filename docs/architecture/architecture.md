@@ -8,12 +8,12 @@
 
 | 文档 | 说明 |
 | --- | --- |
-| `docs/architecture.md` | 描述当前系统架构与核心链路 |
-| `docs/current-status.md` | 描述当前实现完成度与限制 |
-| `docs/structure.md` | 描述实际目录结构与模块职责 |
+| `docs/architecture/architecture.md` | 描述当前系统架构与核心链路 |
+| `docs/overview/current-status.md` | 描述当前实现完成度与限制 |
+| `docs/architecture/structure.md` | 描述实际目录结构与模块职责 |
 
 > 本文档以“当前仓库已存在的实现”为主，同时保留长期演进方向说明。
-> 如遇“规划目标”和“当前落地状态”不完全一致，请以 `docs/current-status.md` 为现状基线。
+> 如遇“规划目标”和“当前落地状态”不完全一致，请以 `docs/overview/current-status.md` 为现状基线。
 
 ## 当前实现快照
 

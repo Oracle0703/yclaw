@@ -30,7 +30,7 @@
 | AI 最小支撑 | `src/main/ai/AIService.ts`, `src/main/ai/ContextManager.ts`, `src/renderer/shared/components/AIChatPanel/AIChatPanel.tsx`, `src/shared/types/ai.ts` |
 | 自动化 UI | `src/renderer/entries/automation/App.tsx`, `src/renderer/entries/automation/components/TaskList.tsx`, `src/renderer/entries/automation/components/ExecutionPanel.tsx` |
 | 测试 | `tests/unit/services/AppIpcIntegration.test.ts`, `tests/unit/services/TaskService.test.ts`, `tests/unit/engines/FlowRunner.test.ts`, `tests/unit/services/AIService.test.ts`, `tests/unit/services/TabManager.test.ts`, `tests/unit/components/WebViewContainer.test.tsx` |
-| 文档 | `docs/roadmap-next.md`, `docs/specs.md`, `docs/specs-enhancements.md`, `docs/plan-automation-browser-ops-v1.md`, `README.md` |
+| 文档 | `docs/overview/roadmap.md`, `docs/specs/v1.0-baseline.md`, `docs/specs/v1.1-enhancements.md`, `docs/plans/automation-browser-ops-v1.md`, `README.md` |
 
 ## 执行原则
 
@@ -49,8 +49,8 @@
 - Modify: `src/main/ai/AIService.ts`
 - Test: `tests/unit/services/AppIpcIntegration.test.ts`
 - Test: `tests/unit/services/AIService.test.ts`
-- Modify: `docs/specs.md`
-- Modify: `docs/specs-enhancements.md`
+- Modify: `docs/specs/v1.0-baseline.md`
+- Modify: `docs/specs/v1.1-enhancements.md`
 
 - [ ] **Step 1: 写失败测试，锁定当前真正缺口**
 
@@ -82,8 +82,8 @@ Expected:
 - [ ] **Step 4: 校正文档状态**
 
 将以下文档项按真实实现改为 `✅ / 🟡 / ⬜`：
-- `docs/specs.md`
-- `docs/specs-enhancements.md`
+- `docs/specs/v1.0-baseline.md`
+- `docs/specs/v1.1-enhancements.md`
 
 要求：
 - 不保留无法通过最小测试验证的 `✅`
@@ -99,7 +99,7 @@ Expected:
 - [ ] **Step 6: 提交**
 
 ```bash
-git add src/main/app.ts src/shared/constants/channels.ts src/main/ai/AIService.ts tests/unit/services/AppIpcIntegration.test.ts tests/unit/services/AIService.test.ts docs/specs.md docs/specs-enhancements.md
+git add src/main/app.ts src/shared/constants/channels.ts src/main/ai/AIService.ts tests/unit/services/AppIpcIntegration.test.ts tests/unit/services/AIService.test.ts docs/specs/v1.0-baseline.md docs/specs/v1.1-enhancements.md
 git commit -m "fix: align runtime channels with documented status"
 ```
 
@@ -253,7 +253,7 @@ git commit -m "feat: add observable execution results and logs"
 - Modify: `src/renderer/entries/browser/components/WebViewContainer.tsx`
 - Test: `tests/unit/services/TabManager.test.ts`
 - Test: `tests/unit/components/WebViewContainer.test.tsx`
-- Modify: `docs/plan-automation-browser-ops-v1.md`
+- Modify: `docs/plans/automation-browser-ops-v1.md`
 - Modify: `README.md`
 
 - [ ] **Step 1: 写失败测试，先锁定用户可见缺口**
@@ -290,7 +290,7 @@ Expected:
 - [ ] **Step 5: 同步回写文档**
 
 更新：
-- `docs/plan-automation-browser-ops-v1.md`
+- `docs/plans/automation-browser-ops-v1.md`
 - `README.md`
 
 要求：
@@ -306,7 +306,7 @@ Expected:
 - [ ] **Step 7: 提交**
 
 ```bash
-git add src/main/browser/TabManager.ts src/shared/types/browser.ts src/renderer/entries/browser/App.tsx src/renderer/entries/browser/components/WebViewContainer.tsx tests/unit/services/TabManager.test.ts tests/unit/components/WebViewContainer.test.tsx docs/plan-automation-browser-ops-v1.md README.md
+git add src/main/browser/TabManager.ts src/shared/types/browser.ts src/renderer/entries/browser/App.tsx src/renderer/entries/browser/components/WebViewContainer.tsx tests/unit/services/TabManager.test.ts tests/unit/components/WebViewContainer.test.tsx docs/plans/automation-browser-ops-v1.md README.md
 git commit -m "feat: clarify browser intervention runtime path"
 ```
 
@@ -371,9 +371,9 @@ git commit -m "feat: focus ai assistant on automation support"
 ### Task 6: 阶段收尾与质量门禁
 
 **Files:**
-- Modify: `docs/roadmap-next.md`
-- Modify: `docs/specs.md`
-- Modify: `docs/specs-enhancements.md`
+- Modify: `docs/overview/roadmap.md`
+- Modify: `docs/specs/v1.0-baseline.md`
+- Modify: `docs/specs/v1.1-enhancements.md`
 - Modify: `README.md`
 - Test: `tests/unit/components/BrowserApp.regression.test.tsx`
 - Test: `tests/unit/components/LoadingRegression.test.tsx`
@@ -405,7 +405,7 @@ Expected:
 - [ ] **Step 4: 提交**
 
 ```bash
-git add docs/roadmap-next.md docs/specs.md docs/specs-enhancements.md README.md tests/unit/components/BrowserApp.regression.test.tsx tests/unit/components/LoadingRegression.test.tsx
+git add docs/overview/roadmap.md docs/specs/v1.0-baseline.md docs/specs/v1.1-enhancements.md README.md tests/unit/components/BrowserApp.regression.test.tsx tests/unit/components/LoadingRegression.test.tsx
 git commit -m "docs: close near-term automation milestone status"
 ```
 

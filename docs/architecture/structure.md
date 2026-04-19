@@ -1,7 +1,7 @@
 # 📁 YClaw 项目文件结构
 
 > 本文档以**当前仓库真实结构**为准，重点帮助快速定位代码。
-> 若要了解系统如何运行，请阅读 `docs/architecture.md`；若要了解当前实现范围，请阅读 `docs/current-status.md`。
+> 若要了解系统如何运行，请阅读 `docs/architecture/architecture.md`；若要了解当前实现范围，请阅读 `docs/overview/current-status.md`。
 
 ## 目录总览
 
@@ -35,15 +35,15 @@ yclaw/
 
 | 路径 | 说明 |
 | --- | --- |
-| `docs/current-status.md` | 当前实现状态、限制与阅读建议 |
-| `docs/prd.md` | 产品愿景与用户场景 |
-| `docs/plan.md` | 可行性分析与阶段计划 |
-| `docs/architecture.md` | 技术架构、进程模型、调用链路 |
-| `docs/structure.md` | 当前目录结构与职责说明 |
-| `docs/specs.md` | 基线规格与验收标准 |
-| `docs/specs-enhancements.md` | 增强项规格 |
-| `docs/specs-automation-browser-ops-v1.md` | 自动化 Browser Ops 专项规格 |
-| `docs/roadmap-next.md` | 近期演进方向 |
+| `docs/overview/current-status.md` | 当前实现状态、限制与阅读建议 |
+| `docs/product/prd.md` | 产品愿景与用户场景 |
+| `docs/product/plan.md` | 可行性分析与阶段计划 |
+| `docs/architecture/architecture.md` | 技术架构、进程模型、调用链路 |
+| `docs/architecture/structure.md` | 当前目录结构与职责说明 |
+| `docs/specs/v1.0-baseline.md` | 基线规格与验收标准 |
+| `docs/specs/v1.1-enhancements.md` | 增强项规格 |
+| `docs/specs/automation-browser-ops-v1.md` | 自动化 Browser Ops 专项规格 |
+| `docs/overview/roadmap.md` | 近期演进方向 |
 | 其他中文方案/评审文档 | 历史设计、代码审查、专项记录，作为背景材料保留 |
 
 ### `src/main/` — Electron 主进程

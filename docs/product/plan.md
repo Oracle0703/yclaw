@@ -8,8 +8,8 @@
 | --- | --- |
 | 文档属性 | 本文档保留项目早期“可行性分析 + 阶段实施计划”的基线视角 |
 | 当前关系 | 仓库当前已进入真实实现阶段，因此本文不等同于当前完成度清单 |
-| 现状参考 | 当前代码落地情况请优先查看 `docs/current-status.md` |
-| 规格参考 | 功能验收基线请查看 `docs/specs.md` 与 `docs/specs-enhancements.md` |
+| 现状参考 | 当前代码落地情况请优先查看 `docs/overview/current-status.md` |
+| 规格参考 | 功能验收基线请查看 `docs/specs/v1.0-baseline.md` 与 `docs/specs/v1.1-enhancements.md` |
 
 > 阅读建议：把本文视为“阶段路线与风险分析”，而不是“最新功能完成列表”。
 

@@ -135,8 +135,8 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `docs/package-size-optimization.md` | 当前减包方案说明 |
-| `docs/package-size-optimization-record-2026-04-17.md` | 本轮优化历史记录 |
+| `docs/design/package-size-optimization.md` | 当前减包方案说明 |
+| `docs/reviews/2026-04-17-package-size-optimization-record.md` | 本轮优化历史记录 |
 | `electron-builder.yml` | 核心在线包配置和过滤规则 |
 | `electron-builder.full.yml` | 完整离线包配置 |
 | `scripts/after-pack-prune.cjs` | native 解包目录剪枝 |

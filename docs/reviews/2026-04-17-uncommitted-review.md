@@ -10,7 +10,7 @@
 >
 > 审查基线：`npx vitest run` → **77 files / 578 tests 全部通过**。所有缺陷均未被现有测试覆盖。
 >
-> 审查方式：三轮深度 loop（架构与 DI → Repository/Service 逻辑 → FeaturePackage/打包/渲染层），对照 `docs/specs.md`、`docs/architecture.md`、`docs/structure.md`、`docs/package-size-optimization.md`、`docs/superpowers/plans/2026-04-17-database-service-repository-split.md`。
+> 审查方式：三轮深度 loop（架构与 DI → Repository/Service 逻辑 → FeaturePackage/打包/渲染层），对照 `docs/specs/v1.0-baseline.md`、`docs/architecture/architecture.md`、`docs/architecture/structure.md`、`docs/design/package-size-optimization.md`、`docs/superpowers/plans/2026-04-17-database-service-repository-split.md`。
 
 ---
 

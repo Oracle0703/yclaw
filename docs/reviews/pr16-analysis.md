@@ -65,9 +65,9 @@
 变更文件分布 (47 个文件):
 
   📄 文档 (4 个)
-  ├── docs/YClaw_页面容器优化建议.md
-  ├── docs/YClaw_总控页面创意建议.md
-  ├── docs/YClaw_AI运营助手设计方案.md
+  ├── docs/design/page-container-optimization.md
+  ├── docs/design/dashboard-ideas.md
+  ├── docs/design/ai-assistant.md
   └── docs/YClaw_端侧推理集成方案.md
 
   🖥️ 主进程 (1 个)

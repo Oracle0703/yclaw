@@ -1,7 +1,7 @@
 # 📌 YClaw 当前实现现状
 
 > 本文档描述仓库**当前已经落地的实现**、工程运行方式、已知限制与后续重点。  
-> 若需查看产品愿景与长期规划，请阅读 `docs/prd.md`、`docs/plan.md`、`docs/specs.md`。
+> 若需查看产品愿景与长期规划，请阅读 `docs/product/prd.md`、`docs/product/plan.md`、`docs/specs/v1.0-baseline.md`。
 
 ---
 
@@ -9,14 +9,14 @@
 
 | 文档 | 作用 | 适用场景 |
 | --- | --- | --- |
-| `docs/current-status.md` | 当前代码实现与工程状态 | 想知道“现在做到哪了” |
-| `docs/index.md` | `docs/` 文档总索引 | 想知道“还有哪些资料” |
-| `docs/architecture.md` | 技术分层、调用链路、进程模型 | 想了解“系统怎么工作” |
-| `docs/structure.md` | 实际目录结构与模块职责 | 想快速定位代码 |
-| `docs/prd.md` | 产品愿景、角色、场景 | 想了解“为什么做这个项目” |
-| `docs/plan.md` | 可行性分析与阶段路线 | 想了解“整体怎么推进” |
-| `docs/specs.md` | 基线规格与验收目标 | 想了解“V1.0 要交付什么” |
-| `docs/specs-enhancements.md` | 增强项规格 | 想了解“V1.1 之后补什么” |
+| `docs/overview/current-status.md` | 当前代码实现与工程状态 | 想知道“现在做到哪了” |
+| `docs/README.md` | `docs/` 文档总索引 | 想知道“还有哪些资料” |
+| `docs/architecture/architecture.md` | 技术分层、调用链路、进程模型 | 想了解“系统怎么工作” |
+| `docs/architecture/structure.md` | 实际目录结构与模块职责 | 想快速定位代码 |
+| `docs/product/prd.md` | 产品愿景、角色、场景 | 想了解“为什么做这个项目” |
+| `docs/product/plan.md` | 可行性分析与阶段路线 | 想了解“整体怎么推进” |
+| `docs/specs/v1.0-baseline.md` | 基线规格与验收目标 | 想了解“V1.0 要交付什么” |
+| `docs/specs/v1.1-enhancements.md` | 增强项规格 | 想了解“V1.1 之后补什么” |
 
 ---
 
@@ -103,7 +103,7 @@
 
 | 项目 | 当前情况 |
 | --- | --- |
-| 文档基调 | 早期 `docs/prd.md`、`docs/plan.md`、`docs/specs.md` 偏规划；当前仓库已进入实现阶段 |
+| 文档基调 | 早期 `docs/product/prd.md`、`docs/product/plan.md`、`docs/specs/v1.0-baseline.md` 偏规划；当前仓库已进入实现阶段 |
 | 多入口模型 | 已实现业务模块入口；当前还增加了 `plugin-host` 和 feature pack 构建链路 |
 | 插件系统 | 已落地基础权限模型与宿主容器；更强隔离仍属后续演进 |
 | 自动化能力 | 已具备基础执行、结果、干预、模板与调度骨架；真实复杂页面场景仍在增强 |
@@ -127,9 +127,9 @@
 
 | 目标 | 建议顺序 |
 | --- | --- |
-| 快速了解项目 | `README.md` → `docs/current-status.md` |
-| 了解技术架构 | `docs/current-status.md` → `docs/architecture.md` |
-| 快速定位代码 | `docs/structure.md` |
-| 了解产品愿景 | `docs/prd.md` |
-| 了解基线规格 | `docs/specs.md`、`docs/specs-enhancements.md` |
-| 了解专项演进 | `docs/specs-automation-browser-ops-v1.md`、`docs/roadmap-next.md` |
+| 快速了解项目 | `README.md` → `docs/overview/current-status.md` |
+| 了解技术架构 | `docs/overview/current-status.md` → `docs/architecture/architecture.md` |
+| 快速定位代码 | `docs/architecture/structure.md` |
+| 了解产品愿景 | `docs/product/prd.md` |
+| 了解基线规格 | `docs/specs/v1.0-baseline.md`、`docs/specs/v1.1-enhancements.md` |
+| 了解专项演进 | `docs/specs/automation-browser-ops-v1.md`、`docs/overview/roadmap.md` |

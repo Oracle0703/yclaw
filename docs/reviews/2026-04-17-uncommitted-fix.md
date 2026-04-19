@@ -120,8 +120,8 @@
 - 修改：`scripts/dist-win-core.ts`
 - 修改：`tests/unit/services/repositories/AIRepository.test.ts`
 - 修改：`tests/unit/services/FeaturePackageService.test.ts`（新增 1 条版本回归 test）
-- 新增：`docs/YClaw_未提交改动_代码审查报告_2026-04-17.md`
-- 新增：`docs/YClaw_未提交改动_修复报告_2026-04-17.md`（本文件）
+- 新增：`docs/reviews/2026-04-17-uncommitted-review.md`
+- 新增：`docs/reviews/2026-04-17-uncommitted-fix.md`（本文件）
 
 ---
 

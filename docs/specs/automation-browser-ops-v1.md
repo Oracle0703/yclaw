@@ -1,7 +1,7 @@
 # 📦 YClaw 自动化采集产品化 Spec（V1）
 
 > 范围：聚焦 `自动化采集 + 浏览器介入台` 的一期产品化方案  
-> 说明：本文件为新增 spec，**扩展但不替代**现有 `docs/specs.md`（V1.0 SPEC-001 ~ SPEC-022）
+> 说明：本文件为新增 spec，**扩展但不替代**现有 `docs/specs/v1.0-baseline.md`（V1.0 SPEC-001 ~ SPEC-022）
 
 ---
 
