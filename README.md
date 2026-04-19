@@ -127,6 +127,43 @@ npm run dist:linux
 | `npm run dist` | 生成发行包 |
 | `npm run dist:win:core` | 生成 Windows 精简核心包 |
 
+## Task-as-Code 快速上手
+
+YClaw 把任务流（`Task`）与抽取模板（`Template`）以 YAML 形式承载，方便审阅、改 diff、做版本管理：
+
+```bash
+# 静态校验目录下所有 *.task.yaml / *.template.yaml
+npm run yclaw -- lint ./examples/tasks
+
+# 把目录中的任务/模板写入数据库（同一文件反复 import 不刷新 createdAt）
+npm run yclaw -- import ./examples/tasks
+
+# 把当前数据库中的指定 id 导出为 YAML
+npm run yclaw -- export task t-001 -o ./examples/tasks/t-001.task.yaml
+
+# CI 側可生成 SARIF，供 GitHub code-scanning / 其他平台消费
+npm run yclaw -- lint ./examples/tasks --format sarif > yclaw-lint.sarif
+```
+
+YAML 最小骨架（`examples/tasks/` 下有完整示例）：
+
+```yaml
+schemaVersion: 1
+kind: Task
+metadata:
+  id: t-001
+  name: 抓取首页
+spec:
+  steps:
+    - id: s1
+      name: 点击搜索
+      action: { type: click, selector: '#search' }
+```
+
+主进程会向渲染层暴露 `window.api.taskAsCode`（`importYaml / exportYaml / watchStart / watchStop`），UI 侧的「导入 / 导出 / 监听变更」面板按钮基于此 API 接入。完整字段、并发幂等约束与目录监听语义详见
+[`docs/specs/task-as-code-v1.md`](./docs/specs/task-as-code-v1.md) 与
+[`src/shared/serialization/README.md`](./src/shared/serialization/README.md)。
+
 ## 文档导航
 
 | 文档 | 说明 |

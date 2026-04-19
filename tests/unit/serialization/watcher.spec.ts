@@ -224,4 +224,36 @@ describe('shared · serialization · watcher', () => {
     await expect(w.start()).rejects.toThrow(/already/);
     await w.stop();
   });
+
+  it('treats Windows-style separators returned by listFiles as opaque keys (no false add/remove)', async () => {
+    // 模拟 Windows 平台下未做 POSIX 归一的 listFiles 实现：rel 中带反斜杠。
+    // watcher 把 rel 当作不透明 Map key，因此连续两次 scan 不应产生伪 added/removed。
+    const fs: FakeFs = {
+      files: new Map([
+        ['sub\\a.yaml', { mtimeMs: 100, size: 10 }],
+        ['sub\\b.yaml', { mtimeMs: 200, size: 5 }],
+      ]),
+    };
+    const ctx = makeDeps(fs);
+    const events: WatchEvent[] = [];
+    const w = createWatcher('C:\\root', { ...ctx.deps, debounceMs: 5 });
+    w.onChange((e) => events.push(e));
+    const r = await w.start();
+    expect(r.initialFileCount).toBe(2);
+    // 没有真实变化：再 trigger 一次 + flush，应当无事件。
+    ctx.triggerNative();
+    ctx.advance(10);
+    await new Promise((res) => setImmediate(res));
+    expect(events).toEqual([]);
+    // 真实变更：删除一个、新增一个，确认 relativePath 透传原始反斜杠。
+    fs.files.delete('sub\\b.yaml');
+    fs.files.set('sub\\c.yaml', { mtimeMs: 300, size: 7 });
+    ctx.triggerNative();
+    ctx.advance(10);
+    await new Promise((res) => setImmediate(res));
+    expect(events).toHaveLength(1);
+    const kinds = events[0].changes.map((c) => `${c.kind}:${c.relativePath}`).sort();
+    expect(kinds).toEqual(['added:sub\\c.yaml', 'removed:sub\\b.yaml']);
+    await w.stop();
+  });
 });

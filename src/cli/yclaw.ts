@@ -15,7 +15,7 @@ import { runImport, runExport } from './io';
 const HELP = `yclaw — Task-as-Code CLI
 
 Usage:
-  yclaw lint   <path...> [--format text|json] [--strict] [--check-refs] [--migrate]
+  yclaw lint   <path...> [--format text|json|sarif] [--strict] [--check-refs] [--migrate]
   yclaw import <path...> [--out <dir>] [--migrate] [--check-refs]
   yclaw export <jsonpath...> [--out <dir>]
 
@@ -89,16 +89,16 @@ async function runLintCli(
     const arg = args[i]!;
     if (arg === '--format') {
       const next = args[i + 1];
-      if (next !== 'text' && next !== 'json') {
-        io.stderr.write(`yclaw lint: --format must be "text" or "json"\n`);
+      if (next !== 'text' && next !== 'json' && next !== 'sarif') {
+        io.stderr.write(`yclaw lint: --format must be "text", "json" or "sarif"\n`);
         return 2;
       }
       format = next;
       i += 1;
     } else if (arg.startsWith('--format=')) {
       const v = arg.slice('--format='.length);
-      if (v !== 'text' && v !== 'json') {
-        io.stderr.write(`yclaw lint: --format must be "text" or "json"\n`);
+      if (v !== 'text' && v !== 'json' && v !== 'sarif') {
+        io.stderr.write(`yclaw lint: --format must be "text", "json" or "sarif"\n`);
         return 2;
       }
       format = v;

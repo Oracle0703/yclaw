@@ -1,23 +1,24 @@
 # Task-as-Code 工作流 · 代码审查记录（2026-04-20）
 
 > 范围：`src/shared/serialization/`、`src/cli/`、`src/main/ipc/task-as-code-handlers.ts`、对应 `tests/unit/`、[docs/specs/task-as-code-v1.md](specs/task-as-code-v1.md)。
-> 当前状态：TS 0 / Vitest **229 用例 (24 文件) 全绿** / `lint:tasks` 0。
+> 当前状态：TS 0 / Vitest **246 用例 (25 文件) 全绿** / `lint:tasks` 0。
+> 更新记录：2026-04-20 首于本文检查后发现 § 1 / § 2 / § 4 中部分条目与实际代码不符，已在原位标记。
 
 ## 1. 模块级问题（按文件）
 
-| 文件 | 问题 | 严重度 |
-| --- | --- | --- |
-| `src/shared/serialization/validate.ts:90-120` | id 长度上限 64，但 name 200 / description 2000，量级不一致；建议在文档中说明 | 低 |
-| `src/shared/serialization/loader.ts`（`loadDirectory`） | 同 id 跨文件时静默覆盖，无 warning issue | 中 |
-| `src/shared/serialization/service.ts:112,116` | `Persistence.upsert*` 失败仅靠抛错传递，未在文档强调 contract | 低 |
-| `src/main/ipc/task-as-code-handlers.ts:exportYaml` | `payload` 直接 cast 为 `TaskFlow` / `ExtractionTemplate`，无运行时结构校验 | **中** |
-| `src/cli/io.ts`（`checkRefs` 路径） | 仅当 inputs.length===1 且为目录时启用，CLI help 未说明 | 低 |
+| 文件 | 问题 | 严重度 | 状态 |
+| --- | --- | --- | --- |
+| `src/shared/serialization/validate.ts:90-120` | id 长度上限 64，但 name 200 / description 2000，量级不一致；建议在文档中说明 | 低 | 未处理 |
+| ~~`loader.ts`（同 id 静默覆盖）~~ | **误报**：`insertEntry` 已以 error issue 记录重复 id 且保留首次出现；有专门单测 [loader.spec.ts L124](../tests/unit/serialization/loader.spec.ts) | — | 已冲销 |
+| `src/shared/serialization/service.ts:112,116` | `Persistence.upsert*` 失败仅靠抛错传递，未在文档强调 contract | 低 | 未处理 |
+| ~~`task-as-code-handlers.ts:exportYaml` payload 未校验~~ | 已加 `assertTaskFlow` / `assertExtractionTemplate` 运行时守卫 + 17 个单测 | — | 已修复 |
+| `src/cli/io.ts`（`checkRefs` 路径） | 仅当 inputs.length===1 且为目录时启用，CLI help 未说明 | 低 | 未处理 |
 
 ## 2. 跨模块问题
 
 - **错误处理不统一**：loader 抛错 / validate 返回 issues / service 混合两者；建议用户面 API 统一为「issues 累积 + 仅程序错误抛出」。
 - **类型双轨**：`*File`（schema 形态）与运行时形态（`TaskFlow` / `ExtractionTemplate`）独立维护，缺一条 round-trip 锁定测试。
-- **IPC 边界校验薄弱**：`importYaml` / `watchStart` / `watchStop` 已校验 `path` / `watchId` 字符串非空；`exportYaml.payload` 完全未校验。
+- ~~**IPC 边界校验薄弱**~~：已加 `exportYaml.payload` 运行时结构守卫（`assertTaskFlow` / `assertExtractionTemplate`）。Ⓟ
 - **幂等性 (TAC-02) 未端到端测试**：单测层面只能 stub Persistence；缺一组「同一文件两次 importPath，断言 createdAt 不变」。
 
 ## 3. 验收标准对照表（TAC-01..08）
@@ -36,10 +37,10 @@
 ## 4. 测试覆盖缺口
 
 1. importPath 幂等性（同文件两次）。
-2. IPC 异常 payload（`exportYaml` 字段缺失/类型错）。
-3. `loadDirectory` 重复 id 行为。
+2. ~~IPC 异常 payload（`exportYaml` 字段缺失/类型错）~~ — 已补齐（[task-as-code-payload.spec.ts](../tests/unit/ipc/task-as-code-payload.spec.ts)）。
+3. ~~`loadDirectory` 重复 id 行为~~ — 已存在（[loader.spec.ts L124](../tests/unit/serialization/loader.spec.ts)）。
 4. 大目录（接近 `LOADER_SAFETY.maxFiles`）压力。
-5. Watcher 高频变更（500ms 内 100+ 改动）防抖语义。
+5. Watcher 高频变更（90+ 改动）防抖语义。
 6. Windows 路径分隔符兼容（当前仅 POSIX）。
 7. 用户手动加明文 secret 后 `validate` 是否拒绝（端到端）。
 

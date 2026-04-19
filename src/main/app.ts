@@ -24,6 +24,7 @@ import { PluginLoader } from './plugin-loader/PluginLoader';
 import { PermissionChecker } from './plugin-loader/PermissionChecker';
 import { BatchService } from './services/BatchService';
 import { TaskService } from './services/TaskService';
+import { bootstrapTaskAsCode, type TaskAsCodeBootstrap } from './services/task-as-code/bootstrap';
 import { DataSourceManager } from '@engines/analytics/DataSourceManager';
 import { IndicatorLibrary } from '@engines/analytics/IndicatorLibrary';
 import { AutomationEngine } from '@engines/automation/AutomationEngine';
@@ -77,6 +78,7 @@ export class App {
   private resultService: ResultService;
   private dataSourceManager: DataSourceManager;
   private indicatorLibrary: IndicatorLibrary;
+  private taskAsCode: TaskAsCodeBootstrap;
   private eventForwarders: Array<{ event: string; listener: (...args: unknown[]) => void }> = [];
   private interventionState: InterventionState | null = null;
   private started = false;
@@ -153,6 +155,14 @@ export class App {
     this.resultService = new ResultService({ resultRepository });
     this.dataSourceManager = new DataSourceManager({ eventBus: this.eventBus });
     this.indicatorLibrary = new IndicatorLibrary();
+    this.taskAsCode = bootstrapTaskAsCode({
+      ipcController: this.ipcController,
+      taskRepository,
+      templateRepository,
+      broadcast: (channel, payload) => {
+        this.windowManager.broadcast(channel, payload);
+      },
+    });
   }
 
   async start(): Promise<void> {
@@ -184,6 +194,8 @@ export class App {
   }
 
   private registerIpcHandlers(): void {
+    // Task-as-Code（YAML 导入/导出/watch）handler 已在 bootstrapTaskAsCode 中注册到 ipcController
+
     // 窗口管理
     this.ipcController.handle(IPC_CHANNELS.WINDOW_OPEN, (params: unknown) => {
       const { module, options } = params as { module: string; options?: Record<string, number> };
@@ -683,6 +695,10 @@ export class App {
       this.eventBus.off(event, listener);
     }
     this.eventForwarders = [];
+    // dispose 是 async：兜底捕获，避免 watcher 关闭异常被吞；不阻塞同步 shutdown 流。
+    this.taskAsCode.dispose().catch((err) => {
+      this.logService.error('main', 'task-as-code dispose failed', err as Error);
+    });
     this.ipcController.dispose();
     this.dataSourceManager.closeAll();
     this.databaseService.close();

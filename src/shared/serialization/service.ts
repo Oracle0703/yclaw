@@ -32,10 +32,20 @@ import type { ValidationIssue } from './validate';
 import type { AnyFile } from './types';
 import type { ExtractionTemplate, TaskFlow } from '@shared/types/task';
 
-/** 调用方注入的「持久化」适配器；service 不假设 DB 形态。 */
+/** 调用方注入的「持久化」适配器；service 不假设 DB 形态。
+ *
+ * 实现幂等性（TAC-02）：可选提供 `findExistingTaskCreatedAt` /
+ * `findExistingTemplateCreatedAt`，service 会以其返回值作为 `createdAt`，
+ * 这样同一文件反复 import 不会刷新创建时间。
+ *
+ * 钩子契约：返回非空 ISO 字符串 = 既存；返回 `null` / `undefined` / 空字符串 = 不存在；
+ * 抛出异常会被 service 吞掉并视为不存在（保证 importPath 不被诊断查询拖垮）。
+ */
 export interface Persistence {
   upsertTask: (flow: TaskFlow) => Promise<void> | void;
   upsertTemplate: (template: ExtractionTemplate) => Promise<void> | void;
+  findExistingTaskCreatedAt?: (id: string) => Promise<string | null> | string | null;
+  findExistingTemplateCreatedAt?: (id: string) => Promise<string | null> | string | null;
 }
 
 export interface ServiceDeps {
@@ -95,7 +105,7 @@ export class TaskAsCodeService {
     this.loadSafety = deps.loadSafety;
   }
 
-  /** 导入单个文件或目录到持久层。 */
+  /** 导入单个文件或目录到持久层。幂等：如 Persistence 提供 find* 钩子，同 id 二次导入保留原 createdAt。 */
   async importPath(target: string): Promise<ImportPathResult> {
     const st = await this.stat(target);
     if (!st) {
@@ -105,18 +115,49 @@ export class TaskAsCodeService {
       ? await loadDirectory(target, { readFile: this.readFile, safety: this.loadSafety })
       : await this.loadSingleFileAsRegistry(target);
     const refIssues = resolveReferences(registry).issues;
-    const ts = this.makeTimestamps();
+    const nowIso = new Date(this.now()).toISOString();
     let taskCount = 0;
     let templateCount = 0;
     for (const entry of registry.tasks.values()) {
+      const ts = await this.timestampsFor('task', entry.file.metadata.id, nowIso);
       await this.persistence.upsertTask(taskFromFile(entry.file, ts));
       taskCount++;
     }
     for (const entry of registry.templates.values()) {
+      const ts = await this.timestampsFor('template', entry.file.metadata.id, nowIso);
       await this.persistence.upsertTemplate(templateFromFile(entry.file, ts));
       templateCount++;
     }
     return { taskCount, templateCount, issues: [...registry.issues, ...refIssues] };
+  }
+
+  private async timestampsFor(
+    kind: 'task' | 'template',
+    id: string,
+    nowIso: string,
+  ): Promise<FromFileTimestamps> {
+    const existingCreatedAt = await this.lookupExistingCreatedAt(kind, id);
+    // 显式判定：钩子返回 null / undefined / 空字符串均视为「无既存记录」。
+    // 接口契约：`findExisting*CreatedAt` 应返回非空 ISO 字符串或 null/undefined。
+    if (existingCreatedAt == null || existingCreatedAt === '') {
+      return { now: nowIso };
+    }
+    return { now: nowIso, existingCreatedAt };
+  }
+
+  private async lookupExistingCreatedAt(
+    kind: 'task' | 'template',
+    id: string,
+  ): Promise<string | null> {
+    const fn = kind === 'task'
+      ? this.persistence.findExistingTaskCreatedAt
+      : this.persistence.findExistingTemplateCreatedAt;
+    if (!fn) return null;
+    try {
+      return (await fn(id)) ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /** 把运行时 TaskFlow 映射为 YAML 文本。 */
@@ -188,10 +229,6 @@ export class TaskAsCodeService {
       for (const id of reg.templates.keys()) out.templates.push(id);
     }
     return out;
-  }
-
-  private makeTimestamps(): FromFileTimestamps {
-    return { now: new Date(this.now()).toISOString() };
   }
 }
 

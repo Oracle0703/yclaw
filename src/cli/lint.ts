@@ -11,7 +11,7 @@ import { lintFile, loadDirectory, resolveReferences } from '@shared/serializatio
 import type { ValidationIssue } from '@shared/serialization';
 import { collectYamlFiles } from './fs-walk';
 
-export type LintFormat = 'text' | 'json';
+export type LintFormat = 'text' | 'json' | 'sarif';
 
 export interface LintOptions {
   /** 输入路径列表（文件或目录）。 */
@@ -141,6 +141,8 @@ export async function runLint(options: LintOptions): Promise<LintRunResult> {
         2,
       )}\n`,
     );
+  } else if (format === 'sarif') {
+    stdout.write(`${JSON.stringify(buildSarif(fileResults, refIssues, cwd), null, 2)}\n`);
   } else {
     stdout.write(formatTextReport(fileResults, cwd));
     if (refIssues.length > 0) {
@@ -174,4 +176,63 @@ function formatTextReport(results: LintFileResult[], cwd: string): string {
     }
   }
   return lines.join('\n');
+}
+
+/**
+ * 构造 SARIF 2.1.0 报告，便于 CI（GitHub code scanning / Azure DevOps）直接消费。
+ * 单 run 单 driver；每个 issue 映射为一条 result，level 由 severity 决定。
+ */
+function buildSarif(
+  fileResults: LintFileResult[],
+  refIssues: ValidationIssue[],
+  cwd: string,
+): unknown {
+  const ruleSet = new Map<string, { id: string; shortDescription: { text: string } }>();
+  const results: unknown[] = [];
+
+  const pushIssue = (issue: ValidationIssue, filePath: string): void => {
+    // SARIF 规范：ruleId 应为不包含不安全字符的稳定标识。issue.path 可能包含中文 / `:` / `/` 等，
+    // 这里统一转换为 `[A-Za-z0-9._-]`，空串则退化为 generic。
+    const safe = issue.path && issue.path.length > 0
+      ? issue.path.replace(/[^A-Za-z0-9._-]/g, '_')
+      : '';
+    const ruleId = safe.length > 0 ? `tac.${safe}` : 'tac.generic';
+    if (!ruleSet.has(ruleId)) {
+      ruleSet.set(ruleId, { id: ruleId, shortDescription: { text: ruleId } });
+    }
+    const display = relative(cwd, filePath) || filePath;
+    results.push({
+      ruleId,
+      level: issue.severity === 'error' ? 'error' : 'warning',
+      message: { text: issue.message },
+      locations: [{
+        physicalLocation: {
+          artifactLocation: { uri: display.replace(/\\/g, '/') },
+        },
+      }],
+    });
+  };
+
+  for (const fr of fileResults) {
+    for (const issue of fr.issues) pushIssue(issue, fr.filePath);
+  }
+  for (const issue of refIssues) {
+    pushIssue(issue, issue.path || cwd);
+  }
+
+  return {
+    $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+    version: '2.1.0',
+    runs: [{
+      tool: {
+        driver: {
+          name: 'yclaw-lint',
+          // 仓库主页（使用者可 fork 后覆盖）。
+          informationUri: 'https://github.com/huangyu/yclaw',
+          rules: Array.from(ruleSet.values()),
+        },
+      },
+      results,
+    }],
+  };
 }

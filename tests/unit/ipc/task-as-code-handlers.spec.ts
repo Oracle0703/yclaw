@@ -142,4 +142,120 @@ describe('main · ipc · task-as-code-handlers', () => {
       TAC_CHANNELS.watchStop,
     ].sort());
   });
+
+  it('watchStart rejects when maxWatches reached', async () => {
+    const fakeService = {
+      watchDirectory: vi.fn(async () => ({ initialFileCount: 0, stop: async () => undefined })),
+    } as unknown as TaskAsCodeService;
+    let id = 0;
+    const h = createTaskAsCodeHandlers({
+      service: fakeService,
+      emit: vi.fn(),
+      generateId: () => `w${++id}`,
+      maxWatches: 2,
+    });
+    await h.watchStart({ rootDir: tmp });
+    await h.watchStart({ rootDir: tmp });
+    await expect(h.watchStart({ rootDir: tmp })).rejects.toThrow(/Watch limit reached/);
+    await h.disposeAll();
+  });
+
+  it('TTL fires auto-stop and frees slot for new watch', async () => {
+    const stops: Array<() => Promise<void>> = [];
+    const fakeService = {
+      watchDirectory: vi.fn(async () => {
+        const stop = vi.fn(async () => undefined);
+        stops.push(stop);
+        return { initialFileCount: 0, stop };
+      }),
+    } as unknown as TaskAsCodeService;
+    // 注入定时器：保留 cb，手动触发。
+    let timerCb: (() => void) | null = null;
+    const setTimer = vi.fn((cb: () => void, _ms: number) => { timerCb = cb; return { token: 1 }; });
+    const clearTimer = vi.fn();
+    let id = 0;
+    const h = createTaskAsCodeHandlers({
+      service: fakeService,
+      emit: vi.fn(),
+      generateId: () => `w${++id}`,
+      maxWatches: 1,
+      watchTtlMs: 1000,
+      setTimer,
+      clearTimer,
+    });
+    await h.watchStart({ rootDir: tmp });
+    expect(setTimer).toHaveBeenCalledOnce();
+    expect(h.watchCount).toBe(1);
+    // 触发 TTL：应自动停止并释放槽位。
+    timerCb!();
+    await new Promise((r) => setImmediate(r));
+    expect(stops[0]).toHaveBeenCalledTimes(1);
+    expect(h.watchCount).toBe(0);
+    // 槽位释放后可再次 start。
+    await expect(h.watchStart({ rootDir: tmp })).resolves.toMatchObject({ watchId: 'w2' });
+    await h.disposeAll();
+  });
+
+  it('watchStop clears TTL timer to avoid double-stop', async () => {
+    const stop = vi.fn(async () => undefined);
+    const fakeService = {
+      watchDirectory: vi.fn(async () => ({ initialFileCount: 0, stop })),
+    } as unknown as TaskAsCodeService;
+    const setTimer = vi.fn(() => ({ token: 'a' }));
+    const clearTimer = vi.fn();
+    const h = createTaskAsCodeHandlers({
+      service: fakeService,
+      emit: vi.fn(),
+      generateId: () => 'w1',
+      watchTtlMs: 1000,
+      setTimer,
+      clearTimer,
+    });
+    await h.watchStart({ rootDir: tmp });
+    await h.watchStop({ watchId: 'w1' });
+    expect(clearTimer).toHaveBeenCalledWith({ token: 'a' });
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('watchTtlMs=0 disables TTL timer', async () => {
+    const fakeService = {
+      watchDirectory: vi.fn(async () => ({ initialFileCount: 0, stop: async () => undefined })),
+    } as unknown as TaskAsCodeService;
+    const setTimer = vi.fn();
+    const h = createTaskAsCodeHandlers({
+      service: fakeService,
+      emit: vi.fn(),
+      generateId: () => 'w1',
+      watchTtlMs: 0,
+      setTimer,
+    });
+    await h.watchStart({ rootDir: tmp });
+    expect(setTimer).not.toHaveBeenCalled();
+    await h.disposeAll();
+  });
+
+  it('disposeAll clears every live TTL timer', async () => {
+    const fakeService = {
+      watchDirectory: vi.fn(async () => ({ initialFileCount: 0, stop: async () => undefined })),
+    } as unknown as TaskAsCodeService;
+    let n = 0;
+    const setTimer = vi.fn(() => ({ id: ++n }));
+    const clearTimer = vi.fn();
+    let id = 0;
+    const h = createTaskAsCodeHandlers({
+      service: fakeService,
+      emit: vi.fn(),
+      generateId: () => `w${++id}`,
+      watchTtlMs: 1000,
+      setTimer,
+      clearTimer,
+    });
+    await h.watchStart({ rootDir: tmp });
+    await h.watchStart({ rootDir: tmp });
+    await h.watchStart({ rootDir: tmp });
+    expect(setTimer).toHaveBeenCalledTimes(3);
+    await h.disposeAll();
+    expect(clearTimer).toHaveBeenCalledTimes(3);
+    expect(h.watchCount).toBe(0);
+  });
 });

@@ -10,6 +10,7 @@
   },
   "include": [
     "src/main/windows/preload.ts",
-    "src/shared/types"
+    "src/renderer/shared/api/taskAsCode.ts",
+    "src/shared"
   ]
 }

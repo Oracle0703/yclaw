@@ -121,6 +121,51 @@ describe('cli · lint', () => {
     expect(parsed.files[0].issues.length).toBeGreaterThan(0);
   });
 
+  it('emits valid SARIF 2.1.0 when format=sarif', async () => {
+    const file = join(dir, 't.yaml');
+    writeFileSync(file, INVALID);
+    const stdout = new StringSink();
+    const r = await runLint({ inputs: [file], format: 'sarif', stdout, stderr: new StringSink(), cwd: dir });
+    expect(r.exitCode).toBe(1);
+    const sarif = JSON.parse(stdout.text());
+    expect(sarif.version).toBe('2.1.0');
+    expect(sarif.runs).toHaveLength(1);
+    expect(sarif.runs[0].tool.driver.name).toBe('yclaw-lint');
+    expect(Array.isArray(sarif.runs[0].results)).toBe(true);
+    expect(sarif.runs[0].results.length).toBeGreaterThan(0);
+    const first = sarif.runs[0].results[0];
+    expect(['error', 'warning']).toContain(first.level);
+    expect(typeof first.message.text).toBe('string');
+    expect(first.locations[0].physicalLocation.artifactLocation.uri).toMatch(/t\.yaml$/);
+    // 规则被收集到 driver.rules 中
+    expect(Array.isArray(sarif.runs[0].tool.driver.rules)).toBe(true);
+    expect(sarif.runs[0].tool.driver.rules.length).toBeGreaterThan(0);
+  });
+
+  it('SARIF emits empty results array when all files pass', async () => {
+    const file = join(dir, 'ok.yaml');
+    writeFileSync(file, VALID);
+    const stdout = new StringSink();
+    const r = await runLint({ inputs: [file], format: 'sarif', stdout, stderr: new StringSink(), cwd: dir });
+    expect(r.exitCode).toBe(0);
+    const sarif = JSON.parse(stdout.text());
+    expect(sarif.runs[0].results).toEqual([]);
+  });
+
+  it('SARIF ruleId is sanitized to safe characters [A-Za-z0-9._-]', async () => {
+    const file = join(dir, 't.yaml');
+    writeFileSync(file, INVALID);
+    const stdout = new StringSink();
+    await runLint({ inputs: [file], format: 'sarif', stdout, stderr: new StringSink(), cwd: dir });
+    const sarif = JSON.parse(stdout.text());
+    for (const rule of sarif.runs[0].tool.driver.rules as Array<{ id: string }>) {
+      expect(rule.id).toMatch(/^tac\.[A-Za-z0-9._-]+$/);
+    }
+    for (const r of sarif.runs[0].results as Array<{ ruleId: string }>) {
+      expect(r.ruleId).toMatch(/^tac\.[A-Za-z0-9._-]+$/);
+    }
+  });
+
   it('strict mode turns warnings into failure', async () => {
     // 空 steps 数组是 warning
     const file = join(dir, 'warn.yaml');

@@ -144,6 +144,15 @@ export class TaskRepository {
     );
   }
 
+  /** 仅返回 created_at；用于 Task-as-Code 幂等导入决策。 */
+  getTaskCreatedAt(taskId: string): string | null {
+    const row = this.executor.get<{ createdAt: string }>(
+      'SELECT created_at AS createdAt FROM tasks WHERE id = ?',
+      [taskId],
+    );
+    return row?.createdAt ?? null;
+  }
+
   createTask(task: {
     id: string;
     name: string;
@@ -226,6 +235,12 @@ export class TaskRepository {
     this.executor.run('DELETE FROM tasks WHERE id = ?', [taskId]);
   }
 
+  /**
+   * 保存完整 TaskFlow（双写策略）：
+   * - `tasks.flow_json` 仅存 `{ steps }`，作为「快照 / 容灾恢复」的源；name/description/时间戳走列。
+   * - `task_steps` 表存归一化的逐步行，供 SQL 查询/索引/外键引用使用。
+   * 两者由本方法在同一事务中刷新；不存在 = INSERT，存在 = UPDATE 后清空 + 重新插入。
+   */
   saveTaskFlow(flow: TaskFlow): void {
     this.executor.transaction(() => {
       const flowJson = JSON.stringify({ steps: flow.steps });

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ElectronAPI } from '@shared/types';
+import { createTaskAsCodeApi, type TaskAsCodeApi } from '@renderer/shared/api/taskAsCode';
 
 const electronAPI: ElectronAPI = {
   invoke: (channel: string, ...args: unknown[]) => {
@@ -17,4 +18,12 @@ const electronAPI: ElectronAPI = {
   },
 };
 
+const api: { taskAsCode: TaskAsCodeApi } = {
+  taskAsCode: createTaskAsCodeApi({
+    invoke: electronAPI.invoke,
+    on: electronAPI.on,
+  }),
+};
+
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
+contextBridge.exposeInMainWorld('api', api);
