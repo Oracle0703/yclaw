@@ -1,6 +1,6 @@
 # YClaw
 
-> Extensible desktop ops workspace built with Electron, React, and Vite.
+> 基于 Electron、React、Vite 构建的可扩展桌面运营工作台。
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-0f172a.svg)](./LICENSE)
 ![Electron](https://img.shields.io/badge/electron-33-1f2937.svg)
@@ -8,148 +8,99 @@
 ![TypeScript](https://img.shields.io/badge/typescript-5-0f766e.svg)
 ![Vite](https://img.shields.io/badge/vite-6-7c3aed.svg)
 
-YClaw is a modular desktop workbench for operations-heavy workflows: analytics, automation, embedded browsing, AI assistant, plugin governance, and shared system services. It is structured as an Electron shell with 6 renderer entries, a typed IPC layer (60+ channels), an AI service layer, and a plugin-oriented architecture.
+## 项目简介
 
-Core capabilities are implemented: main-process services, multi-window management, IPC bridge, automation/analytics engines, AI assistant (LLM + tool calling), command palette, and broad unit/regression test coverage.
+YClaw 是一个面向复杂运营工作流的桌面工作台，目标是把浏览、自动化、分析、AI 助手、插件治理和系统服务统一到一个 Electron 容器中。
 
-## Automation Browser Ops V1
+当前仓库已经不是“纯规划项目”，而是一个**可运行、可构建、可测试**的工程仓库。
 
-This branch now includes a first productized pass of the automation + browser ops loop:
+| 方向 | 当前状态 |
+| --- | --- |
+| 桌面壳 | Electron 主进程、窗口管理、托盘、自动更新已落地 |
+| 渲染层 | React + Vite 多入口页面已建立 |
+| IPC 边界 | 已有类型化通道、事件总线与限流控制 |
+| 核心引擎 | 自动化引擎、分析引擎已具备基础能力 |
+| AI 助手 | 服务层、工具调用、聊天面板已接入 |
+| 插件系统 | 插件加载、权限校验、插件中心、宿主页已具备基础版本 |
+| 工程能力 | 已有 lint、typecheck、单测、e2e、构建与打包脚本 |
 
-- task list, batch list, result table, export flow, and failed-batch retry entry
-- browser intervention panel with breakpoint/session context and manual resume
-- session registry, extraction template service, template manager, and recorder panel
-- execution alert view backed by structured execution logs
-- Playwright acceptance coverage for manual start, export, and intervention resume
+## 当前重点能力
 
-Current known limits:
+| 模块 | 已实现能力 |
+| --- | --- |
+| `workbench` | 工作台首页、设置页、命令面板、AI 助手入口 |
+| `stock` | K 线图与技术指标展示基础能力 |
+| `automation` | 任务列表、步骤编辑、执行面板、批次/结果/模板管理 |
+| `browser` | 多标签会话控制台、地址栏、干预面板、录制面板 |
+| `plugin-center` | 插件安装、启停、卸载、权限确认 |
+| `plugin-host` | 受限插件宿主与桥接层 |
+| 主进程服务 | 配置、数据库、日志、托盘、更新、标签与窗口管理 |
 
-- full task CRUD/product editing flow is not finished yet
-- scheduler and recorder are minimal production skeletons, not the final hardened implementation
-- captcha handling remains manual-only
-- Playwright coverage runs against Vite renderer entries with mocked preload, not packaged Electron binaries
+## 自动化 Browser Ops V1
 
-## Why YClaw
+当前分支已补齐一轮“自动化 + 浏览器运维闭环”基础能力：
 
-YClaw targets a practical gap between generic admin panels and heavyweight internal tooling platforms. It treats the desktop shell as an operations cockpit:
+| 能力 | 当前内容 |
+| --- | --- |
+| 任务执行 | 任务列表、批次列表、结果表格、失败重试入口 |
+| 浏览器干预 | 断点/会话上下文展示、人工恢复 |
+| 执行支撑 | 会话注册、模板服务、模板管理、录制面板 |
+| 可观测性 | 基于执行日志的告警与状态视图 |
+| 验证方式 | Playwright 覆盖手动启动、导出、干预恢复主流程 |
 
-- one container for browsing, automation, analysis, and plugin governance
-- multiple focused renderer entries instead of forcing everything into one page
-- typed boundaries between Electron main process, preload bridge, and React modules
-- an architecture that can grow from local tooling into a more extensible desktop platform
+## 已知限制
 
-## At A Glance
+| 类别 | 当前限制 |
+| --- | --- |
+| 自动化真实场景 | 复杂页面自动化与全量任务 CRUD 仍在继续增强 |
+| 调度与录制 | 已具备生产骨架，但还不是最终强化版本 |
+| 验证边界 | e2e 目前主要针对渲染层与预加载模拟环境 |
+| 插件隔离 | 仍为基础宿主模式，按插件独立进程隔离属于后续版本 |
+| 发布验证 | 多平台打包脚本已存在，但发行质量仍需持续验证 |
 
-- Docs: [docs/prd.md](docs/prd.md), [docs/architecture.md](docs/architecture.md), [docs/specs.md](docs/specs.md)
-- Changelog: [CHANGELOG.md](CHANGELOG.md)
-- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
-- Security policy: [SECURITY.md](SECURITY.md)
-- License: [LICENSE](LICENSE)
+## 快速开始
 
-## Highlights
+### 环境要求
 
-- Electron desktop shell with multi-window module management (WindowManager, up to 10 windows)
-- React + Vite renderer architecture with **6 independent entry pages**
-- Typed IPC bridge (60+ channels) with rate limiting (100/s) and EventBus
-- **AI assistant**: LLM service layer (OpenAI / Ollama), tool registry, context manager, chat panel (Ctrl+J)
-- **Command palette** (Ctrl+K) with fuzzy search and command registry
-- Built-in module entries:
-  - `workbench` — operations cockpit with KPI dashboard
-  - `stock` — K-line charts + technical indicators (MA/MACD/RSI/BOLL)
-  - `automation` — task flow editor + execution panel
-  - `browser` — multi-tab browser session console backed by main-process WebContentsView
-  - `plugin-center` — local plugin management + permission review
-  - `plugin-host` — shared plugin runtime with restricted preload APIs
-- Shared UI components: PageShell, TitleBar, GlobalLoading, Sparkline, RingGauge, TaskTimeline
-- Plugin host with three-level permission model (L1/L2/L3)
-- System services: SQLite (WAL mode), config, logging (7-day rotation), tray, auto-update
-- Automation engine: 5 actions (click/input/scroll/extract/screenshot), flow runner with breakpoint resume
-- Analytics engine: DataSourceManager (REST/WebSocket), IndicatorLibrary
-- Automation Browser Ops V1 scaffold: batches, results, intervention, sessions, templates, recorder, alerts
-- Test coverage: unit and regression suites across services, engines, components, shared utilities, and scripts
+| 项目 | 要求 |
+| --- | --- |
+| Node.js | `>=20.19.0 <23` |
+| 包管理器 | `npm` |
+| 平台 | Windows / macOS / Linux |
 
-## Current Status
-
-Implemented and tested:
-
-- Electron main-process app lifecycle and multi-window management (up to 10)
-- Preload + `contextBridge` IPC bridge with 60+ typed channels
-- IPC Controller with rate limiting (100 req/s) and EventBus fan-out
-- AI service layer: AIService, ContextManager, ToolRegistry, LLMProvider (OpenAI/Ollama)
-- AI Chat Panel (Ctrl+J) with Zustand state management
-- Command Palette (Ctrl+K) with fuzzy search and command registry
-- Workbench UI with module navigation, KPI cards, AI assistant integration
-- Stock analysis module with K-line chart and indicator workflow
-- Automation task list/editor/execution panel with step editor
-- Browser session console with multi-tab management, navigation state, and configurable session partitions
-- Automation Browser Ops V1: batch tracking, result export, session binding, template CRUD, recorder import, alert aggregation
-- Plugin center with local install, enable/disable, uninstall confirmation, permission review flow, and three-level permission model
-- SQLite database service (WAL mode), config service, log service (7-day rotation), tray, auto-update
-- Automation engine: 5 operations, flow runner with retry + breakpoint resume
-- Analytics engine: DataSourceManager, IndicatorLibrary (MA/MACD/RSI/BOLL)
-- Shared components: PageShell, TitleBar, ErrorBoundary, GlobalLoading, AppProviders, Sparkline, RingGauge, TaskTimeline
-- Comprehensive unit and regression tests across core services and renderer components
-
-Still evolving:
-
-- Full production-grade automation execution against real pages
-- Complete plugin runtime isolation (V1.5 target)
-- End-to-end test coverage for packaged Electron runtime
-- Automation Browser Ops V1 hardening: full task CRUD, stronger scheduler recovery, richer recorder semantics
-- Production packaging verification across all platforms
-
-## Tech Stack
-
-- Electron 33
-- React 18
-- Vite 6
-- TypeScript 5.7
-- Ant Design 5 + Pro Components
-- Zustand 5 (state management)
-- better-sqlite3 (SQLite with WAL)
-- electron-builder
-- Vitest 2 + @testing-library/react + happy-dom
-
-## Quick Start
-
-### Requirements
-
-- Node.js `>= 20.19.0`
-- npm
-- macOS / Windows / Linux supported by Electron tooling
-
-### Install
+### 安装依赖
 
 ```bash
 npm install
 ```
 
-### Run In Development
+### 启动开发环境
 
 ```bash
 npm run dev
 ```
 
-This starts:
-
-- Vite dev server
-- preload TypeScript watch build
-- Electron main process through `tsx`
-
-### Build
+### 构建
 
 ```bash
 npm run build
 ```
 
-### Package Release Artifacts
+### 测试
+
+```bash
+npm test
+npm run test:e2e
+npm run typecheck
+```
+
+### 打包
 
 ```bash
 npm run dist
 ```
 
-Platform-specific packaging is also available:
+平台打包：
 
 ```bash
 npm run dist:mac
@@ -157,201 +108,91 @@ npm run dist:win
 npm run dist:linux
 ```
 
-### Test
+## 常用脚本
 
-```bash
-npm test
-```
+| 命令 | 说明 |
+| --- | --- |
+| `npm run dev` | 启动本地开发环境 |
+| `npm run build` | 构建核心渲染层、特性包与主进程 |
+| `npm run build:core` | 构建核心渲染层 |
+| `npm run build:features` | 构建特性包并同步产物 |
+| `npm run build:main` | 编译主进程 |
+| `npm run lint` | 执行 ESLint |
+| `npm run format` | 执行 Prettier |
+| `npm test` | 运行 Vitest |
+| `npm run test:coverage` | 运行覆盖率测试 |
+| `npm run test:e2e` | 运行 Playwright |
+| `npm run typecheck` | 执行 TypeScript 类型检查 |
+| `npm run pack` | 生成未封装 Electron 构建产物 |
+| `npm run dist` | 生成发行包 |
+| `npm run dist:win:core` | 生成 Windows 精简核心包 |
 
-### End-to-End Acceptance
+## 文档导航
 
-```bash
-npm run test:e2e -- --grep automation-browser-ops
-```
+| 文档 | 说明 |
+| --- | --- |
+| `docs/current-status.md` | 当前实现现状、已知限制、阅读建议 |
+| `docs/index.md` | `docs/` 文档总索引 |
+| `docs/architecture.md` | 技术架构、进程模型、核心调用链路 |
+| `docs/structure.md` | 实际目录结构与模块职责 |
+| `docs/prd.md` | 产品愿景与核心场景 |
+| `docs/plan.md` | 可行性分析与阶段计划 |
+| `docs/specs.md` | 基线规格与验收目标 |
+| `docs/specs-enhancements.md` | 增强项规格 |
+| `docs/specs-automation-browser-ops-v1.md` | 自动化 Browser Ops 专项规格 |
+| `docs/roadmap-next.md` | 近期演进路线 |
 
-### Type Check
-
-```bash
-npm run typecheck
-```
-
-## Available Scripts
-
-| Command                  | Description                                              |
-| ------------------------ | -------------------------------------------------------- |
-| `npm run dev`            | Start Vite + preload watcher + Electron development flow |
-| `npm run build`          | Build renderer entries and main process                  |
-| `npm run build:renderer` | Build Vite renderer bundles                              |
-| `npm run build:main`     | Compile Electron main process                            |
-| `npm run lint`           | Run ESLint on `src/` and `tests/`                        |
-| `npm run format`         | Format TypeScript/CSS files with Prettier                |
-| `npm test`               | Run Vitest test suite                                    |
-| `npm run test:coverage`  | Run tests with coverage                                  |
-| `npm run test:e2e`       | Run Playwright tests                                     |
-| `npm run pack`           | Create unpacked Electron build                           |
-| `npm run dist`           | Build distributable app packages                         |
-| `npm run dist:mac`       | Build macOS release artifacts                            |
-| `npm run dist:win`       | Build Windows release artifacts                          |
-| `npm run dist:linux`     | Build Linux release artifacts                            |
-
-## Quality Gates
-
-Current repository validation baseline:
-
-- `npm run lint`
-- `npm run typecheck`
-- `npm test`
-- `npm run build`
-
-The current local baseline is green across all four commands.
-
-Release automation is configured through [release.yml](.github/workflows/release.yml) and publishes tagged builds for `v*`.
-GitHub release notes are generated from [CHANGELOG.md](CHANGELOG.md) through [extract-release-notes.mjs](.github/scripts/extract-release-notes.mjs).
-Dependency update automation is configured through [dependabot.yml](.github/dependabot.yml).
-
-## Project Structure
+## 目录概览
 
 ```text
 src/
-  main/                 Electron main process
-    ai/                 AI service layer (AIService, ContextManager, ToolRegistry, LLMProvider)
-    browser/            TabManager (browser session and WebContentsView management)
-    ipc/                IPC Controller + EventBus
-    plugin-loader/      Plugin scanning + permission checking
-    services/           DB, Config, Log, Tray, Update services
-    windows/            WindowManager + preload
+  main/                 Electron 主进程、系统服务、AI、插件、浏览器管理
   renderer/
-    entries/            6 module entry pages
-      workbench/        Main operations cockpit
-      stock/            Stock analysis module
-      automation/       Task automation module
-      browser/          Browser session console
-      plugin-center/    Plugin management module
-    plugin-host/        Sandboxed plugin runtime
-    shared/             Shared renderer components/hooks/styles
-      components/       PageShell, TitleBar, CommandPalette, AIChatPanel, Sparkline, etc.
-      hooks/            useIpc, useEventBus, useLoading
-  shared/               Cross-process types/constants/utils
-    types/              IPC, plugin, task, stock, config, browser, AI types
-    constants/          60+ IPC channels, permissions, events
-  engines/              Automation + analytics engines
+    entries/            业务模块入口（workbench/stock/automation/browser/plugin-center）
+    plugin-host/        插件宿主页与桥接层
+    shared/             共享组件、Hook、样式、工具
+  shared/               主/渲染进程共享类型、常量、工具
+  engines/              自动化与分析引擎
 plugins/
-  _template/            Plugin starter template
-docs/
-  prd.md                Product requirements
-  plan.md               Milestones and feasibility notes
-  architecture.md       Technical architecture
-  structure.md          Project structure
-  specs.md              Spec breakdown (SPEC-001 ~ SPEC-022)
-  specs-enhancements.md Enhancement specs (SPEC-023 ~ SPEC-028)
+  _template/            插件模板
+scripts/                开发、构建、打包辅助脚本
 tests/
-  unit/                 Unit and regression tests
-    components/         UI component + regression tests
-    services/           Service layer tests (including AI)
-    engines/            Engine tests
-    shared/             Shared utility tests
-scripts/
-  dev.ts                Development launcher
+  unit/                 单元与回归测试
+  e2e/                  Playwright 端到端测试
+docs/                   产品、架构、规格、现状与专项文档
 ```
 
-## Module Overview
+更详细的目录说明见 `docs/structure.md`。
 
-### Workbench
+## 工程质量基线
 
-The primary operations cockpit. It provides the shared navigation shell, cross-module overview, settings, CommandPalette (Ctrl+K), AI Chat Panel (Ctrl+J), and the admin-style UI baseline used by the rest of the product.
-
-### Stock
-
-Market/indicator-oriented workspace with K-line rendering, timeframe selection, and technical indicator toggles (MA, MACD, RSI, BOLL). Powered by IndicatorLibrary and DataSourceManager engines.
-
-### Automation
-
-Task-oriented flow editor and execution panel. It is designed as the UI companion to the automation engine and retry/flow runner primitives already present in `src/engines/automation/`.
-
-### Browser
-
-Browser session console with multi-tab management (TabManager, up to 20 tabs), address bar, navigation state, and WebViewContainer metadata. The main process owns WebContentsView instances; the renderer intentionally presents a controlled session console rather than pretending to embed the native view directly.
-
-### Plugin Center
-
-UI for local plugin installation, enable/disable, uninstall confirmation, permission review, and metadata display. Plugin loading and permission enforcement logic live in the main process.
-
-## Architecture Notes
-
-- Main/renderer communication is routed through Electron IPC (60+ typed channels).
-- Shared constants and type definitions live under `src/shared/`.
-- AI service layer provides LLM integration with tool calling (task_list, system_status, navigate).
-- Window management is centralized in [src/main/windows/WindowManager.ts](src/main/windows/WindowManager.ts).
-- Renderer entry resolution is handled through [src/main/utils/paths.ts](src/main/utils/paths.ts).
-- Vite multi-entry build configuration is defined in [vite.config.ts](vite.config.ts).
-- Shared page framing for renderer modules lives in [src/renderer/shared/components/PageShell.tsx](src/renderer/shared/components/PageShell.tsx).
-- Path aliases: `@shared`, `@main`, `@renderer`, `@engines`.
-
-For deeper background, see:
-
-- [docs/prd.md](docs/prd.md)
-- [docs/architecture.md](docs/architecture.md)
-- [docs/structure.md](docs/structure.md)
-- [docs/specs.md](docs/specs.md)
-
-## Plugin Development
-
-There is a starter template in [plugins/\_template](plugins/_template) with:
-
-- `plugin.json` manifest
-- `src/index.ts` entry
-- template `README.md`
-
-The long-term design is permission-aware and plugin-driven, but the current repository should be treated as a controlled host environment, not yet a stable public plugin SDK.
-
-## Testing
-
-The repository includes comprehensive unit and regression coverage:
-
-- Main-process services: ConfigService, LogService, DatabaseService, TrayService, UpdateService
-- AI service layer: AIService, ContextManager, ToolRegistry
-- IPC controller and EventBus
-- Browser/tab management: TabManager, WindowManager
-- Automation engines: AutomationEngine, FlowRunner, RetryPolicy, SelectorGenerator
-- Analytics engines: DataSourceManager, IndicatorLibrary
-- Shared validators, constants, formatters, and logger helpers
-- Renderer components: KLineChart, StepEditor, ExecutionPanel, PluginCard, PermissionDialog, AddressBar, TabBar, Sparkline, RingGauge, TaskTimeline, CommandRegistry, WebViewContainer
-- Regression tests: BrowserApp, Loading
-
-Test entrypoint:
-
-- [tests/setup.ts](tests/setup.ts)
-
-## Roadmap
-
-Near-term priorities:
-
-- Production-grade automation execution against real pages
-- Plugin runtime isolation upgrade (V1.5: per-plugin process)
-- End-to-end test coverage with Playwright
-- AI assistant: streaming responses, more tool integrations
-- Production packaging verification across all platforms
-
-## Contributing
-
-Issues and pull requests are welcome. If you contribute, prefer:
-
-- small, reviewable changes
-- TypeScript-first implementations
-- matching existing naming/layout conventions
-- adding or updating tests when behavior changes
-- keeping docs in sync with actual code
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contributor workflow and PR expectations.
-Community participation is also governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
-
-Before opening a PR, a good baseline is:
+建议在提交前至少执行以下命令：
 
 ```bash
+npm run lint
 npm run typecheck
 npm test
 npm run build
 ```
+
+CI 与发布相关配置位于：
+
+| 文件 | 说明 |
+| --- | --- |
+| `.github/workflows/ci.yml` | CI 校验流程 |
+| `.github/workflows/release.yml` | 发版流程 |
+| `.github/scripts/extract-release-notes.mjs` | 发布说明提取脚本 |
+
+## 贡献与协作
+
+提交改动时建议遵循：
+
+- 保持改动聚焦、便于评审
+- 优先保持 TypeScript 类型完整
+- 行为变更时同步更新测试与文档
+- 保持目录结构与命名风格一致
+
+详细协作方式见 `CONTRIBUTING.md`，社区行为规范见 `CODE_OF_CONDUCT.md`，安全相关说明见 `SECURITY.md`。
 
 ## License
 
