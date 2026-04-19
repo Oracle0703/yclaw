@@ -21,6 +21,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
+    "yclaw": "tsx scripts/yclaw.ts",
+    "lint:tasks": "tsx scripts/yclaw.ts lint examples/tasks",
     "pack": "electron-builder --dir",
     "dist": "npm run build && electron-builder --config electron-builder.full.yml",
     "dist:mac": "npm run build && electron-builder --mac --config electron-builder.full.yml",
@@ -35,6 +37,7 @@
     "electron-log": "^5.2.4",
     "electron-store": "^10.0.0",
     "electron-updater": "^6.3.9",
+    "yaml": "^2.8.3",
     "zod": "^3.24.0"
   },
   "devDependencies": {
@@ -51,6 +54,7 @@
     "@typescript-eslint/parser": "^8.16.0",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^2.1.8",
+    "antd": "^5.29.3",
     "electron": "^41.2.0",
     "electron-builder": "^25.1.8",
     "eslint": "^8.57.0",
@@ -58,16 +62,15 @@
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "happy-dom": "^20.9.0",
-    "antd": "^5.29.3",
     "prettier": "^3.4.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
-    "zustand": "^5.0.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite": "^6.0.0",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "zustand": "^5.0.2"
   },
   "engines": {
     "node": ">=20.19.0 <23"

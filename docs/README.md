@@ -52,10 +52,14 @@
 - [specs/v1.0-baseline.md](specs/v1.0-baseline.md)：V1.0 基线规格
 - [specs/v1.1-enhancements.md](specs/v1.1-enhancements.md)：V1.1 增强规格
 - [specs/automation-browser-ops-v1.md](specs/automation-browser-ops-v1.md)：自动化采集 V1 规格
+- [specs/headless-runner-v1.md](specs/headless-runner-v1.md)：Headless Runner / CLI 草案
+- [specs/task-as-code-v1.md](specs/task-as-code-v1.md)：任务即代码草案
+- [specs/mcp-integration-v1.md](specs/mcp-integration-v1.md)：MCP 集成草案
 - [plans/automation-browser-ops-v1.md](plans/automation-browser-ops-v1.md)：自动化采集 V1 实施计划
 
 ### 2.5 设计与专项（design）
 
+- [design/next-phase-ideas.md](design/next-phase-ideas.md)：下一阶段拓展思路（产品形态升维副线）
 - [design/ai-assistant.md](design/ai-assistant.md)：AI 运营助手设计方案
 - [design/dashboard-ideas.md](design/dashboard-ideas.md)：总控页面创意建议
 - [design/page-container-optimization.md](design/page-container-optimization.md)：页面容器优化建议

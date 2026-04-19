@@ -19,7 +19,8 @@
       "@shared/*": ["src/shared/*"],
       "@main/*": ["src/main/*"],
       "@renderer/*": ["src/renderer/*"],
-      "@engines/*": ["src/engines/*"]
+      "@engines/*": ["src/engines/*"],
+      "@cli/*": ["src/cli/*"]
     }
   },
   "include": ["src"],

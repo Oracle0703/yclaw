@@ -1,0 +1,49 @@
+schemaVersion: 1
+kind: Task
+metadata:
+  id: daily-report
+  name: 每日运营报表采集
+  tags:
+    - daily
+    - report
+  description: 登录后台并下载昨日运营数据
+spec:
+  entryUrl: https://example.com/login
+  templateRef: extract-table
+  enabled: true
+  steps:
+    - id: input-username
+      name: 输入用户名
+      action:
+        type: input
+        selector: '#username'
+        params:
+          value: ${env:DEMO_USERNAME}
+        timeout: 5000
+    - id: input-password
+      name: 输入密码
+      action:
+        type: input
+        selector: '#password'
+        params:
+          value: ${env:DEMO_PASSWORD}
+    - id: submit
+      name: 提交登录
+      action:
+        type: click
+        selector: 'button[type="submit"]'
+      retryCount: 2
+      retryDelay: 1000
+    - id: extract-table
+      name: 抓取报表
+      action:
+        type: extract
+        selector: '#report-table'
+  schedule:
+    type: cron
+    cron: 0 9 * * *
+    timeoutMs: 600000
+    maxConcurrency: 1
+  secrets:
+    username: ${env:DEMO_USERNAME}
+    password: ${env:DEMO_PASSWORD}

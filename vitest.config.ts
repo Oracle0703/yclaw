@@ -9,6 +9,7 @@ export default defineConfig({
       '@main': resolve(__dirname, 'src/main'),
       '@renderer': resolve(__dirname, 'src/renderer'),
       '@engines': resolve(__dirname, 'src/engines'),
+      '@cli': resolve(__dirname, 'src/cli'),
     },
   },
   test: {
