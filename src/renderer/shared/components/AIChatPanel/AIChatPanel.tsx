@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CloseOutlined, RobotOutlined, SendOutlined, UserOutlined } from '@ant-design/icons';
 import { Avatar, Badge, Button, Input, Space, Spin, Typography } from 'antd';
-import type { ChatMessage } from '@shared/types';
+import { IPC_CHANNELS } from '@shared/constants/channels';
+import type {
+  AIChatResponse,
+  AIPendingToolCall,
+  AIToolDef,
+  ChatMessage,
+  ToolResult,
+} from '@shared/types';
 import { useAIChatStore } from './store';
 
 const { TextArea } = Input;
@@ -94,7 +101,15 @@ export default function AIChatPanel() {
   } = useAIChatStore();
 
   const [inputValue, setInputValue] = useState('');
+  const [availableTools, setAvailableTools] = useState<AIToolDef[]>([]);
+  const [toolName, setToolName] = useState('');
+  const [toolParamsText, setToolParamsText] = useState('{}');
+  const [pendingToolCall, setPendingToolCall] = useState<AIPendingToolCall | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const selectedTool = useMemo(
+    () => availableTools.find((tool) => tool.name === toolName.trim()) ?? null,
+    [availableTools, toolName],
+  );
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -115,6 +130,107 @@ export default function AIChatPanel() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggle]);
 
+  const loadTools = useCallback(async () => {
+    try {
+      const response = await window.electronAPI.invoke<AIToolDef[]>(IPC_CHANNELS.AI_TOOLS_LIST);
+      if (response.success && Array.isArray(response.data)) {
+        setAvailableTools(response.data);
+      }
+    } catch {
+      setAvailableTools([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    void loadTools();
+  }, [isOpen, loadTools]);
+
+  const addAssistantMessage = useCallback(
+    (content: string) => {
+      addMessage({
+        id: `${Date.now()}-assistant-${Math.random().toString(36).slice(2, 8)}`,
+        role: 'assistant',
+        content,
+        timestamp: Date.now(),
+      });
+    },
+    [addMessage],
+  );
+
+  const formatToolPayload = useCallback((value: unknown) => JSON.stringify(value, null, 2), []);
+
+  const executeTool = useCallback(
+    async (name: string, params: Record<string, unknown>) => {
+      try {
+        const response = await window.electronAPI.invoke<ToolResult>(IPC_CHANNELS.AI_TOOL_EXECUTE, {
+          name,
+          params,
+        });
+
+        if (!response.success || !response.data) {
+          addAssistantMessage(response.error?.message ?? '工具执行失败');
+          return;
+        }
+
+        if (!response.data.success) {
+          addAssistantMessage(`工具执行失败：${response.data.error ?? '未知错误'}`);
+          return;
+        }
+
+        addAssistantMessage(`工具结果：\n\`\`\`json\n${formatToolPayload(response.data.data)}\n\`\`\``);
+      } catch {
+        addAssistantMessage('工具执行失败：无法连接主进程。');
+      }
+    },
+    [addAssistantMessage, formatToolPayload],
+  );
+
+  const requestToolExecution = useCallback(async () => {
+    const normalizedName = toolName.trim();
+    if (!normalizedName) {
+      addAssistantMessage('请输入要执行的工具名。');
+      return;
+    }
+
+    const matchedTool = availableTools.find((tool) => tool.name === normalizedName);
+    if (!matchedTool) {
+      addAssistantMessage(`未找到工具：${normalizedName}`);
+      return;
+    }
+
+    let parsedParams: Record<string, unknown>;
+    try {
+      const parsed = toolParamsText.trim().length === 0 ? {} : JSON.parse(toolParamsText);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('工具参数必须是 JSON 对象');
+      }
+      parsedParams = parsed as Record<string, unknown>;
+    } catch (error) {
+      addAssistantMessage(
+        error instanceof Error ? error.message : '工具参数解析失败，请输入合法 JSON。',
+      );
+      return;
+    }
+
+    addAssistantMessage(
+      `准备调用工具：${matchedTool.name}\n参数：\n\`\`\`json\n${formatToolPayload(parsedParams)}\n\`\`\``,
+    );
+
+    if (matchedTool.confirmationLevel >= 2) {
+      setPendingToolCall({
+        name: matchedTool.name,
+        params: parsedParams,
+      });
+      return;
+    }
+
+    await executeTool(matchedTool.name, parsedParams);
+  }, [addAssistantMessage, availableTools, executeTool, formatToolPayload, toolName, toolParamsText]);
+
   const sendMessage = useCallback(async () => {
     const content = inputValue.trim();
     if (!content || isLoading) return;
@@ -127,20 +243,30 @@ export default function AIChatPanel() {
     };
     addMessage(userMessage);
     setInputValue('');
+    setPendingToolCall(null);
     setLoading(true);
 
     try {
-      const response = await window.electronAPI.invoke<{
-        message: ChatMessage;
-        conversationId: string;
-      }>('ai:chat', {
+      const response = await window.electronAPI.invoke<AIChatResponse>(IPC_CHANNELS.AI_CHAT, {
         message: content,
         conversationId: conversationId ?? undefined,
       });
 
       if (response.success && response.data) {
+        if (response.data.executedToolCall) {
+          addAssistantMessage(
+            `准备调用工具：${response.data.executedToolCall.name}\n参数：\n\`\`\`json\n${formatToolPayload(response.data.executedToolCall.params)}\n\`\`\``,
+          );
+          setToolName(response.data.executedToolCall.name);
+          setToolParamsText(formatToolPayload(response.data.executedToolCall.params));
+        }
         addMessage(response.data.message);
         setConversationId(response.data.conversationId);
+        if (response.data.pendingToolCall) {
+          setPendingToolCall(response.data.pendingToolCall);
+          setToolName(response.data.pendingToolCall.name);
+          setToolParamsText(formatToolPayload(response.data.pendingToolCall.params));
+        }
       } else {
         addMessage({
           id: `${Date.now()}-error`,
@@ -159,7 +285,16 @@ export default function AIChatPanel() {
     } finally {
       setLoading(false);
     }
-  }, [inputValue, conversationId, isLoading, addMessage, setConversationId, setLoading]);
+  }, [
+    inputValue,
+    conversationId,
+    isLoading,
+    addMessage,
+    addAssistantMessage,
+    setConversationId,
+    setLoading,
+    formatToolPayload,
+  ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -293,6 +428,86 @@ export default function AIChatPanel() {
             </div>
           </div>
         )}
+      </div>
+
+      <div
+        style={{
+          padding: '8px 12px',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <Typography.Text strong>工具执行</Typography.Text>
+        <Input
+          value={toolName}
+          placeholder="输入工具名，例如 task_list"
+          onChange={(event) => setToolName(event.target.value)}
+        />
+        <TextArea
+          value={toolParamsText}
+          placeholder="输入工具参数 JSON，可留空"
+          onChange={(event) => setToolParamsText(event.target.value)}
+          autoSize={{ minRows: 2, maxRows: 4 }}
+        />
+        <Space wrap>
+          {availableTools.map((tool) => (
+            <Button
+              key={tool.name}
+              size="small"
+              onClick={() => {
+                setToolName(tool.name);
+              }}
+            >
+              {tool.name}
+              {tool.confirmationLevel >= 2 ? '（需确认）' : ''}
+            </Button>
+          ))}
+        </Space>
+        {selectedTool ? (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {selectedTool.description}
+          </Typography.Text>
+        ) : null}
+        <Button onClick={() => void requestToolExecution()} disabled={!toolName.trim()}>
+          执行工具
+        </Button>
+        {pendingToolCall ? (
+          <div
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              backgroundColor: 'rgba(220, 38, 38, 0.08)',
+            }}
+          >
+            <Typography.Text strong>危险工具需确认</Typography.Text>
+            <Typography.Paragraph style={{ marginBottom: 8 }}>
+              即将执行 `{pendingToolCall.name}`，请确认参数是否正确。
+            </Typography.Paragraph>
+            <Space>
+              <Button
+                type="primary"
+                danger
+                onClick={() => {
+                  const currentCall = pendingToolCall;
+                  setPendingToolCall(null);
+                  void executeTool(currentCall.name, currentCall.params);
+                }}
+              >
+                确认执行工具
+              </Button>
+              <Button
+                onClick={() => {
+                  addAssistantMessage(`已取消工具调用：${pendingToolCall.name}`);
+                  setPendingToolCall(null);
+                }}
+              >
+                取消
+              </Button>
+            </Space>
+          </div>
+        ) : null}
       </div>
 
       {/* Input */}

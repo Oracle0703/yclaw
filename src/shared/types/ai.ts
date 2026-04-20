@@ -24,6 +24,33 @@ export interface AIConfig {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  mcp?: {
+    embeddedHttp?: {
+      host?: string;
+      port?: number;
+      token?: string;
+    };
+    servers?: McpClientServerConfig[];
+  };
+}
+
+export interface McpClientServerConfig {
+  id: string;
+  name: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  enabled?: boolean;
+}
+
+export interface McpClientServerStatus {
+  id: string;
+  name: string;
+  enabled: boolean;
+  connected: boolean;
+  state: 'connected' | 'unavailable' | 'disabled';
+  toolCount: number;
+  lastError?: string;
 }
 
 export interface AIToolDef {
@@ -31,6 +58,7 @@ export interface AIToolDef {
   description: string;
   parameters: Record<string, unknown>;
   confirmationLevel: 0 | 1 | 2 | 3;
+  source?: 'builtin' | `mcp:${string}`;
 }
 
 export interface ToolResult {
@@ -64,7 +92,16 @@ export interface AIChatRequest {
   conversationId?: string;
 }
 
+export interface AIToolCall {
+  name: string;
+  params: Record<string, unknown>;
+}
+
+export type AIPendingToolCall = AIToolCall;
+
 export interface AIChatResponse {
   message: ChatMessage;
   conversationId: string;
+  pendingToolCall?: AIPendingToolCall;
+  executedToolCall?: AIToolCall;
 }

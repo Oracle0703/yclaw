@@ -1,8 +1,20 @@
 # SPEC · Headless Runner V1（草案）
 
-> 状态：**草案 / 待评审**  
+> 状态：**草案 / HR-M1 CLI 起步 + Playwright adapter 基础版（`run` 与 `list tasks/batches` 已落地）**
 > 关联：[design/next-phase-ideas.md §2.1](../design/next-phase-ideas.md#21-方向-a--headless-runner--cli产品形态升维)  
 > 与主线关系：**副线，不替代** [specs/automation-browser-ops-v1.md](automation-browser-ops-v1.md)；只新增「Headless Runner 模式」。
+
+## 当前实施状态（截至 2026-04-20）
+
+| 项 | 状态 | 说明 |
+| --- | --- | --- |
+| HR-M0 依赖盘点 | ✅ 已完成 | 已扫描 `src/main`、`src/engines`、`src/shared`、`src/cli` 中对 `electron` 的直接依赖，并整理去耦边界 |
+| `AutomationPage` 最小接口 | ✅ 已完成 | 已新增 `src/engines/automation/types.ts` 中的 `AutomationPage` / `AutomationPageImage`，用于替代自动化执行链对 Electron `WebContents` 类型的暴露 |
+| 自动化执行链去 Electron 类型 | ✅ 已完成 | `AutomationEngine`、`FlowRunner`、`SelectorGenerator`、`TaskService.startTask/resumeTask` 已改为依赖 `AutomationPage`；新增边界测试防止回退 |
+| `src/runner/` 目录 | 🟡 已起步 | 已新增 `src/runner/cli/list.ts`，提供最小只读查询入口；RunnerHost / DaemonHost 仍未创建 |
+| CLI `run/list/daemon` | 🟡 部分实现 | 已支持 `yclaw run <taskId>`、`yclaw list tasks`、`yclaw list batches --task <id>`；`daemon` 尚未实现 |
+| Headless 浏览器后端 | 🟡 基础 adapter 已接入 | 已新增 Playwright 风格 `AutomationPage` adapter，可承接 `executeJavaScript()` / `capturePage()`；支持 `--browser-executable` / `YCLAW_BROWSER_EXECUTABLE` 指向系统 Chrome/Edge |
+| 桌面远程 Runner 配置 UI | ⬜ 未开始 | 仍停留在本 spec 草案 |
 
 ---
 
@@ -75,7 +87,7 @@
 ### 4.2 CLI 入口结构
 
 ```
-yclaw run    <taskId>  [--headed] [--output json] [--timeout 60s]
+yclaw run    <taskId>  [--headed] [--browser-executable <path>] [--output json] [--timeout 60s]
 yclaw list   tasks
 yclaw list   batches  --task <id>  [--limit 20]
 yclaw show   batch    <batchId>    [--with-logs]
@@ -98,6 +110,49 @@ yclaw config          [get|set|list]
 - 默认 **仅监听 127.0.0.1**，不开放公网。
 - 鉴权：v1 仅支持 token（`YCLAW_TOKEN`），不做用户体系。
 
+### 4.4 HR-M0 Electron 依赖盘点
+
+> 盘点时间：2026-04-20。目标是先识别哪些文件必须保留 Desktop 专属，哪些核心服务需要抽象端口后才能在 Headless Runner 中复用。
+
+| 文件 | 依赖类型 | 当前用途 | 去耦建议 |
+| --- | --- | --- | --- |
+| `src/main/app.ts` | 运行时 `electron` | Desktop App 装配、窗口、对话框、生命周期 | 保持 DesktopHost 专属；未来抽取 Core Services 工厂供 CLI/Daemon 复用 |
+| `src/main/index.ts` | 运行时 `electron` | Electron 应用入口 | 保持 Desktop 专属；Headless 使用独立 CLI 入口 |
+| `src/main/windows/WindowManager.ts` | 运行时 `BrowserWindow` | 桌面窗口管理 | 保持 Desktop 专属；RunnerHost 只暴露 capability，不复用窗口管理 |
+| `src/main/windows/preload.ts` | 运行时 `contextBridge/ipcRenderer` | 渲染进程桥接 | 保持 Desktop 专属；headless 不加载 preload |
+| `src/main/ipc/IpcController.ts` | 运行时 `ipcMain` | Electron IPC handler 注册 | 抽象为 `CommandRouter` / handler registry；Desktop adapter 绑定 `ipcMain` |
+| `src/main/browser/TabManager.ts` | 运行时 `WebContentsView/session` | 浏览器标签页与会话分区 | 抽象 `BrowserHost` / `BrowserPageHandle`；Desktop 用 WebContentsView，Headless 用 Playwright/Chromium |
+| `src/main/services/TrayService.ts` | 运行时 `Tray/Menu/nativeImage/app` | 系统托盘 | Desktop 专属；headless 不加载 |
+| `src/main/utils/paths.ts` | 动态 `require('electron')` + fallback | 获取 userData / DB / log 路径 | 已具备 `YCLAW_DATA_DIR` 与 `~/.yclaw` fallback；可作为 headless 早期路径层继续复用 |
+| `src/main/services/TaskService.ts` | type-only `WebContents` | `startTask/resumeTask` 接收页面执行对象 | 将参数替换为最小接口，如 `AutomationPage`，避免服务层暴露 Electron 类型 |
+| `src/engines/automation/AutomationEngine.ts` | type-only `WebContents`，运行依赖其 API | 使用 `executeJavaScript()` 与 `capturePage()` 执行动作 | 抽象 `AutomationPage`：`executeJavaScript<T>()`、`capturePage(): Promise<{ toDataURL(): string }>` |
+| `src/engines/automation/FlowRunner.ts` | type-only `WebContents` | 将页面对象传递给 `AutomationEngine.execute()` | 跟随 `AutomationEngine` 改为 `AutomationPage` |
+| `src/engines/automation/SelectorGenerator.ts` | type-only `WebContents` | 使用 `executeJavaScript()` 生成/校验选择器 | 跟随 `AutomationPage`，只依赖 JS 执行能力 |
+
+### 4.5 建议去耦顺序
+
+| 顺序 | 工作项 | 验收口径 |
+| --- | --- | --- |
+| 1 | 新增 `AutomationPage` 最小类型，不改行为 | ✅ 现有 Electron 调用点可通过结构类型满足接口，测试不回归；`BrowserHost` 仍待后续抽象 |
+| 2 | 将 `AutomationEngine`、`FlowRunner`、`SelectorGenerator` 从 `WebContents` 类型迁移到 `AutomationPage` | ✅ `src/engines/automation` 不再 import `electron` |
+| 3 | 将 `TaskService.startTask/resumeTask` 参数迁移到 `AutomationPage` | ✅ `src/main/services/TaskService.ts` 不再 import `electron` |
+| 4 | 为 `TabManager` 增加 Desktop adapter，预留 Headless adapter | Desktop 行为保持不变 |
+| 5 | 新建 `src/runner/cli/`，先接 `list tasks` / `list batches` 等只读命令 | CLI 可在无 Electron 环境启动基础服务 |
+
+### 4.6 HR-M1 前置去耦记录
+
+| 项 | 结果 |
+| --- | --- |
+| 最小页面接口 | `AutomationPage` 只要求 `executeJavaScript<T>()` 与 `capturePage().toDataURL()`，Electron `webContents` 可通过结构类型直接兼容 |
+| 执行链迁移 | `AutomationEngine`、`FlowRunner`、`SelectorGenerator` 不再导入 `electron` |
+| 服务层边界 | `TaskService.startTask()` / `TaskService.resumeTask()` 不再使用 Electron 类型，方便后续 CLI/Daemon 注入 headless 页面句柄 |
+| 回归保护 | 新增 `tests/unit/engines/headless-boundary.spec.ts`，防止自动化执行链重新暴露 `electron` / `WebContents` |
+| CLI 起步 | 新增 `src/runner/cli/list.ts` 与 `src/runner/cli/run.ts`；`run` 会创建/启动/完成或失败 batch，并更新任务状态 |
+| Headless adapter | 新增 `src/runner/browser/PlaywrightAutomationPage.ts`，将 Playwright `page.evaluate()` / `page.screenshot()` 适配为 `AutomationPage` |
+| 浏览器路径配置 | `yclaw run` 支持 `--browser-executable <path>`；也可通过 `YCLAW_BROWSER_EXECUTABLE` 指向系统 Chrome/Edge |
+| 当前限制 | 默认 `run` 已可执行空步骤任务；含页面动作任务会尝试启动 Playwright Chromium 或指定浏览器，本地需具备可用浏览器环境 |
+| 下一步 | 完成浏览器自动发现/分发策略、真实站点验收，再向 `daemon` 形态扩展 |
+
 ---
 
 ## 5. 影响面
@@ -117,8 +172,8 @@ yclaw config          [get|set|list]
 | 里程碑 | 内容 |
 | --- | --- |
 | HR-M0 | 服务层依赖梳理：列出当前所有「直接 import electron」的位置，给出去耦计划。 |
-| HR-M1 | `CliHost` 跑通 `run` / `list tasks` / `list batches`，复用现有 SQLite。 |
-| HR-M2 | 浏览器执行后端抽象：Playwright headless 通道接入，与现有 WebContentsView 并存。 |
+| HR-M1 | 进行中：自动化执行链已完成 `AutomationPage` 前置去耦，且已跑通 CLI `run`、`list tasks`、`list batches`。 |
+| HR-M2 | 部分起步：基础 Playwright adapter 已接入，并支持显式系统 Chrome/Edge 路径；浏览器自动发现/分发策略、复杂站点验收仍待实现。 |
 | HR-M3 | `DaemonHost` HTTP 端点 + 桌面端「远程 Runner」客户端配置 UI。 |
 | HR-M4 | 验收：完整跑通 HR-01 ~ HR-10。 |
 

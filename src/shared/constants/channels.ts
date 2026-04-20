@@ -105,8 +105,14 @@ export const IPC_CHANNELS = {
   AI_CONFIG_GET: 'ai:config:get',
   AI_CONFIG_SET: 'ai:config:set',
   AI_TOOLS_LIST: 'ai:tools:list',
+  AI_TOOL_EXECUTE: 'ai:tool:execute',
   AI_CONVERSATION_LIST: 'ai:conversation:list',
   AI_CONVERSATION_DELETE: 'ai:conversation:delete',
+  AI_MCP_START: 'ai:mcp:start',
+  AI_MCP_STOP: 'ai:mcp:stop',
+  AI_MCP_STATUS: 'ai:mcp:status',
+  AI_MCP_CLIENT_STATUS: 'ai:mcp:client:status',
+  AI_MCP_AUDIT_LIST: 'ai:mcp:audit:list',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

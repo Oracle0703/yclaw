@@ -14,6 +14,9 @@ const mockTaskRepository = {
 
 const mockBatchService = {
   createBatch: vi.fn(),
+  startBatch: vi.fn(),
+  finishBatch: vi.fn(),
+  failBatch: vi.fn(),
   getBatch: vi.fn(),
   listBatchesByTask: vi.fn(),
 };
@@ -269,14 +272,58 @@ describe('TaskService', () => {
     );
   });
 
-  it('starts a task with persisted flow and active webContents', async () => {
+  it('starts a task with persisted flow and active page', async () => {
     mockRunner.run.mockResolvedValueOnce({ success: true, stepResults: [] });
 
     const result = await service.startTask('task-1', webContents);
 
     expect(mockTaskRepository.getTaskFlow).toHaveBeenCalledWith('task-1');
-    expect(mockRunner.run).toHaveBeenCalledWith(sampleFlow, webContents, 0);
+    expect(mockRunner.run).toHaveBeenCalledWith(sampleFlow, webContents, 0, 'batch-created');
     expect(result).toEqual({ taskId: 'task-1', status: 'running' });
+  });
+
+  it('records batch lifecycle when a task run succeeds', async () => {
+    const stepResults = [{ stepId: 'step-1', success: true, duration: 10 }];
+    mockRunner.run.mockResolvedValueOnce({ success: true, stepResults });
+    mockBatchService.createBatch.mockReturnValueOnce({
+      id: 'batch-run-1',
+      taskId: 'task-1',
+      status: 'pending',
+      createdAt: '2026-04-20T00:00:00.000Z',
+      stepResults: [],
+    } satisfies TaskBatch);
+
+    service.startTask('task-1', webContents);
+    await Promise.resolve();
+
+    expect(mockBatchService.createBatch).toHaveBeenCalledWith('task-1', { reason: 'manual' });
+    expect(mockBatchService.startBatch).toHaveBeenCalledWith('batch-run-1');
+    expect(mockBatchService.finishBatch).toHaveBeenCalledWith('batch-run-1', stepResults);
+  });
+
+  it('records failed batch details when a task run fails', async () => {
+    mockRunner.run.mockResolvedValueOnce({
+      success: false,
+      stepResults: [],
+      error: 'selector missing',
+      breakpoint: { stepIndex: 0, error: 'selector missing' },
+    });
+    mockBatchService.createBatch.mockReturnValueOnce({
+      id: 'batch-run-2',
+      taskId: 'task-1',
+      status: 'pending',
+      createdAt: '2026-04-20T00:00:00.000Z',
+      stepResults: [],
+    } satisfies TaskBatch);
+
+    service.startTask('task-1', webContents);
+    await Promise.resolve();
+
+    expect(mockBatchService.failBatch).toHaveBeenCalledWith(
+      'batch-run-2',
+      'selector missing',
+      { stepIndex: 0, error: 'selector missing' },
+    );
   });
 
   it('pauses a running task', () => {

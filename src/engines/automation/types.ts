@@ -3,8 +3,17 @@
  */
 import type { ActionType, StepResult } from '@shared/types';
 
+export interface AutomationPageImage {
+  toDataURL(): string;
+}
+
+export interface AutomationPage {
+  executeJavaScript<T = unknown>(code: string): Promise<T>;
+  capturePage(): Promise<AutomationPageImage>;
+}
+
 export interface ActionContext {
-  /** WebContents ID */
+  /** 页面 ID */
   webContentsId: number;
 }
 

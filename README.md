@@ -164,6 +164,91 @@ spec:
 [`docs/specs/task-as-code-v1.md`](./docs/specs/task-as-code-v1.md) 与
 [`src/shared/serialization/README.md`](./src/shared/serialization/README.md)。
 
+## MCP Server 预览
+
+YClaw 已开始接入 MCP（Model Context Protocol）生态，当前已完成 **MCP Server M0-M3** 的首轮落地：支持通过 `stdio` 或本机 `Streamable HTTP` 暴露只读工具与资源，方便 Claude Desktop、Cursor、Continue 等外部 LLM 客户端读取任务、批次、日志和结果。
+
+```bash
+npm run yclaw -- mcp serve --transport stdio
+```
+
+```bash
+YCLAW_MCP_TOKEN=your-token npm run yclaw -- mcp serve --transport http --port 3939
+```
+
+当前可用只读工具：
+
+| 工具 | 说明 |
+| --- | --- |
+| `task.list` | 列出任务与最近批次摘要 |
+| `task.get` | 读取任务详情 |
+| `batch.get` | 读取批次状态 |
+| `batch.logs` | 读取批次结构化日志 |
+| `results.query` | 查询任务或批次结果 |
+
+当前可读取资源：
+
+| URI | 内容 |
+| --- | --- |
+| `yclaw://tasks/<id>` | 任务定义 YAML |
+| `yclaw://batches/<id>` | 批次状态 JSON |
+| `yclaw://batches/<id>/logs` | 批次日志 NDJSON |
+| `yclaw://results/<taskId>?limit=` | 结果集 NDJSON |
+
+> 说明：当前 CLI 侧 `stdio/http` 都仍为本地**只读模式**；完整规格见 [`docs/specs/mcp-integration-v1.md`](./docs/specs/mcp-integration-v1.md)。
+
+Claude Desktop / Cursor 示例配置已放在 [`examples/mcp/`](./examples/mcp/)：
+
+| 文件 | 用途 |
+| --- | --- |
+| `examples/mcp/claude-desktop.json` | Claude Desktop 的 `mcpServers` 片段 |
+| `examples/mcp/cursor.json` | Cursor 的 `mcpServers` 片段 |
+
+补充说明：
+
+- `createMcpServer(...)` 已支持按宿主注入 `task.run` / `session.refresh` 两类写工具，并通过 `annotations.destructiveHint=true` 与 `_meta.dangerous=true` 暴露危险标记。
+- 桌面进程侧已新增 `App#createEmbeddedMcpServer()`，会把上述写工具真正接到 `TaskService + TabManager + SessionRegistry` 的宿主执行链路。
+- 桌面进程侧已新增 embedded MCP HTTP 生命周期：`ai:mcp:start` / `ai:mcp:status` / `ai:mcp:stop`，默认走本机 `Streamable HTTP` 预览形态。
+- 设置页已新增 `Embedded MCP HTTP` 面板，可查看运行状态、保存 HTTP 端口/token，并直接启动、停止或刷新服务；同时可通过 JSON 数组维护外部 `MCP Servers`（`command / args / env / enabled`）。
+- AI 助手自动调用外部 MCP 工具时，会先在聊天面板展示工具名与参数；若工具带危险标记，则进入“危险工具需确认”区，需用户点按后才真正执行。
+- 设置页现已新增 `MCP 审计` 区块，可查看最近 MCP 调用日志，并手动刷新 `task.run`、`session.refresh` 与外部 MCP 工具执行记录。
+- CLI 侧 `npm run yclaw -- mcp serve --transport http --port <port>` 已接入同一套 HTTP 启动链路，默认只监听 `127.0.0.1`。
+- embedded MCP HTTP 现在要求 `YCLAW_MCP_TOKEN`（或设置页/IPC 显式 token）作为 Bearer Token；未携带或不匹配时返回 `401 Unauthorized`。
+- 当前 `npm run yclaw -- mcp serve --transport stdio` 与 `http` 都保持**只读模式**，待 Headless Runner/执行宿主接入后再默认开放写能力。
+
+## Headless Runner 预览
+
+Headless Runner 目前已完成 **HR-M1 的最小 CLI 切片**，并接入了基础 Playwright 页面 adapter：CLI 可以在无 Electron UI 的上下文里直接读取本地 SQLite 中的任务与批次，并启动任务执行链路。
+
+```bash
+npm run yclaw -- run <taskId> --output json
+```
+
+```bash
+npm run yclaw -- run <taskId> --headed
+```
+
+```bash
+npm run yclaw -- run <taskId> --browser-executable "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+```
+
+```bash
+npm run yclaw -- list tasks --output json
+```
+
+```bash
+npm run yclaw -- list batches --task <taskId> --limit 20
+```
+
+补充说明：
+
+- 当前 `list` 命令默认读取 `YCLAW_DATA_DIR` 指定的数据目录；未指定时复用现有桌面端默认数据目录解析逻辑。
+- 当前 `run` 会创建/启动/完成或失败 batch，并更新任务状态；空步骤任务可完整跑通。
+- 含页面动作的任务会通过基础 Playwright adapter 执行 `executeJavaScript()` / `capturePage()`；本地需具备可用 Chromium/Playwright 浏览器环境。
+- 可用 `--browser-executable <path>` 或 `YCLAW_BROWSER_EXECUTABLE` 指向系统 Chrome / Edge，降低 Playwright 浏览器下载依赖。
+- `daemon`、远程 Runner UI、浏览器二进制自动发现/分发策略和复杂真实站点验收仍在后续阶段。
+- 详细状态与后续里程碑见 `docs/specs/headless-runner-v1.md`。
+
 ## 文档导航
 
 | 文档 | 说明 |

@@ -15,5 +15,5 @@ runCli({ argv: process.argv.slice(2) })
   .catch((error) => {
     // eslint-disable-next-line no-console
     console.error(`yclaw: fatal: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
-    process.exit(2);
+    process.exit(3);
   });

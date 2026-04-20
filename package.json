@@ -33,12 +33,13 @@
     "postinstall": "node -e \"if(!process.env.SKIP_POSTINSTALL){require('child_process').execSync('electron-builder install-app-deps',{stdio:'inherit'})}\""
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.9.0",
     "electron-log": "^5.2.4",
     "electron-store": "^10.0.0",
     "electron-updater": "^6.3.9",
     "yaml": "^2.8.3",
-    "zod": "^3.24.0"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@ant-design/icons": "^6.1.1",

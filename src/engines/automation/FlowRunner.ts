@@ -1,7 +1,6 @@
-import type { WebContents } from 'electron';
 import type { TaskFlow, TaskStep, TaskExecutionResult, StepResult } from '@shared/types';
 import { TaskStatus } from '@shared/types';
-import type { ActionDefinition } from './types';
+import type { ActionDefinition, AutomationPage } from './types';
 import type { AutomationEngine } from './AutomationEngine';
 import { withRetry, createBreakpoint, type Breakpoint } from './RetryPolicy';
 import { EVENTS } from '@shared/constants';
@@ -59,7 +58,7 @@ export class FlowRunner {
    */
   async run(
     flow: TaskFlow,
-    webContents: WebContents,
+    webContents: AutomationPage,
     fromStep = 0,
     batchId?: string,
   ): Promise<TaskExecutionResult> {
@@ -143,7 +142,7 @@ export class FlowRunner {
    */
   async resume(
     flow: TaskFlow,
-    webContents: WebContents,
+    webContents: AutomationPage,
     batchId?: string,
   ): Promise<TaskExecutionResult> {
     const fromStep = this.breakpoint ? this.breakpoint.stepIndex : this.currentStepIndex;
@@ -194,7 +193,7 @@ export class FlowRunner {
   /**
    * 执行单步（带重试）
    */
-  private async executeStep(step: TaskStep, webContents: WebContents): Promise<StepResult> {
+  private async executeStep(step: TaskStep, webContents: AutomationPage): Promise<StepResult> {
     const retryCount = step.retryCount ?? this.defaultRetryCount;
     const retryDelay = step.retryDelay ?? this.defaultRetryDelay;
 

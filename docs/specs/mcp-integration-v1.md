@@ -1,11 +1,28 @@
 # SPEC · MCP 集成 V1（草案）
 
-> 状态：**草案 / 待评审**  
+> 状态：**草案 / 实施中（M0-M4 主链路已落地，M5 验收收尾中）**  
 > 关联：[design/next-phase-ideas.md §2.3](../design/next-phase-ideas.md#23-方向-c--mcpmodel-context-protocol集成)  
 > 与主线关系：**副线增量**，复用现有 `ToolRegistry` / `AIService`，不改变桌面 AI 助手交互。
 
 > MCP（Model Context Protocol）是 Anthropic 主导的开放协议，让 LLM 客户端（Claude Desktop、Cursor、Continue 等）能以标准方式调用外部工具与资源。  
 > 协议规范：<https://modelcontextprotocol.io>。
+
+## 当前实施进度（截至 2026-04-20）
+
+- ✅ `src/mcp/shared/`、`src/mcp/server/`、`src/mcp/client/` 基础目录与协议适配层已落地。
+- ✅ MCP Server 已支持 `stdio` 与本机 `Streamable HTTP`，并具备 token / Bearer 鉴权。
+- ✅ 只读 tools/resources 已可通过真实集成测试验证，危险写工具 `task.run` / `session.refresh` 已具备 dangerous 标记与桌面宿主接线。
+- ✅ 桌面端设置页已支持 `Embedded MCP HTTP` 生命周期管理、外部 `MCP Servers` JSON 配置、外部 server 状态展示。
+- ✅ AI 助手已可自动注册外部 MCP tools 到 `ToolRegistry`，支持手动执行、自动工具调用、危险确认、执行前摘要展示。
+- ✅ 设置页已新增 `MCP 审计` 区块；外部 MCP tool 执行、危险写工具调用都会写入审计日志。
+- ✅ Claude Desktop / Cursor 示例配置已放入 [`examples/mcp/`](../../examples/mcp/)。
+
+### 待继续收口
+
+| 优先级 | 项目 | 说明 |
+| --- | --- | --- |
+| P1 | 最终验收清单核对 | 对照 MCP-S01~07、MCP-C01~04、MCP-G01~03 逐条标记完成度 |
+| P1 | 文档持续对齐 | 后续若补资源、审计筛选或远程访问边界，需同步 README / spec / current-status |
 
 ---
 

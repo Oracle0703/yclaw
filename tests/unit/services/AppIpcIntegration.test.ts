@@ -40,6 +40,15 @@ const mockDbUpdateTaskStatus = vi.fn();
 const mockLogInfo = vi.fn();
 const mockLogWrite = vi.fn();
 const mockLogExport = vi.fn(() => 'debug-package');
+const mockLogQueryMcpAudit = vi.fn(() => [
+  {
+    timestamp: '2026-04-20T10:00:00.000Z',
+    level: 'info',
+    source: 'main',
+    message: 'MCP audit',
+    data: { action: 'task.run', taskId: 'task-1' },
+  },
+]);
 const mockLogClose = vi.fn();
 const mockTrayCreate = vi.fn();
 const mockTrayDestroy = vi.fn();
@@ -117,8 +126,18 @@ const mockAiChat = vi.fn(async () => ({
 const mockAiGetConfig = vi.fn(() => ({ provider: 'openai', model: 'gpt-3.5-turbo' }));
 const mockAiUpdateConfig = vi.fn();
 const mockAiListTools = vi.fn(() => []);
+const mockAiExecuteTool = vi.fn(async () => ({ success: true, data: { ok: true } }));
 const mockAiListConversations = vi.fn(() => []);
 const mockAiDeleteConversation = vi.fn(() => true);
+const mockCollectAiContext = vi.fn(async () => ({
+  currentModule: 'workbench',
+  systemMetrics: { cpu: 0, memory: 0, disk: 0, uptime: 0 },
+  recentTasks: [],
+  installedPlugins: [],
+}));
+const mockMcpClientManagerSyncServers = vi.fn(async () => undefined);
+const mockMcpClientManagerClose = vi.fn(async () => undefined);
+const mockMcpClientManagerGetServerStatuses = vi.fn(() => []);
 const mockSessionList = vi.fn(() => []);
 const mockSessionCreate = vi.fn();
 const mockSessionDelete = vi.fn();
@@ -142,6 +161,18 @@ const mockSchedulerStatus = vi.fn(() => ({
   queuedCount: 0,
   scheduledCount: 1,
 }));
+const mockStartEmbeddedMcpHttpServer = vi.hoisted(() =>
+  vi.fn(async ({ host = '127.0.0.1', port = 0 } = {}) => ({
+    running: true,
+    host,
+    port: port || 3940,
+    endpoint: `http://${host}:${port || 3940}/mcp`,
+    transport: 'http',
+    mode: 'streamable-http',
+    authRequired: true,
+    close: vi.fn(async () => undefined),
+  })),
+);
 const mockFeatureListPackages = vi.fn(() => [
   {
     id: 'stock',
@@ -158,7 +189,7 @@ const mockFeatureInstallPackage = vi.fn(async () => ({
   installed: true,
   entryPath: 'C:\\Users\\Admin\\AppData\\Roaming\\YClaw\\features\\stock\\renderer\\entries\\stock\\index.html',
 }));
-const mockConfigGet = vi.fn((key: string) => {
+const defaultConfigGet = (key: string) => {
   if (key === 'ai') {
     return { provider: 'openai', model: 'gpt-3.5-turbo' };
   }
@@ -166,7 +197,8 @@ const mockConfigGet = vi.fn((key: string) => {
     return {};
   }
   return undefined;
-});
+};
+const mockConfigGet = vi.fn(defaultConfigGet);
 const mockConfigGetGeneral = vi.fn(() => ({
   theme: 'system',
   language: 'zh-CN',
@@ -237,6 +269,7 @@ vi.mock('@main/services/LogService', () => ({
     info: mockLogInfo,
     write: mockLogWrite,
     exportDebugPackage: mockLogExport,
+    queryMcpAudit: mockLogQueryMcpAudit,
     close: mockLogClose,
   })),
 }));
@@ -282,9 +315,21 @@ vi.mock('@main/ai/AIService', () => ({
     updateConfig: mockAiUpdateConfig,
     getToolRegistry: vi.fn(() => ({
       list: mockAiListTools,
+      execute: mockAiExecuteTool,
+    })),
+    getContextManager: vi.fn(() => ({
+      collectContext: mockCollectAiContext,
     })),
     listConversations: mockAiListConversations,
     deleteConversation: mockAiDeleteConversation,
+  })),
+}));
+
+vi.mock('@mcp/client/McpClientManager', () => ({
+  McpClientManager: vi.fn().mockImplementation(() => ({
+    syncServers: mockMcpClientManagerSyncServers,
+    close: mockMcpClientManagerClose,
+    getServerStatuses: mockMcpClientManagerGetServerStatuses,
   })),
 }));
 
@@ -355,6 +400,10 @@ vi.mock('@engines/analytics/IndicatorLibrary', () => ({
   })),
 }));
 
+vi.mock('@mcp/server/startEmbeddedHttpServer', () => ({
+  startEmbeddedMcpHttpServer: mockStartEmbeddedMcpHttpServer,
+}));
+
 vi.mock('@main/ipc/EventBus', () => ({
   EventBus: {
     getInstance: vi.fn(() => ({
@@ -371,6 +420,7 @@ describe('App IPC integration', () => {
   beforeEach(() => {
     handlers.clear();
     vi.clearAllMocks();
+    mockConfigGet.mockImplementation(defaultConfigGet);
 
     const existingTaskIds = new Set(['task-1']);
 
@@ -700,6 +750,330 @@ describe('App IPC integration', () => {
       data: {
         id: 'stock',
         installed: true,
+      },
+    });
+  });
+
+  it('starts and stops embedded MCP HTTP server through ipc handlers', async () => {
+    const app = new App();
+
+    await app.start();
+
+    const startHandler = handlers.get(IPC_CHANNELS.AI_MCP_START);
+    const statusHandler = handlers.get(IPC_CHANNELS.AI_MCP_STATUS);
+    const stopHandler = handlers.get(IPC_CHANNELS.AI_MCP_STOP);
+
+    expect(startHandler).toBeDefined();
+    expect(statusHandler).toBeDefined();
+    expect(stopHandler).toBeDefined();
+
+    const started = await startHandler!({}, { host: '127.0.0.1', port: 0 });
+    expect(mockStartEmbeddedMcpHttpServer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createServer: expect.any(Function),
+        host: '127.0.0.1',
+        port: 0,
+        token: undefined,
+        logService: expect.any(Object),
+      }),
+    );
+    expect(started).toMatchObject({
+      success: true,
+      data: {
+        running: true,
+        transport: 'http',
+        mode: 'streamable-http',
+      },
+    });
+
+    const status = await statusHandler!({});
+    expect(status).toMatchObject({
+      success: true,
+      data: {
+        running: true,
+        endpoint: expect.stringContaining('/mcp'),
+        authRequired: true,
+      },
+    });
+
+    const stopped = await stopHandler!({});
+    expect(stopped).toMatchObject({
+      success: true,
+      data: {
+        running: false,
+      },
+    });
+  });
+
+  it('uses persisted MCP HTTP config when ipc start params omit values', async () => {
+    mockConfigGet.mockImplementation((key: string) => {
+      if (key === 'ai') {
+        return {
+          provider: 'openai',
+          model: 'gpt-3.5-turbo',
+          mcp: {
+            embeddedHttp: {
+              host: '127.0.0.1',
+              port: 4949,
+              token: 'persisted-token',
+            },
+          },
+        };
+      }
+      if (key === 'modules') {
+        return {};
+      }
+      return undefined;
+    });
+
+    const app = new App();
+
+    await app.start();
+
+    const startHandler = handlers.get(IPC_CHANNELS.AI_MCP_START);
+    expect(startHandler).toBeDefined();
+
+    await startHandler!({}, {});
+
+    expect(mockStartEmbeddedMcpHttpServer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: '127.0.0.1',
+        port: 4949,
+        token: 'persisted-token',
+      }),
+    );
+  });
+
+  it('deep merges MCP config when updating AI settings', async () => {
+    mockConfigGet.mockImplementation((key: string) => {
+      if (key === 'ai') {
+        return {
+          provider: 'openai',
+          model: 'gpt-3.5-turbo',
+          mcp: {
+            embeddedHttp: {
+              host: '127.0.0.1',
+              port: 3939,
+              token: 'persisted-token',
+            },
+            servers: [],
+          },
+        };
+      }
+      if (key === 'modules') {
+        return {};
+      }
+      return undefined;
+    });
+
+    const app = new App();
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.AI_CONFIG_SET);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, {
+      mcp: {
+        servers: [
+          {
+            id: 'git',
+            name: 'Git',
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-git'],
+            env: { GIT_ROOT: 'E:\\allsite\\yclaw' },
+            enabled: true,
+          },
+        ],
+      },
+    });
+
+    expect(mockAiUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mcp: {
+          embeddedHttp: {
+            host: '127.0.0.1',
+            port: 3939,
+            token: 'persisted-token',
+          },
+          servers: [
+            expect.objectContaining({
+              id: 'git',
+              command: 'npx',
+            }),
+          ],
+        },
+      }),
+    );
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        mcp: {
+          embeddedHttp: {
+            host: '127.0.0.1',
+            port: 3939,
+            token: 'persisted-token',
+          },
+          servers: [
+            {
+              id: 'git',
+              name: 'Git',
+              command: 'npx',
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it('syncs external MCP servers on app start and config update', async () => {
+    mockConfigGet.mockImplementation((key: string) => {
+      if (key === 'ai') {
+        return {
+          provider: 'openai',
+          model: 'gpt-3.5-turbo',
+          mcp: {
+            servers: [
+              {
+                id: 'git',
+                name: 'Git',
+                command: 'npx',
+                args: ['-y', '@modelcontextprotocol/server-git'],
+                enabled: true,
+              },
+            ],
+          },
+        };
+      }
+      if (key === 'modules') {
+        return {};
+      }
+      return undefined;
+    });
+
+    const app = new App();
+    await app.start();
+
+    expect(mockMcpClientManagerSyncServers).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'git',
+        command: 'npx',
+      }),
+    ]);
+
+    const handler = handlers.get(IPC_CHANNELS.AI_CONFIG_SET);
+    expect(handler).toBeDefined();
+
+    await handler!({}, {
+      mcp: {
+        servers: [
+          {
+            id: 'fs',
+            name: 'Filesystem',
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-filesystem', 'E:\\allsite\\yclaw'],
+            enabled: true,
+          },
+        ],
+      },
+    });
+
+    expect(mockMcpClientManagerSyncServers).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        id: 'fs',
+        command: 'npx',
+      }),
+    ]);
+  });
+
+  it('returns external MCP server availability through ipc handler', async () => {
+    mockMcpClientManagerGetServerStatuses.mockReturnValueOnce([
+      {
+        id: 'filesystem',
+        name: 'Filesystem',
+        enabled: true,
+        connected: false,
+        state: 'unavailable',
+        toolCount: 0,
+        lastError: 'spawn failed',
+      },
+    ]);
+
+    const app = new App();
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.AI_MCP_CLIENT_STATUS);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({});
+
+    expect(response).toMatchObject({
+      success: true,
+      data: [
+        {
+          id: 'filesystem',
+          state: 'unavailable',
+          lastError: 'spawn failed',
+        },
+      ],
+    });
+  });
+
+  it('returns MCP audit entries through ipc handler', async () => {
+    const app = new App();
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.AI_MCP_AUDIT_LIST);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, { limit: 5 });
+
+    expect(mockLogQueryMcpAudit).toHaveBeenCalledWith(5);
+    expect(response).toMatchObject({
+      success: true,
+      data: [
+        {
+          message: 'MCP audit',
+          data: {
+            action: 'task.run',
+            taskId: 'task-1',
+          },
+        },
+      ],
+    });
+  });
+
+  it('executes AI tools through ipc with collected context', async () => {
+    const app = new App();
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.AI_TOOL_EXECUTE);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, {
+      name: 'mcp.mock.echo',
+      params: {
+        text: 'hello',
+      },
+    });
+
+    expect(mockCollectAiContext).toHaveBeenCalled();
+    expect(mockAiExecuteTool).toHaveBeenCalledWith(
+      'mcp.mock.echo',
+      {
+        text: 'hello',
+      },
+      expect.objectContaining({
+        currentModule: 'workbench',
+      }),
+    );
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        success: true,
+        data: {
+          ok: true,
+        },
       },
     });
   });

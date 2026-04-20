@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "yclaw": {
+      "command": "npm",
+      "args": [
+        "run",
+        "yclaw",
+        "--",
+        "mcp",
+        "serve",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "YCLAW_MCP_TOKEN": "replace-with-a-local-token"
+      }
+    }
+  }
+}

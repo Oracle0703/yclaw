@@ -36,6 +36,35 @@
 
 ---
 
+## 2.1 规格 / 方案落地状态（截至 2026-04-20）
+
+| 文档 | 当前状态 | 实现情况 | 说明 |
+| --- | --- | --- | --- |
+| `docs/specs/v1.0-baseline.md` | 已落地基础版 | Electron 壳、Vite 多入口、IPC、数据库、浏览器、自动化、插件、AI 基础能力均已存在 | 仍有少量交互与打包态验收需继续核验 |
+| `docs/specs/v1.1-enhancements.md` | 部分完成 | 命令面板、AI 面板、设置页增强、多数运营/浏览器增强已进入代码 | 文档中的部分 UI 勾选项仍需与真实实现继续对齐 |
+| `docs/specs/automation-browser-ops-v1.md` | 部分完成到基础闭环 | 任务、批次、结果、会话、告警、执行日志、介入面板、模板等主链路已具备基础版 | 完整 Electron 成品态验收和部分深水区交互仍待补齐 |
+| `docs/specs/task-as-code-v1.md` | 实施中 | 核心序列化、CLI、IPC、preload 桥接、目录监听、Persistence 适配已落地 | UI 导入/导出入口与用户向 quick-start 文档仍待补齐 |
+| `docs/specs/mcp-integration-v1.md` | 实施中 | MCP Server `stdio/http`、token 鉴权、dangerous 标记、外部 MCP Client、设置页、AI 工具可见性、审计面板、Claude/Cursor 示例已落地 | 最终逐条验收与少量尾项仍待收口 |
+| `docs/specs/headless-runner-v1.md` | HR-M1 CLI 起步 / HR-M2 adapter 基础版 | 已新增 `AutomationPage` 最小接口，落地 `src/runner/cli/list.ts`、`src/runner/cli/run.ts` 与基础 Playwright adapter，支持 `yclaw run <taskId>`、`yclaw list tasks`、`yclaw list batches --task <id>` 直连现有 SQLite；支持 `--browser-executable` / `YCLAW_BROWSER_EXECUTABLE` 指向系统浏览器 | `daemon`、RunnerHost、浏览器自动发现/分发策略和复杂真实站点验收尚未接入 |
+| `docs/design/ai-assistant.md` | 部分落地 | 已有 `AIService`、`ToolRegistry`、聊天面板、MCP 工具接入 | 流式输出、更多 provider 体验与更深层任务助理能力仍待扩展 |
+| `docs/design/dashboard-ideas.md` | 未开始 | 当前没有按该文档独立推进总控仪表盘重构 | 属于中后期体验增强方向 |
+| `docs/design/page-container-optimization.md` | 未系统推进 | 局部页面样式已有演进，但未按文档做专项改造 | 仍属于设计建议 |
+| `docs/design/package-size-optimization.md` | 部分处理 | 仓库中已有相关 review / remediation 记录 | 尚未形成持续化、指标化的专项实施线 |
+
+### 2.2 docs 中尚未启动或仅停留在设计层的方向
+
+| 文档 / 方向 | 当前状态 | 备注 |
+| --- | --- | --- |
+| `docs/design/dashboard-ideas.md` | 未开始 | 总控仪表盘重构尚未立项实现 |
+| `docs/design/next-phase-ideas.md` 的 D · 数据出口/可观测性 | 仅设计探索 | 尚未拆独立 spec，也未开始代码实现 |
+| `docs/design/next-phase-ideas.md` 的 E · Snapshot Replay | 仅设计探索 | 尚未拆独立 spec，也未开始代码实现 |
+| `docs/design/next-phase-ideas.md` 的 F · 本地 LLM Provider | 仅设计探索 | 建议后续并入 `docs/specs/v1.1-enhancements.md` 增量 |
+| `docs/specs/headless-runner-v1.md` 的浏览器自动发现/分发策略 / `daemon` / RunnerHost | 未开始 | CLI `run/list` 与基础 Playwright adapter 已起步，显式系统浏览器路径已支持；自动发现、daemon 和远程 Runner 宿主仍未创建 |
+
+> 阅读建议：`specs/` 更关注“目标与验收”，本表回答的是“代码现在已经做到多少”。
+
+---
+
 ## 3. 已落地能力
 
 ### 3.1 主进程与系统服务

@@ -20,4 +20,13 @@ export default defineWorkspace([
       setupFiles: ['tests/setup-component.ts'],
     },
   }),
+  defineProject({
+    extends: './vitest.config.ts',
+    test: {
+      name: 'integration-node',
+      environment: 'node',
+      include: ['tests/integration/**/*.{test,spec}.ts'],
+      exclude: ['tests/e2e/**'],
+    },
+  }),
 ]);

@@ -1,9 +1,9 @@
 import crypto from 'crypto';
-import type { WebContents } from 'electron';
 import type { TaskBatch, TaskFlow, TaskStatus } from '@shared/types';
 import { TaskStatus as TaskStatusEnum } from '@shared/types';
 import { EVENTS } from '@shared/constants';
 import type { FlowRunner } from '@engines/automation/FlowRunner';
+import type { AutomationPage } from '@engines/automation/types';
 import { EventBus } from '@main/ipc/EventBus';
 import { BatchService } from './BatchService';
 import { randomUUID } from 'crypto';
@@ -44,7 +44,10 @@ export interface TaskServiceOptions {
   >;
   createRunner?: () => FlowRunner;
   eventBus?: EventBus;
-  batchService?: Pick<BatchService, 'createBatch' | 'getBatch' | 'listBatchesByTask'>;
+  batchService?: Pick<
+    BatchService,
+    'createBatch' | 'startBatch' | 'finishBatch' | 'failBatch' | 'getBatch' | 'listBatchesByTask'
+  >;
 }
 
 export interface SaveTaskFlowPayload {
@@ -64,7 +67,10 @@ export class TaskService {
   >;
   private readonly createRunner: () => FlowRunner;
   private readonly eventBus: EventBus;
-  private batchService?: Pick<BatchService, 'createBatch' | 'getBatch' | 'listBatchesByTask'>;
+  private batchService?: Pick<
+    BatchService,
+    'createBatch' | 'startBatch' | 'finishBatch' | 'failBatch' | 'getBatch' | 'listBatchesByTask'
+  >;
   private readonly activeTasks = new Map<string, ActiveTask>();
 
   constructor(options: TaskServiceOptions = {}) {
@@ -135,23 +141,33 @@ export class TaskService {
     return this.saveTaskFlow(taskId, { steps });
   }
 
-  startTask(taskId: string, webContents: WebContents): TaskState {
+  startTask(taskId: string, webContents: AutomationPage): TaskState {
     const flow = this.getTaskFlow(taskId);
 
     const runner = this.createRunner();
+    const batch = this.getBatchService().createBatch(taskId, { reason: 'manual' });
+    this.getBatchService().startBatch(batch.id);
     this.activeTasks.set(taskId, { flow, runner });
     this.updateStatus(taskId, TaskStatusEnum.RUNNING, flow.id);
 
     const runTask = async () => {
       try {
-        const result = await runner.run(flow, webContents, 0);
+        const result = await runner.run(flow, webContents, 0, batch.id);
         this.activeTasks.delete(taskId);
         this.updateStatus(
           taskId,
           result.success ? TaskStatusEnum.COMPLETED : TaskStatusEnum.FAILED,
           flow.id,
         );
+        if (result.success) {
+          this.getBatchService().finishBatch(batch.id, result.stepResults);
+        }
         if (!result.success) {
+          this.getBatchService().failBatch(
+            batch.id,
+            result.error ?? 'Task failed',
+            result.breakpoint,
+          );
           this.eventBus.emit(EVENTS.TASK_FAILED, {
             flowId: flow.id,
             error: result.error ?? 'Task failed',
@@ -162,6 +178,10 @@ export class TaskService {
           flowId: flow.id,
           error: error instanceof Error ? error.message : String(error),
         });
+        this.getBatchService().failBatch(
+          batch.id,
+          error instanceof Error ? error.message : String(error),
+        );
         this.activeTasks.delete(taskId);
         this.updateStatus(taskId, TaskStatusEnum.FAILED, flow.id);
       }
@@ -179,7 +199,7 @@ export class TaskService {
     return { taskId, status: TaskStatusEnum.PAUSED };
   }
 
-  resumeTask(taskId: string, webContents: WebContents): TaskState {
+  resumeTask(taskId: string, webContents: AutomationPage): TaskState {
     const task = this.getActiveTask(taskId);
     const status = task.runner.getStatus();
 
@@ -322,7 +342,10 @@ export class TaskService {
     });
   }
 
-  private getBatchService(): Pick<BatchService, 'createBatch' | 'getBatch' | 'listBatchesByTask'> {
+  private getBatchService(): Pick<
+    BatchService,
+    'createBatch' | 'startBatch' | 'finishBatch' | 'failBatch' | 'getBatch' | 'listBatchesByTask'
+  > {
     return this.batchService!;
   }
 

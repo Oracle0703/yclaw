@@ -25,6 +25,13 @@ import { PermissionChecker } from './plugin-loader/PermissionChecker';
 import { BatchService } from './services/BatchService';
 import { TaskService } from './services/TaskService';
 import { bootstrapTaskAsCode, type TaskAsCodeBootstrap } from './services/task-as-code/bootstrap';
+import { createDesktopMcpServer } from '@mcp/server/createDesktopMcpServer';
+import {
+  startEmbeddedMcpHttpServer,
+  type EmbeddedMcpHttpHandle,
+  type EmbeddedMcpHttpStatus,
+} from '@mcp/server/startEmbeddedHttpServer';
+import { McpClientManager } from '@mcp/client/McpClientManager';
 import { DataSourceManager } from '@engines/analytics/DataSourceManager';
 import { IndicatorLibrary } from '@engines/analytics/IndicatorLibrary';
 import { AutomationEngine } from '@engines/automation/AutomationEngine';
@@ -45,12 +52,15 @@ import {
 import type {
   AIChatRequest,
   AIConfig,
+  McpClientServerConfig,
+  McpClientServerStatus,
   OHLCVData,
   IndicatorType,
   DataSourceConfig,
   InterventionState,
   TaskFlow,
 } from '@shared/types';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 
 /**
  * 应用生命周期管理
@@ -81,6 +91,8 @@ export class App {
   private taskAsCode: TaskAsCodeBootstrap;
   private eventForwarders: Array<{ event: string; listener: (...args: unknown[]) => void }> = [];
   private interventionState: InterventionState | null = null;
+  private embeddedMcpHttpServer: EmbeddedMcpHttpHandle | null = null;
+  private mcpClientManager: McpClientManager;
   private started = false;
 
   constructor() {
@@ -120,13 +132,18 @@ export class App {
       eventBus: this.eventBus,
       sessionPartition: this.getBrowserSessionPartition(),
     });
+    const toolRegistry = new ToolRegistry();
     this.aiService = new AIService({
       config: this.configService.get('ai'),
       openWindow: (module: string) => this.windowManager.openWindow({ module }),
       taskRepository,
       aiRepository,
       contextManager,
-      toolRegistry: new ToolRegistry(),
+      toolRegistry,
+    });
+    this.mcpClientManager = new McpClientManager({
+      toolRegistry,
+      logService: this.logService,
     });
     this.permissionChecker = new PermissionChecker();
     this.pluginLoader = new PluginLoader({
@@ -181,6 +198,7 @@ export class App {
     // 注册 IPC handlers
     this.registerIpcHandlers();
     this.registerEventForwarders();
+    await this.syncExternalMcpServers(this.configService.get('ai').mcp?.servers);
     this.schedulerService.start();
 
     // 创建系统托盘
@@ -313,15 +331,46 @@ export class App {
       return this.configService.get('ai');
     });
 
-    this.ipcController.handle(IPC_CHANNELS.AI_CONFIG_SET, (config: unknown) => {
-      const nextConfig = { ...this.configService.get('ai'), ...(config as Partial<AIConfig>) };
+    this.ipcController.handle(IPC_CHANNELS.AI_CONFIG_SET, async (config: unknown) => {
+      const currentConfig = this.configService.get('ai');
+      const partialConfig = config as Partial<AIConfig>;
+      const nextConfig = {
+        ...currentConfig,
+        ...partialConfig,
+        mcp: partialConfig.mcp
+          ? {
+              ...currentConfig.mcp,
+              ...partialConfig.mcp,
+              embeddedHttp: partialConfig.mcp.embeddedHttp
+                ? {
+                    ...currentConfig.mcp?.embeddedHttp,
+                    ...partialConfig.mcp.embeddedHttp,
+                  }
+                : currentConfig.mcp?.embeddedHttp,
+              servers: partialConfig.mcp.servers ?? currentConfig.mcp?.servers,
+            }
+          : currentConfig.mcp,
+      };
       this.configService.set('ai', nextConfig);
       this.aiService.updateConfig(nextConfig);
+      await this.syncExternalMcpServers(nextConfig.mcp?.servers);
       return nextConfig;
     });
 
     this.ipcController.handle(IPC_CHANNELS.AI_TOOLS_LIST, () => {
       return this.aiService.getToolRegistry().list();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_TOOL_EXECUTE, async (payload: unknown) => {
+      const { name, params } =
+        (payload as { name?: string; params?: Record<string, unknown> }) ?? {};
+
+      if (typeof name !== 'string' || name.trim().length === 0) {
+        throw new Error('Tool name is required');
+      }
+
+      const context = await this.aiService.getContextManager().collectContext();
+      return this.aiService.getToolRegistry().execute(name.trim(), params ?? {}, context);
     });
 
     this.ipcController.handle(IPC_CHANNELS.AI_CONVERSATION_LIST, () => {
@@ -330,6 +379,29 @@ export class App {
 
     this.ipcController.handle(IPC_CHANNELS.AI_CONVERSATION_DELETE, (id: unknown) => {
       return this.aiService.deleteConversation(String(id));
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_MCP_START, async (params: unknown) => {
+      const { host, port, token } =
+        (params as { host?: string; port?: number; token?: string }) ?? {};
+      return this.startEmbeddedMcpHttpServer({ host, port, token });
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_MCP_STOP, async () => {
+      return this.stopEmbeddedMcpHttpServer();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_MCP_STATUS, () => {
+      return this.getEmbeddedMcpHttpStatus();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_MCP_CLIENT_STATUS, () => {
+      return this.getExternalMcpServerStatuses();
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.AI_MCP_AUDIT_LIST, (payload: unknown) => {
+      const limit = Number((payload as { limit?: number } | undefined)?.limit ?? 20);
+      return this.logService.queryMcpAudit(Number.isFinite(limit) && limit > 0 ? limit : 20);
     });
 
     // 插件
@@ -699,6 +771,15 @@ export class App {
     this.taskAsCode.dispose().catch((err) => {
       this.logService.error('main', 'task-as-code dispose failed', err as Error);
     });
+    if (this.embeddedMcpHttpServer) {
+      void this.embeddedMcpHttpServer.close().catch((err) => {
+        this.logService.error('main', 'embedded mcp http shutdown failed', err as Error);
+      });
+      this.embeddedMcpHttpServer = null;
+    }
+    void this.mcpClientManager.close().catch((err) => {
+      this.logService.error('main', 'external mcp client shutdown failed', err as Error);
+    });
     this.ipcController.dispose();
     this.dataSourceManager.closeAll();
     this.databaseService.close();
@@ -706,6 +787,68 @@ export class App {
     this.trayService.destroy();
     this.tabManager.closeAll();
     this.windowManager.closeAll();
+  }
+
+  createEmbeddedMcpServer(): McpServer {
+    return createDesktopMcpServer({
+      taskService: this.taskService,
+      resultService: this.resultService,
+      executionLogService: this.executionLogService,
+      sessionRegistry: this.sessionRegistry,
+      tabManager: this.tabManager,
+      windowManager: this.windowManager,
+      logService: this.logService,
+    });
+  }
+
+  async startEmbeddedMcpHttpServer(
+    options: {
+      host?: string;
+      port?: number;
+      token?: string;
+    } = {},
+  ): Promise<EmbeddedMcpHttpStatus> {
+    if (this.embeddedMcpHttpServer) {
+      return this.getEmbeddedMcpHttpStatus();
+    }
+
+    const configured = this.configService.get('ai').mcp?.embeddedHttp;
+    this.embeddedMcpHttpServer = await startEmbeddedMcpHttpServer({
+      createServer: () => this.createEmbeddedMcpServer(),
+      host: options.host ?? configured?.host,
+      port: options.port ?? configured?.port,
+      token: options.token ?? configured?.token,
+      logService: this.logService,
+    });
+
+    return this.getEmbeddedMcpHttpStatus();
+  }
+
+  async stopEmbeddedMcpHttpServer(): Promise<EmbeddedMcpHttpStatus> {
+    if (this.embeddedMcpHttpServer) {
+      await this.embeddedMcpHttpServer.close();
+      this.embeddedMcpHttpServer = null;
+    }
+
+    return this.getEmbeddedMcpHttpStatus();
+  }
+
+  getEmbeddedMcpHttpStatus(): EmbeddedMcpHttpStatus {
+    if (!this.embeddedMcpHttpServer) {
+      return { running: false };
+    }
+
+    const { running, host, port, endpoint, transport, mode, authRequired } =
+      this.embeddedMcpHttpServer;
+    return { running, host, port, endpoint, transport, mode, authRequired };
+  }
+
+  getExternalMcpServerStatuses(): McpClientServerStatus[] {
+    return this.mcpClientManager.getServerStatuses();
+  }
+
+  private async syncExternalMcpServers(servers?: McpClientServerConfig[]): Promise<void> {
+    await this.mcpClientManager.syncServers(servers ?? []);
   }
 
   private createMockStockHistory(symbol: string): OHLCVData[] {
@@ -827,7 +970,10 @@ export class App {
       return installedFeatureUrl;
     }
 
-    if (process.env.NODE_ENV !== 'development' && this.featurePackageService.isManagedModule(module)) {
+    if (
+      process.env.NODE_ENV !== 'development' &&
+      this.featurePackageService.isManagedModule(module)
+    ) {
       throw new Error(`Feature package "${module}" is not installed`);
     }
 

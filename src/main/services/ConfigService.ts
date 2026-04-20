@@ -21,6 +21,13 @@ const DEFAULT_CONFIG: AppConfig = {
     baseUrl: 'https://api.openai.com/v1',
     temperature: 0.7,
     maxTokens: 2048,
+    mcp: {
+      embeddedHttp: {
+        host: '127.0.0.1',
+        port: 3939,
+      },
+      servers: [],
+    },
   },
 };
 

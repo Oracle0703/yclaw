@@ -1,5 +1,4 @@
-import type { WebContents } from 'electron';
-import type { ActionDefinition, ActionResult } from './types';
+import type { ActionDefinition, ActionResult, AutomationPage } from './types';
 import type { ResultService } from '@main/services/ResultService';
 
 export interface ActionExecutionContext {
@@ -14,7 +13,7 @@ export interface AutomationEngineOptions {
 }
 
 /**
- * 自动化引擎核心 — 通过 webContents 操控页面
+ * 自动化引擎核心 — 通过页面执行句柄操控页面
  * 支持 5 种基础操作: click / input / scroll / extract / screenshot
  */
 export class AutomationEngine {
@@ -29,7 +28,7 @@ export class AutomationEngine {
    * 执行单个操作
    */
   async execute(
-    webContents: WebContents,
+    webContents: AutomationPage,
     action: ActionDefinition,
     context?: ActionExecutionContext,
   ): Promise<ActionResult> {
@@ -83,7 +82,7 @@ export class AutomationEngine {
   }
 
   private async runAction(
-    wc: WebContents,
+    wc: AutomationPage,
     action: ActionDefinition,
     timeout: number,
   ): Promise<unknown> {
@@ -99,7 +98,7 @@ export class AutomationEngine {
     return Promise.race([actionPromise, timeoutPromise]).finally(() => clearTimeout(timer));
   }
 
-  private async dispatchAction(wc: WebContents, action: ActionDefinition): Promise<unknown> {
+  private async dispatchAction(wc: AutomationPage, action: ActionDefinition): Promise<unknown> {
     switch (action.type) {
       case 'click':
         return this.clickAction(wc, action);
@@ -116,7 +115,7 @@ export class AutomationEngine {
     }
   }
 
-  private async clickAction(wc: WebContents, action: ActionDefinition): Promise<void> {
+  private async clickAction(wc: AutomationPage, action: ActionDefinition): Promise<void> {
     await wc.executeJavaScript(`
       (() => {
         const el = document.querySelector('${escapeCssSelector(action.selector)}');
@@ -126,7 +125,7 @@ export class AutomationEngine {
     `);
   }
 
-  private async inputAction(wc: WebContents, action: ActionDefinition): Promise<void> {
+  private async inputAction(wc: AutomationPage, action: ActionDefinition): Promise<void> {
     const value = (action.params?.value as string) ?? '';
     const clear = (action.params?.clear as boolean) ?? true;
     await wc.executeJavaScript(`
@@ -141,7 +140,7 @@ export class AutomationEngine {
     `);
   }
 
-  private async scrollAction(wc: WebContents, action: ActionDefinition): Promise<void> {
+  private async scrollAction(wc: AutomationPage, action: ActionDefinition): Promise<void> {
     const x = (action.params?.x as number) ?? 0;
     const y = (action.params?.y as number) ?? 300;
     await wc.executeJavaScript(`
@@ -153,7 +152,7 @@ export class AutomationEngine {
     `);
   }
 
-  private async extractAction(wc: WebContents, action: ActionDefinition): Promise<unknown> {
+  private async extractAction(wc: AutomationPage, action: ActionDefinition): Promise<unknown> {
     const attr = (action.params?.attribute as string) ?? 'textContent';
     return wc.executeJavaScript(`
       (() => {
@@ -163,7 +162,7 @@ export class AutomationEngine {
     `);
   }
 
-  private async screenshotAction(wc: WebContents): Promise<string> {
+  private async screenshotAction(wc: AutomationPage): Promise<string> {
     const image = await wc.capturePage();
     return image.toDataURL();
   }

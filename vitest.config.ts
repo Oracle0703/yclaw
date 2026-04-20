@@ -7,6 +7,8 @@ export default defineConfig({
     alias: {
       '@shared': resolve(__dirname, 'src/shared'),
       '@main': resolve(__dirname, 'src/main'),
+      '@mcp': resolve(__dirname, 'src/mcp'),
+      '@runner': resolve(__dirname, 'src/runner'),
       '@renderer': resolve(__dirname, 'src/renderer'),
       '@engines': resolve(__dirname, 'src/engines'),
       '@cli': resolve(__dirname, 'src/cli'),

@@ -38,5 +38,9 @@ export type {
   AIServiceContext,
   AIChatRequest,
   AIChatResponse,
+  AIToolCall,
+  AIPendingToolCall,
+  McpClientServerConfig,
+  McpClientServerStatus,
 } from './ai';
 export type { Tab, BrowserSession, FlowRunnerStatus, InterventionState } from './browser';

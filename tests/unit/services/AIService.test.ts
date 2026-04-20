@@ -167,6 +167,125 @@ describe('AIService', () => {
     expect(mockFetch).toHaveBeenCalledOnce();
   });
 
+  it('should include available tools and call protocol in system prompt', async () => {
+    toolRegistry.register({
+      name: 'mcp.mock.echo',
+      description: '回显输入',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+        },
+      },
+      confirmationLevel: 0,
+      source: 'mcp:mock',
+      execute: vi.fn(),
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: '无需工具' } }],
+        }),
+    });
+
+    await service.chat({ message: '有哪些工具？' });
+
+    const requestBody = JSON.parse(String(mockFetch.mock.calls[0][1]?.body)) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const systemMessage = requestBody.messages.find((message) => message.role === 'system');
+    expect(systemMessage?.content).toContain('## 可用工具');
+    expect(systemMessage?.content).toContain('mcp.mock.echo');
+    expect(systemMessage?.content).toContain('YCLAW_TOOL_CALL');
+  });
+
+  it('should execute a safe tool when the model returns a tool call directive', async () => {
+    const execute = vi.fn(async () => ({
+      success: true,
+      data: {
+        text: 'pong',
+      },
+    }));
+    toolRegistry.register({
+      name: 'mcp.mock.echo',
+      description: '回显输入',
+      parameters: {},
+      confirmationLevel: 0,
+      source: 'mcp:mock',
+      execute,
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: 'YCLAW_TOOL_CALL {"name":"mcp.mock.echo","params":{"text":"ping"}}',
+              },
+            },
+          ],
+        }),
+    });
+
+    const response = await service.chat({ message: '调用 echo' });
+
+    expect(execute).toHaveBeenCalledWith(
+      {
+        text: 'ping',
+      },
+      expect.objectContaining({
+        currentModule: 'workbench',
+      }),
+    );
+    expect(response.executedToolCall).toEqual({
+      name: 'mcp.mock.echo',
+      params: {
+        text: 'ping',
+      },
+    });
+    expect(response.message.content).toContain('已调用工具：mcp.mock.echo');
+    expect(response.message.content).toContain('"text": "pong"');
+  });
+
+  it('should require confirmation and skip execution for dangerous tool directives', async () => {
+    const execute = vi.fn();
+    toolRegistry.register({
+      name: 'mcp.mock.danger',
+      description: '危险操作',
+      parameters: {},
+      confirmationLevel: 2,
+      source: 'mcp:mock',
+      execute,
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: 'YCLAW_TOOL_CALL {"name":"mcp.mock.danger","params":{"action":"refresh"}}',
+              },
+            },
+          ],
+        }),
+    });
+
+    const response = await service.chat({ message: '执行危险工具' });
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(response.message.content).toContain('工具 mcp.mock.danger 需要用户确认');
+    expect(response.message.content).toContain('"action": "refresh"');
+    expect(response.pendingToolCall).toEqual({
+      name: 'mcp.mock.danger',
+      params: {
+        action: 'refresh',
+      },
+    });
+  });
+
   it('should maintain conversation history', async () => {
     mockFetch.mockResolvedValue({
       ok: true,

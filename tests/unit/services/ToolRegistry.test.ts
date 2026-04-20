@@ -31,8 +31,27 @@ describe('ToolRegistry', () => {
     expect(list).toHaveLength(1);
     expect(list[0].name).toBe('test_tool');
     expect(list[0].description).toBe('A test tool');
+    expect(list[0].source).toBe('builtin');
     // execute should not be in listed result
     expect('execute' in list[0]).toBe(false);
+  });
+
+  it('should preserve explicit tool source metadata', () => {
+    registry.register({
+      name: 'mcp.git.status',
+      description: '来自外部 MCP 的工具',
+      parameters: {},
+      confirmationLevel: 1,
+      source: 'mcp:git',
+      execute: vi.fn(),
+    });
+
+    expect(registry.list()).toEqual([
+      expect.objectContaining({
+        name: 'mcp.git.status',
+        source: 'mcp:git',
+      }),
+    ]);
   });
 
   it('should get a tool by name', () => {
