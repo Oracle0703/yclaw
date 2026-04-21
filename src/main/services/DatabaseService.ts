@@ -477,7 +477,7 @@ export class DatabaseService {
     }
 
     if (currentDbVersion < 9) {
-      if (!this.hasColumn('tasks', 'current_revision_id')) {
+      if (this.hasTable('tasks') && !this.hasColumn('tasks', 'current_revision_id')) {
         this.db!.exec(`
           ALTER TABLE tasks
           ADD COLUMN current_revision_id TEXT
@@ -506,35 +506,37 @@ export class DatabaseService {
     }
 
     if (currentDbVersion < 10) {
-      if (!this.hasColumn('alerts', 'status')) {
-        this.db!.exec(`
-          ALTER TABLE alerts
-          ADD COLUMN status TEXT NOT NULL DEFAULT 'new'
-        `);
-      }
-      if (!this.hasColumn('alerts', 'assignee')) {
-        this.db!.exec(`
-          ALTER TABLE alerts
-          ADD COLUMN assignee TEXT
-        `);
-      }
-      if (!this.hasColumn('alerts', 'level')) {
-        this.db!.exec(`
-          ALTER TABLE alerts
-          ADD COLUMN level TEXT NOT NULL DEFAULT 'warning'
-        `);
-      }
-      if (!this.hasColumn('alerts', 'resolution')) {
-        this.db!.exec(`
-          ALTER TABLE alerts
-          ADD COLUMN resolution TEXT
-        `);
-      }
-      if (!this.hasColumn('alerts', 'updated_at')) {
-        this.db!.exec(`
-          ALTER TABLE alerts
-          ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        `);
+      if (this.hasTable('alerts')) {
+        if (!this.hasColumn('alerts', 'status')) {
+          this.db!.exec(`
+            ALTER TABLE alerts
+            ADD COLUMN status TEXT NOT NULL DEFAULT 'new'
+          `);
+        }
+        if (!this.hasColumn('alerts', 'assignee')) {
+          this.db!.exec(`
+            ALTER TABLE alerts
+            ADD COLUMN assignee TEXT
+          `);
+        }
+        if (!this.hasColumn('alerts', 'level')) {
+          this.db!.exec(`
+            ALTER TABLE alerts
+            ADD COLUMN level TEXT NOT NULL DEFAULT 'warning'
+          `);
+        }
+        if (!this.hasColumn('alerts', 'resolution')) {
+          this.db!.exec(`
+            ALTER TABLE alerts
+            ADD COLUMN resolution TEXT
+          `);
+        }
+        if (!this.hasColumn('alerts', 'updated_at')) {
+          this.db!.exec(`
+            ALTER TABLE alerts
+            ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+          `);
+        }
       }
 
       this.db!.exec(`
@@ -566,23 +568,25 @@ export class DatabaseService {
           ON alert_actions(alert_id, created_at DESC);
       `);
 
-      if (!this.hasColumn('extraction_results', 'quality_status')) {
-        this.db!.exec(`
-          ALTER TABLE extraction_results
-          ADD COLUMN quality_status TEXT
-        `);
-      }
-      if (!this.hasColumn('extraction_results', 'evidence_refs')) {
-        this.db!.exec(`
-          ALTER TABLE extraction_results
-          ADD COLUMN evidence_refs TEXT
-        `);
-      }
-      if (!this.hasColumn('extraction_results', 'revision_id')) {
-        this.db!.exec(`
-          ALTER TABLE extraction_results
-          ADD COLUMN revision_id TEXT
-        `);
+      if (this.hasTable('extraction_results')) {
+        if (!this.hasColumn('extraction_results', 'quality_status')) {
+          this.db!.exec(`
+            ALTER TABLE extraction_results
+            ADD COLUMN quality_status TEXT
+          `);
+        }
+        if (!this.hasColumn('extraction_results', 'evidence_refs')) {
+          this.db!.exec(`
+            ALTER TABLE extraction_results
+            ADD COLUMN evidence_refs TEXT
+          `);
+        }
+        if (!this.hasColumn('extraction_results', 'revision_id')) {
+          this.db!.exec(`
+            ALTER TABLE extraction_results
+            ADD COLUMN revision_id TEXT
+          `);
+        }
       }
 
       this.db!.exec(`
@@ -609,19 +613,21 @@ export class DatabaseService {
     }
 
     if (currentDbVersion < 12) {
-      if (!this.hasColumn('alerts', 'workspace_id')) {
+      if (this.hasTable('alerts') && !this.hasColumn('alerts', 'workspace_id')) {
         this.db!.exec(`
           ALTER TABLE alerts
           ADD COLUMN workspace_id TEXT
         `);
       }
 
-      this.db!.exec(`
-        CREATE INDEX IF NOT EXISTS idx_alerts_workspace_created
-          ON alerts(workspace_id, created_at DESC);
+      if (this.hasTable('alerts')) {
+        this.db!.exec(`
+          CREATE INDEX IF NOT EXISTS idx_alerts_workspace_created
+            ON alerts(workspace_id, created_at DESC);
+        `);
+      }
 
-        INSERT INTO migrations (version) VALUES (12);
-      `);
+      this.db!.exec('INSERT INTO migrations (version) VALUES (12);');
     }
 
     if (currentDbVersion < 13) {
@@ -647,29 +653,31 @@ export class DatabaseService {
     }
 
     if (currentDbVersion < 14) {
-      if (!this.hasColumn('extraction_templates', 'version')) {
-        this.db!.exec(`
-          ALTER TABLE extraction_templates
-          ADD COLUMN version TEXT NOT NULL DEFAULT 'v1'
-        `);
-      }
-      if (!this.hasColumn('extraction_templates', 'description')) {
-        this.db!.exec(`
-          ALTER TABLE extraction_templates
-          ADD COLUMN description TEXT
-        `);
-      }
-      if (!this.hasColumn('extraction_templates', 'deprecated')) {
-        this.db!.exec(`
-          ALTER TABLE extraction_templates
-          ADD COLUMN deprecated INTEGER NOT NULL DEFAULT 0
-        `);
-      }
-      if (!this.hasColumn('extraction_templates', 'plugin_dependencies')) {
-        this.db!.exec(`
-          ALTER TABLE extraction_templates
-          ADD COLUMN plugin_dependencies TEXT NOT NULL DEFAULT '[]'
-        `);
+      if (this.hasTable('extraction_templates')) {
+        if (!this.hasColumn('extraction_templates', 'version')) {
+          this.db!.exec(`
+            ALTER TABLE extraction_templates
+            ADD COLUMN version TEXT NOT NULL DEFAULT 'v1'
+          `);
+        }
+        if (!this.hasColumn('extraction_templates', 'description')) {
+          this.db!.exec(`
+            ALTER TABLE extraction_templates
+            ADD COLUMN description TEXT
+          `);
+        }
+        if (!this.hasColumn('extraction_templates', 'deprecated')) {
+          this.db!.exec(`
+            ALTER TABLE extraction_templates
+            ADD COLUMN deprecated INTEGER NOT NULL DEFAULT 0
+          `);
+        }
+        if (!this.hasColumn('extraction_templates', 'plugin_dependencies')) {
+          this.db!.exec(`
+            ALTER TABLE extraction_templates
+            ADD COLUMN plugin_dependencies TEXT NOT NULL DEFAULT '[]'
+          `);
+        }
       }
 
       this.db!.exec(`
@@ -860,6 +868,13 @@ export class DatabaseService {
         INSERT INTO migrations (version) VALUES (19);
       `);
     }
+  }
+
+  private hasTable(tableName: string): boolean {
+    const row = this.db!.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    ).get(tableName) as { name: string } | undefined;
+    return row?.name === tableName;
   }
 
   private hasColumn(tableName: string, columnName: string): boolean {
