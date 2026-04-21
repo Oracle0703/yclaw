@@ -113,6 +113,37 @@ export const IPC_CHANNELS = {
   AI_MCP_STATUS: 'ai:mcp:status',
   AI_MCP_CLIENT_STATUS: 'ai:mcp:client:status',
   AI_MCP_AUDIT_LIST: 'ai:mcp:audit:list',
+
+  // Runner Scheduler
+  RUNNER_REGISTRY_LIST: 'runner:registry:list',
+  RUNNER_REGISTRY_HEARTBEAT: 'runner:registry:heartbeat',
+  RUNNER_REGISTRY_DRAIN: 'runner:registry:drain',
+  RUNNER_REGISTRY_RESUME: 'runner:registry:resume',
+  RUNNER_QUEUE_LIST: 'runner:queue:list',
+  RUNNER_QUEUE_ENQUEUE: 'runner:queue:enqueue',
+  RUNNER_QUEUE_CANCEL: 'runner:queue:cancel',
+  RUNNER_DISPATCH_TICK: 'runner:dispatch:tick',
+  RUNNER_LEASE_LIST: 'runner:lease:list',
+  RUNNER_LEASE_RENEW: 'runner:lease:renew',
+  RUNNER_LEASE_RELEASE: 'runner:lease:release',
+  RUNNER_LEASE_RECONCILE: 'runner:lease:reconcile',
+
+  // Remote Runner 控制面
+  REMOTE_RUNNER_CONNECTION_LIST: 'runner:connection:list',
+  REMOTE_RUNNER_CONNECTION_SAVE: 'runner:connection:save',
+  REMOTE_RUNNER_CONNECTION_DELETE: 'runner:connection:delete',
+  REMOTE_RUNNER_CONNECTION_TEST: 'runner:connection:test',
+  REMOTE_RUNNER_TASK_LIST: 'runner:task:list',
+  REMOTE_RUNNER_TASK_SAVE: 'runner:task:save',
+  REMOTE_RUNNER_TASK_DELETE: 'runner:task:delete',
+  REMOTE_RUNNER_SESSION_LIST: 'runner:session:list',
+  REMOTE_RUNNER_SESSION_SAVE: 'runner:session:save',
+  REMOTE_RUNNER_SESSION_DELETE: 'runner:session:delete',
+  REMOTE_RUNNER_EXECUTION_START: 'runner:execution:start',
+  REMOTE_RUNNER_EXECUTION_GET: 'runner:execution:get',
+  REMOTE_RUNNER_EXECUTION_CANCEL: 'runner:execution:cancel',
+  REMOTE_RUNNER_EXECUTION_LOGS: 'runner:execution:logs',
+  REMOTE_RUNNER_LOG_EVENT: 'runner:log:event',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

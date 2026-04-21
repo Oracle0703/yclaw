@@ -15,6 +15,7 @@ yclaw/
 │   │   ├── plugin-host/           插件宿主页与受限桥接
 │   │   └── shared/                渲染层共享组件、Hook、样式、工具
 │   ├── shared/                    主/渲染进程共享类型、常量、工具
+│   ├── runner/                    Headless Runner CLI、daemon、浏览器运行时适配
 │   └── engines/                   自动化引擎与分析引擎
 ├── plugins/                       插件模板与插件目录
 ├── scripts/                       开发、构建、同步、打包辅助脚本
@@ -53,12 +54,13 @@ yclaw/
 | `src/main/index.ts` | 主进程入口，负责启动与异常兜底 |
 | `src/main/app.ts` | 应用生命周期编排 |
 | `src/main/windows/` | 窗口管理与 preload 入口 |
-| `src/main/ipc/` | IPC 通道路由、事件总线、消息边界控制 |
+| `src/main/ipc/` | IPC 通道路由、事件总线、消息边界控制；包含 `remote-runner-handlers.ts`、`runner-scheduler-handlers.ts` 等专项 handler |
 | `src/main/browser/` | WebContentsView 标签与会话管理 |
 | `src/main/plugin-loader/` | 插件扫描、加载、权限校验 |
 | `src/main/ai/` | AI 服务层、工具注册、上下文收集、Provider 抽象 |
-| `src/main/services/` | 配置、数据库、日志、调度、批次、结果、模板、告警等系统服务 |
+| `src/main/services/` | 配置、数据库、日志、调度、批次、结果、模板、告警、Remote Runner 等系统服务 |
 | `src/main/services/repositories/` | 数据仓储层，承接具体表与持久化读写 |
+| `src/main/services/runner-scheduler/` | 容量评分、Runner 注册、队列、dispatch、lease、reconcile 等调度子模块 |
 | `src/main/utils/` | 路径等主进程辅助工具 |
 
 ### `src/renderer/entries/` — 业务模块入口
@@ -69,7 +71,7 @@ yclaw/
 | --- | --- |
 | `workbench/` | 主工作台、模块导航、设置、AI 与命令面板入口 |
 | `stock/` | 股票分析与技术指标展示 |
-| `automation/` | 自动化任务、批次、结果、模板管理 |
+| `automation/` | 自动化任务、批次、结果、模板管理，以及 Remote Runner / Runner 调度面板 |
 | `browser/` | 浏览器会话控制台、干预面板、录制面板 |
 | `plugin-center/` | 插件安装、启停、卸载、权限确认 |
 
@@ -92,14 +94,23 @@ yclaw/
 | `hooks/` | `useIpc`、`useEventBus`、`useLoading` |
 | `styles/` | 全局样式与主题配置 |
 | `utils/` | 渲染层格式化与通用工具 |
+| `api/` | 主进程 IPC 的前端封装，例如 `runnerScheduler.ts` |
 
 ### `src/shared/` — 跨进程共享
 
 | 目录 | 说明 |
 | --- | --- |
-| `types/` | IPC、AI、插件、浏览器、股票、任务、配置、特性包等类型定义 |
-| `constants/` | IPC 通道、事件、权限常量 |
+| `types/` | IPC、AI、插件、浏览器、股票、任务、Remote Runner、Runner Scheduler、配置、特性包等类型定义 |
+| `constants/` | IPC 通道、事件、权限常量与 Runner 调度默认值 |
 | `utils/` | 校验、日志等共享工具 |
+
+### `src/runner/` — Headless Runner 与 daemon
+
+| 路径 | 说明 |
+| --- | --- |
+| `src/runner/cli/` | `run`、`list`、`daemon` 等命令入口 |
+| `src/runner/browser/` | Playwright 页面适配，如 `PlaywrightAutomationPage.ts` |
+| `src/runner/daemon/` | 最小 Remote Runner HTTP/SSE server 与内存 runtime |
 
 ### `src/engines/` — 核心引擎
 
@@ -134,6 +145,8 @@ yclaw/
 | `tests/unit/services/` | 服务层、IPC、AI、插件、窗口与浏览器管理测试 |
 | `tests/unit/services/repositories/` | 仓储层测试 |
 | `tests/unit/engines/` | 自动化/分析引擎测试 |
+| `tests/unit/ipc/` | IPC handler 测试，包括 remote runner 与 runner scheduler |
+| `tests/unit/runner/` | CLI、daemon、Playwright 页面适配测试 |
 | `tests/unit/shared/` | 共享常量、格式化、校验工具测试 |
 | `tests/unit/config/` | 构建与测试配置测试 |
 | `tests/unit/scripts/` | 脚本工具测试 |
@@ -148,9 +161,10 @@ yclaw/
 | --- | --- |
 | 文档背景 | 仓库最初以规划文档起步，现已演进为真实工程仓库 |
 | 渲染入口数量 | 当前是 5 个业务入口 + 1 个 `plugin-host` 宿主 |
-| 服务层 | 已新增批次、结果、模板、告警、调度、特性包等服务，不止基础系统服务 |
+| 服务层 | 已新增批次、结果、模板、告警、Remote Runner、Runner Scheduler、特性包等服务，不止基础系统服务 |
 | 数据访问层 | 当前采用 `services/` + `repositories/` 分层，而不是单一服务文件结构 |
-| 测试结构 | 已扩展为组件、服务、仓储、引擎、脚本、e2e 多层测试 |
+| Runner 形态 | 已包含 `src/runner/cli` 与 `src/runner/daemon`，不再只有 Electron 内部执行路径 |
+| 测试结构 | 已扩展为组件、服务、仓储、IPC、runner、脚本、e2e 多层测试 |
 
 ---
 

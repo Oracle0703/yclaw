@@ -36,16 +36,18 @@
 
 ---
 
-## 2.1 规格 / 方案落地状态（截至 2026-04-20）
+## 2.1 规格 / 方案落地状态（截至 2026-04-21）
 
 | 文档 | 当前状态 | 实现情况 | 说明 |
 | --- | --- | --- | --- |
 | `docs/specs/v1.0-baseline.md` | 已落地基础版 | Electron 壳、Vite 多入口、IPC、数据库、浏览器、自动化、插件、AI 基础能力均已存在 | 仍有少量交互与打包态验收需继续核验 |
 | `docs/specs/v1.1-enhancements.md` | 部分完成 | 命令面板、AI 面板、设置页增强、多数运营/浏览器增强已进入代码 | 文档中的部分 UI 勾选项仍需与真实实现继续对齐 |
 | `docs/specs/automation-browser-ops-v1.md` | 部分完成到基础闭环 | 任务、批次、结果、会话、告警、执行日志、介入面板、模板等主链路已具备基础版 | 完整 Electron 成品态验收和部分深水区交互仍待补齐 |
-| `docs/specs/task-as-code-v1.md` | 实施中 | 核心序列化、CLI、IPC、preload 桥接、目录监听、Persistence 适配已落地 | UI 导入/导出入口与用户向 quick-start 文档仍待补齐 |
-| `docs/specs/mcp-integration-v1.md` | 实施中 | MCP Server `stdio/http`、token 鉴权、dangerous 标记、外部 MCP Client、设置页、AI 工具可见性、审计面板、Claude/Cursor 示例已落地 | 最终逐条验收与少量尾项仍待收口 |
-| `docs/specs/headless-runner-v1.md` | HR-M1 CLI 起步 / HR-M2 adapter 基础版 | 已新增 `AutomationPage` 最小接口，落地 `src/runner/cli/list.ts`、`src/runner/cli/run.ts` 与基础 Playwright adapter，支持 `yclaw run <taskId>`、`yclaw list tasks`、`yclaw list batches --task <id>` 直连现有 SQLite；支持 `--browser-executable` / `YCLAW_BROWSER_EXECUTABLE` 指向系统浏览器 | `daemon`、RunnerHost、浏览器自动发现/分发策略和复杂真实站点验收尚未接入 |
+| `docs/specs/task-as-code-v1.md` | 基础版已落地 / UI 待补 | 核心序列化、CLI、IPC、preload 桥接、目录监听、Persistence 适配、README quick-start 与示例已落地 | 任务中心 / 模板中心 UI 导入导出入口、shutdown 等少量防御性尾项仍待补齐 |
+| `docs/specs/mcp-integration-v1.md` | 基础版已落地 / 验收收尾 | MCP Server `stdio/http`、token 鉴权、dangerous 标记、外部 MCP Client、设置页、AI 工具可见性、审计面板、Claude/Cursor 示例已落地 | 最终逐条验收、资源/审计筛选和远程访问边界仍待收口 |
+| `docs/specs/headless-runner-v1.md` | HR-M1 CLI 可用 / HR-M2 daemon 雏形 | 已落地 `src/runner/cli/list.ts`、`src/runner/cli/run.ts`、`src/runner/cli/daemon.ts`、基础 Playwright adapter 与最小 `RemoteRunnerServer`，支持本地直连 SQLite 执行和最小 daemon 启动；支持 `--browser-executable` / `YCLAW_BROWSER_EXECUTABLE` 指向系统浏览器 | 浏览器自动发现、RunnerHost、复杂真实站点验收和更完整运行时治理仍待补齐 |
+| `docs/specs/remote-runner-control-plane-v1.md` | P0 基础版已落地 | 已具备 Runner 连接管理、能力探测、执行下发、状态查询、实时日志、取消执行、健康检查与最小 daemon 联调链路 | 会话治理、结果聚合、失败恢复策略与映射关系仍待继续收口 |
+| `docs/specs/capacity-aware-runner-scheduler-v1.md` | P0/P1 基础版已落地 | 已具备本地/远程统一 Runner 池、分队列加权轮询、容量评分、dispatch、lease、orphan reconcile、自动化页 `RunnerSchedulerPanel` 与最小运维操作 | 策略配置化、更细粒度可观测、更多异常策略与长时间稳定性验收仍待补齐 |
 | `docs/design/ai-assistant.md` | 部分落地 | 已有 `AIService`、`ToolRegistry`、聊天面板、MCP 工具接入 | 流式输出、更多 provider 体验与更深层任务助理能力仍待扩展 |
 | `docs/design/dashboard-ideas.md` | 未开始 | 当前没有按该文档独立推进总控仪表盘重构 | 属于中后期体验增强方向 |
 | `docs/design/page-container-optimization.md` | 未系统推进 | 局部页面样式已有演进，但未按文档做专项改造 | 仍属于设计建议 |
@@ -59,7 +61,7 @@
 | `docs/design/next-phase-ideas.md` 的 D · 数据出口/可观测性 | 仅设计探索 | 尚未拆独立 spec，也未开始代码实现 |
 | `docs/design/next-phase-ideas.md` 的 E · Snapshot Replay | 仅设计探索 | 尚未拆独立 spec，也未开始代码实现 |
 | `docs/design/next-phase-ideas.md` 的 F · 本地 LLM Provider | 仅设计探索 | 建议后续并入 `docs/specs/v1.1-enhancements.md` 增量 |
-| `docs/specs/headless-runner-v1.md` 的浏览器自动发现/分发策略 / `daemon` / RunnerHost | 未开始 | CLI `run/list` 与基础 Playwright adapter 已起步，显式系统浏览器路径已支持；自动发现、daemon 和远程 Runner 宿主仍未创建 |
+| `docs/specs/headless-runner-v1.md` 的浏览器自动发现/分发策略 / RunnerHost | 部分未开始 | CLI `run/list/daemon`、基础 Playwright adapter 与最小 remote daemon 已落地；自动发现、RunnerHost 和复杂调度策略仍未进入实现 |
 
 > 阅读建议：`specs/` 更关注“目标与验收”，本表回答的是“代码现在已经做到多少”。
 
@@ -78,6 +80,8 @@
 | 配置服务 | `ConfigService` |
 | 数据库服务 | `DatabaseService`（SQLite / `better-sqlite3`） |
 | 日志服务 | `LogService` |
+| 远程执行控制面 | `RemoteRunnerService` + `remote-runner-handlers.ts` |
+| Runner 调度服务 | `RunnerRegistryService`、`DispatchQueueService`、`RunnerDispatchService`、`ExecutionLeaseService`、`LeaseReconciler` |
 | 托盘与更新 | `TrayService`、`UpdateService` |
 
 ### 3.2 渲染端模块
@@ -86,7 +90,7 @@
 | --- | --- |
 | `workbench` | 工作台首页、设置页、命令面板、AI 面板入口 |
 | `stock` | K 线图、技术指标展示基础能力 |
-| `automation` | 任务列表、步骤编辑、执行面板、批次/结果/模板管理 |
+| `automation` | 任务列表、步骤编辑、执行面板、批次/结果/模板管理，以及 `RemoteRunnerPanel`、`RunnerSchedulerPanel` |
 | `browser` | 地址栏、标签栏、干预面板、录制面板、容器视图 |
 | `plugin-center` | 插件列表、权限展示、安装/启停/卸载操作 |
 | `plugin-host` | 受限宿主环境与桥接层 |
@@ -98,7 +102,12 @@
 | 自动化引擎 | `AutomationEngine`、`FlowRunner`、`RetryPolicy`、`SelectorGenerator` |
 | 分析引擎 | `DataSourceManager`、`IndicatorLibrary` |
 | AI 服务层 | `AIService`、`ContextManager`、`ToolRegistry`、`LLMProvider` |
-| 自动化运营闭环 | 批次、结果、告警、会话、模板、执行日志、调度骨架 |
+| Task-as-Code | YAML 序列化、CLI lint/import/export、IPC/preload/API、目录监听、Repository Persistence |
+| MCP 集成 | MCP Server/Client、stdio/http transport、工具注册、dangerous 确认、审计与示例配置 |
+| Headless Runner / Daemon | CLI `run/list/daemon`、Playwright 页面适配、`RemoteRunnerServer` 最小运行时 |
+| Remote Runner 控制面 | 连接管理、能力探测、执行下发、实时日志、取消执行、健康检查 |
+| Runner 调度底座 | 本地/远程统一 Runner 池、队列、容量评分、lease、orphan reconcile |
+| 自动化运营闭环 | 批次、结果、告警、会话、模板、执行日志、远程 Runner 与调度池基础链路 |
 
 ### 3.4 工程能力
 
@@ -121,6 +130,7 @@
 | `src/renderer/plugin-host/` | 插件宿主页与桥接层 |
 | `src/renderer/shared/` | 跨模块共享组件、Hook、样式、工具 |
 | `src/shared/` | 主/渲染进程共享类型、常量、工具 |
+| `src/runner/` | Headless Runner CLI、daemon、Playwright 运行时适配 |
 | `src/engines/` | 自动化与分析引擎 |
 | `tests/unit/` | 单元与回归测试 |
 | `tests/e2e/` | Playwright 端到端测试 |
@@ -135,7 +145,8 @@
 | 文档基调 | 早期 `docs/product/prd.md`、`docs/product/plan.md`、`docs/specs/v1.0-baseline.md` 偏规划；当前仓库已进入实现阶段 |
 | 多入口模型 | 已实现业务模块入口；当前还增加了 `plugin-host` 和 feature pack 构建链路 |
 | 插件系统 | 已落地基础权限模型与宿主容器；更强隔离仍属后续演进 |
-| 自动化能力 | 已具备基础执行、结果、干预、模板与调度骨架；真实复杂页面场景仍在增强 |
+| 自动化能力 | 已具备基础执行、结果、干预、模板、远程执行控制面与容量感知调度底座；真实复杂页面场景仍在增强 |
+| Runner 形态 | 已从单机任务执行扩展到本地 CLI、最小 daemon、远程 Runner 控制面和统一调度池 |
 | AI 助手 | 已实现基础服务层与面板；流式输出、更多工具仍在后续规划中 |
 
 ---
@@ -145,6 +156,8 @@
 | 类别 | 当前限制 |
 | --- | --- |
 | 自动化执行 | 更偏“基础生产化骨架”，复杂真实页面适配仍需继续增强 |
+| 调度策略 | 当前队列权重、lease 参数、`unknown` 幂等性处理仍偏保守，配置化程度有限 |
+| 远程 Runner | 控制面和 daemon 已可联调，但会话治理、结果汇总、长连稳定性仍属下一阶段 |
 | 插件隔离 | 目前仍是 V1 基础模式，尚未达到按插件独立进程隔离 |
 | e2e 范围 | Playwright 主要覆盖浏览器/自动化运营链路，尚未完全覆盖打包后的 Electron 成品 |
 | 打包验证 | 已有打包脚本，但各平台发行质量仍需持续验证 |

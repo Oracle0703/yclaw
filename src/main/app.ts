@@ -16,13 +16,14 @@ import { AlertService } from './services/AlertService';
 import { ExecutionLogService } from './services/ExecutionLogService';
 import { ResultService } from './services/ResultService';
 import { TabManager } from './browser/TabManager';
-import { IPC_CHANNELS } from '@shared/constants';
+import { EVENTS, IPC_CHANNELS, RUNNER_SCHEDULER_DEFAULTS } from '@shared/constants';
 import { AIService } from './ai/AIService';
 import { ContextManager } from './ai/ContextManager';
 import { ToolRegistry } from './ai/ToolRegistry';
 import { PluginLoader } from './plugin-loader/PluginLoader';
 import { PermissionChecker } from './plugin-loader/PermissionChecker';
 import { BatchService } from './services/BatchService';
+import { RemoteRunnerService } from './services/RemoteRunnerService';
 import { TaskService } from './services/TaskService';
 import { bootstrapTaskAsCode, type TaskAsCodeBootstrap } from './services/task-as-code/bootstrap';
 import { createDesktopMcpServer } from '@mcp/server/createDesktopMcpServer';
@@ -36,7 +37,15 @@ import { DataSourceManager } from '@engines/analytics/DataSourceManager';
 import { IndicatorLibrary } from '@engines/analytics/IndicatorLibrary';
 import { AutomationEngine } from '@engines/automation/AutomationEngine';
 import { FlowRunner } from '@engines/automation/FlowRunner';
-import { EVENTS } from '@shared/constants';
+import {
+  DispatchQueueService,
+  ExecutionLeaseService,
+  LeaseReconciler,
+  LocalRunnerAdapter,
+  RemoteRunnerAdapter,
+  RunnerDispatchService,
+  RunnerRegistryService,
+} from './services/runner-scheduler';
 import { getRendererUrl } from './utils/paths';
 import {
   AIRepository,
@@ -44,23 +53,44 @@ import {
   BatchRepository,
   ExecutionLogRepository,
   PluginRepository,
+  RemoteRunnerRepository,
   ResultRepository,
+  RunnerSchedulerRepository,
   SessionRepository,
   TaskRepository,
   TemplateRepository,
 } from './services/repositories';
+import { registerRemoteRunnerHandlers } from './ipc/remote-runner-handlers';
+import { registerRunnerSchedulerHandlers } from './ipc/runner-scheduler-handlers';
 import type {
   AIChatRequest,
   AIConfig,
+  ExecutionLease,
   McpClientServerConfig,
   McpClientServerStatus,
   OHLCVData,
   IndicatorType,
   DataSourceConfig,
   InterventionState,
+  RunnerQueueItem,
   TaskFlow,
 } from '@shared/types';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
+
+interface RunnerSchedulerIpcService {
+  listRunners(): unknown;
+  heartbeat(payload: unknown): unknown;
+  drain(payload: unknown): unknown;
+  resume(payload: unknown): unknown;
+  listQueue(): unknown;
+  enqueue(payload: unknown): unknown;
+  cancelQueueItem(payload: unknown): unknown;
+  dispatchTick(): Promise<void>;
+  listLeases(): ExecutionLease[];
+  renewLease(payload: unknown): ExecutionLease | null;
+  releaseLease(payload: unknown): ExecutionLease | null;
+  reconcile(): void;
+}
 
 /**
  * 应用生命周期管理
@@ -80,6 +110,8 @@ export class App {
   private pluginLoader: PluginLoader;
   private permissionChecker: PermissionChecker;
   private taskService: TaskService;
+  private remoteRunnerService: RemoteRunnerService;
+  private runnerSchedulerService: RunnerSchedulerIpcService;
   private schedulerService: SchedulerService;
   private sessionRegistry: SessionRegistry;
   private templateService: TemplateService;
@@ -116,6 +148,7 @@ export class App {
     const batchRepository = new BatchRepository(this.databaseService);
     const executionLogRepository = new ExecutionLogRepository(this.databaseService);
     const resultRepository = new ResultRepository(this.databaseService);
+    const remoteRunnerRepository = new RemoteRunnerRepository(this.databaseService);
     const contextManager = new ContextManager({
       taskRepository,
       pluginRepository,
@@ -161,6 +194,48 @@ export class App {
           eventBus: this.eventBus,
         }),
     });
+    this.remoteRunnerService = new RemoteRunnerService({
+      repository: remoteRunnerRepository,
+      actorId: 'desktop',
+    });
+    const runnerSchedulerRepository = new RunnerSchedulerRepository(this.databaseService);
+    const runnerRegistry = new RunnerRegistryService({ repository: runnerSchedulerRepository });
+    const dispatchQueue = new DispatchQueueService({ repository: runnerSchedulerRepository });
+    const leaseService = new ExecutionLeaseService({ repository: runnerSchedulerRepository });
+    const leaseReconciler = new LeaseReconciler({ repository: runnerSchedulerRepository });
+    const runnerDispatch = new RunnerDispatchService({
+      queue: dispatchQueue,
+      registry: runnerRegistry,
+      leaseService,
+      adapters: {
+        local: new LocalRunnerAdapter(),
+        remote: new RemoteRunnerAdapter(this.remoteRunnerService),
+      },
+      events: runnerSchedulerRepository,
+    });
+    this.runnerSchedulerService = {
+      listRunners: () => runnerSchedulerRepository.listRunnerNodes(),
+      heartbeat: (payload: unknown) => {
+        const input = payload as {
+          runnerId?: string;
+          metrics?: Parameters<RunnerRegistryService['heartbeat']>[1];
+        };
+        if (typeof input.runnerId !== 'string' || input.runnerId.length === 0) {
+          throw new Error('runnerId is required');
+        }
+        return runnerRegistry.heartbeat(input.runnerId, input.metrics ?? {});
+      },
+      drain: (payload: unknown) => runnerRegistry.drain(this.extractSchedulerId(payload, 'runnerId')),
+      resume: (payload: unknown) => runnerRegistry.resume(this.extractSchedulerId(payload, 'runnerId')),
+      listQueue: () => runnerSchedulerRepository.listQueueItems(),
+      enqueue: (payload: unknown) => dispatchQueue.enqueue(payload as Parameters<DispatchQueueService['enqueue']>[0]),
+      cancelQueueItem: (payload: unknown) => this.cancelRunnerQueueItem(runnerSchedulerRepository, payload),
+      dispatchTick: () => runnerDispatch.tick(),
+      listLeases: () => this.listRunnerLeases(),
+      renewLease: (payload: unknown) => this.renewRunnerLease(runnerSchedulerRepository, payload),
+      releaseLease: (payload: unknown) => this.releaseRunnerLease(runnerSchedulerRepository, payload),
+      reconcile: () => leaseReconciler.reconcile(),
+    };
     this.schedulerService = new SchedulerService({ taskService: this.taskService });
     this.sessionRegistry = new SessionRegistry({ sessionRepository });
     this.templateService = new TemplateService({ templateRepository });
@@ -213,6 +288,14 @@ export class App {
 
   private registerIpcHandlers(): void {
     // Task-as-Code（YAML 导入/导出/watch）handler 已在 bootstrapTaskAsCode 中注册到 ipcController
+    registerRemoteRunnerHandlers({
+      ipcController: this.ipcController,
+      service: this.remoteRunnerService as never,
+    });
+    registerRunnerSchedulerHandlers({
+      ipcController: this.ipcController,
+      service: this.runnerSchedulerService,
+    });
 
     // 窗口管理
     this.ipcController.handle(IPC_CHANNELS.WINDOW_OPEN, (params: unknown) => {
@@ -849,6 +932,201 @@ export class App {
 
   private async syncExternalMcpServers(servers?: McpClientServerConfig[]): Promise<void> {
     await this.mcpClientManager.syncServers(servers ?? []);
+  }
+
+  private cancelRunnerQueueItem(
+    repository: RunnerSchedulerRepository,
+    payload: unknown,
+  ): RunnerQueueItem | null {
+    const queueItemId = this.extractSchedulerId(payload, 'queueItemId');
+    const queueItem = repository.listQueueItems().find((item) => item.id === queueItemId);
+    if (!queueItem) {
+      return null;
+    }
+
+    if (queueItem.status !== 'queued') {
+      throw new Error('Only queued items can be cancelled');
+    }
+
+    return repository.saveQueueItem({
+      ...queueItem,
+      status: 'cancelled',
+      lastError: queueItem.lastError ?? 'Cancelled by operator',
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  private listRunnerLeases(): ExecutionLease[] {
+    const rows = this.databaseService.all<{
+      id: string;
+      execution_id: string;
+      queue_item_id: string;
+      runner_id: string;
+      task_id: string;
+      lease_token: string;
+      status: ExecutionLease['status'];
+      expires_at: string;
+      last_renewed_at: string;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `SELECT
+        id,
+        execution_id,
+        queue_item_id,
+        runner_id,
+        task_id,
+        lease_token,
+        status,
+        expires_at,
+        last_renewed_at,
+        created_at,
+        updated_at
+      FROM execution_leases
+      ORDER BY created_at DESC`,
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      executionId: row.execution_id,
+      queueItemId: row.queue_item_id,
+      runnerId: row.runner_id,
+      taskId: row.task_id,
+      leaseToken: row.lease_token,
+      status: row.status,
+      expiresAt: row.expires_at,
+      lastRenewedAt: row.last_renewed_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  private renewRunnerLease(
+    repository: RunnerSchedulerRepository,
+    payload: unknown,
+  ): ExecutionLease | null {
+    const leaseId = this.extractSchedulerId(payload, 'leaseId');
+    const lease = this.findRunnerLease(leaseId);
+    if (!lease) {
+      return null;
+    }
+
+    const nowIso = new Date().toISOString();
+    const ttlMs = this.extractLeaseTtl(payload);
+    const renewedLease: ExecutionLease = {
+      ...lease,
+      status: 'active',
+      expiresAt: new Date(Date.now() + ttlMs).toISOString(),
+      lastRenewedAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    return repository.saveExecutionLease(renewedLease);
+  }
+
+  private releaseRunnerLease(
+    repository: RunnerSchedulerRepository,
+    payload: unknown,
+  ): ExecutionLease | null {
+    const leaseId = this.extractSchedulerId(payload, 'leaseId');
+    const lease = this.findRunnerLease(leaseId);
+    if (!lease) {
+      return null;
+    }
+
+    const releasedLease: ExecutionLease = {
+      ...lease,
+      status: 'released',
+      updatedAt: new Date().toISOString(),
+    };
+
+    return repository.saveExecutionLease(releasedLease);
+  }
+
+  private findRunnerLease(leaseId: string): ExecutionLease | null {
+    const row = this.databaseService.get<{
+      id: string;
+      execution_id: string;
+      queue_item_id: string;
+      runner_id: string;
+      task_id: string;
+      lease_token: string;
+      status: ExecutionLease['status'];
+      expires_at: string;
+      last_renewed_at: string;
+      created_at: string;
+      updated_at: string;
+    }>(
+      `SELECT
+        id,
+        execution_id,
+        queue_item_id,
+        runner_id,
+        task_id,
+        lease_token,
+        status,
+        expires_at,
+        last_renewed_at,
+        created_at,
+        updated_at
+      FROM execution_leases
+      WHERE id = ?`,
+      [leaseId],
+    );
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      executionId: row.execution_id,
+      queueItemId: row.queue_item_id,
+      runnerId: row.runner_id,
+      taskId: row.task_id,
+      leaseToken: row.lease_token,
+      status: row.status,
+      expiresAt: row.expires_at,
+      lastRenewedAt: row.last_renewed_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  private extractSchedulerId(payload: unknown, primaryField: string): string {
+    if (typeof payload === 'string' && payload.length > 0) {
+      return payload;
+    }
+
+    if (typeof payload !== 'object' || payload === null) {
+      throw new Error(`${primaryField} is required`);
+    }
+
+    const record = payload as Record<string, unknown>;
+    const primary = record[primaryField];
+    if (typeof primary === 'string' && primary.length > 0) {
+      return primary;
+    }
+
+    const fallback = record.id;
+    if (typeof fallback === 'string' && fallback.length > 0) {
+      return fallback;
+    }
+
+    throw new Error(`${primaryField} is required`);
+  }
+
+  private extractLeaseTtl(payload: unknown): number {
+    if (typeof payload !== 'object' || payload === null) {
+      return RUNNER_SCHEDULER_DEFAULTS.leaseTtlMs;
+    }
+
+    const leaseTtlMs = (payload as { leaseTtlMs?: unknown }).leaseTtlMs;
+    if (typeof leaseTtlMs !== 'number' || !Number.isFinite(leaseTtlMs) || leaseTtlMs <= 0) {
+      return RUNNER_SCHEDULER_DEFAULTS.leaseTtlMs;
+    }
+
+    return leaseTtlMs;
   }
 
   private createMockStockHistory(symbol: string): OHLCVData[] {

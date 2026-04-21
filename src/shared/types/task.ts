@@ -1,3 +1,5 @@
+import type { QueueType, TaskIdempotency } from './runner-scheduler';
+
 /**
  * 自动化任务类型定义
  */
@@ -26,6 +28,7 @@ export interface TaskFlow {
   steps: TaskStep[];
   entryUrl?: string;
   schedule?: ScheduleConfig | null;
+  scheduling?: TaskSchedulingMetadata;
   sessionId?: string | null;
   templateId?: string | null;
   enabled?: boolean;
@@ -70,6 +73,13 @@ export interface ScheduleConfig {
   runAt?: string;
   timeoutMs?: number;
   maxConcurrency?: number;
+}
+
+export interface TaskSchedulingMetadata {
+  taskType?: QueueType;
+  idempotency?: TaskIdempotency;
+  preferredRunnerKind?: 'local' | 'remote';
+  requiredCapabilities?: string[];
 }
 
 export interface TaskBreakpoint {

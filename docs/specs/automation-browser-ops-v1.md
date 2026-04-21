@@ -1,32 +1,36 @@
 # 📦 YClaw 自动化采集产品化 Spec（V1）
 
 > 范围：聚焦 `自动化采集 + 浏览器介入台` 的一期产品化方案  
-> 说明：本文件为新增 spec，**扩展但不替代**现有 `docs/specs/v1.0-baseline.md`（V1.0 SPEC-001 ~ SPEC-022）
+> 说明：本文件为自动化主线 spec，**扩展但不替代**现有 `docs/specs/v1.0-baseline.md`（V1.0 SPEC-001 ~ SPEC-022）。  
+> 关联专项：调度与远程执行的细化设计见 `docs/specs/remote-runner-control-plane-v1.md` 与 `docs/specs/capacity-aware-runner-scheduler-v1.md`。
 
 ---
 
-## 实施回写（2026-04-15）
+## 实施回写（2026-04-21）
 
 ### 当前实现映射
 
 | Spec | 当前实现情况 | 备注 |
 | --- | --- | --- |
-| SPEC-A01 任务中心 | 部分完成 | 已有任务列表、手动启动、批次查看、复跑入口；完整任务 CRUD 仍待补齐 |
-| SPEC-A02 调度与执行队列 | 最小完成 | 已有 `SchedulerService`、`BatchService`、状态汇总与批次生命周期 |
-| SPEC-A03 浏览器介入台 | 最小完成 | 已有介入状态展示、失败信息、恢复自动执行与会话关联 |
-| SPEC-A04 规则录制与提取模板 | 最小完成 | 已有 `TemplateService`、`TemplateManager`、`RecorderPanel`、步骤导入 |
-| SPEC-A05 结果中心 | 完成基础版 | 已有结果查询、详情查看、导出与可疑标记 |
-| SPEC-A06 会话与登录态管理 | 完成基础版 | 已有 `SessionRegistry` 与任务绑定能力 |
-| SPEC-A07 告警、日志与复跑 | 完成基础版 | 已有结构化执行日志、告警聚合、已读/未读、批次跳转 |
-| SPEC-A08 稳定性与验收指标 | 部分完成 | 已新增 Playwright 验收脚本覆盖核心三场景，完整 Electron 打包态验收待补 |
+| SPEC-A01 任务中心 | 基础版已落地 | 主进程已具备任务创建、更新、删除、复制与详情查询；自动化页已具备列表、打开、保存、启动、复跑等基础流，完整资产编辑体验仍待补齐 |
+| SPEC-A02 调度与执行队列 | 基础版分层已落地 | 已有本地 `SchedulerService`、`BatchService`，并新增 `RemoteRunnerService`、`RunnerSchedulerPanel` 与容量感知 Runner 调度底座；自动 cron/timer 恢复仍待继续收口 |
+| SPEC-A03 浏览器介入台 | 基础版已落地 | 已有失败断点、恢复自动执行、会话关联和相关 IPC；更完整的失败现场恢复和专用介入台仍待增强 |
+| SPEC-A04 规则录制与提取模板 | 基础版已落地 | 已有 `TemplateService`、`TemplateManager`、录制相关通道与步骤导入；复杂动作录制与更强校验仍待补齐 |
+| SPEC-A05 结果中心 | 基础版已落地 | 已有结果列表、详情查询、导出与可疑标记；结果聚合、更多导出形态和跨批次分析仍待补齐 |
+| SPEC-A06 会话与登录态管理 | 基础版已落地 | 已有 `SessionRegistry`、会话 CRUD、任务绑定与远程会话元数据链路 |
+| SPEC-A07 告警、日志与复跑 | 基础版已落地 | 已有结构化执行日志、告警聚合、批次复跑、告警已读与批次跳转 |
+| SPEC-A08 稳定性与验收指标 | 部分完成 | 已有单测、组件测试、Playwright 场景覆盖与远程 Runner / 调度专项测试；完整 Electron 打包态与长稳压测仍待补齐 |
 
 ### 当前限制 / 暂不支持
 
 | 项 | 说明 |
 | --- | --- |
-| 完整任务资产编辑 | 当前未把任务创建、详情编辑、模板绑定做成完整产品流 |
+| 完整任务资产编辑 | 后端 CRUD 已有，但自动化页仍以“列表 + 步骤编辑 + 保存”为主，删除、复制、详情配置未全部收口到产品流 |
+| 自动定时调度 | 当前 `SchedulerService.start()` 仅登记可调度任务，自动 cron/once 触发与重启恢复仍未完全落地 |
+| 统一 Runner 调度自动化 | 当前 Runner 调度器已可用，但主要通过显式 `dispatch tick` / `reconcile` 驱动，后台自动 loop 仍待补齐 |
 | 复杂录制动作 | 当前仅覆盖 click/input/change/scroll 的轻量录制 |
 | 告警实时推送 | 当前已支持事件广播骨架，但主要以 `alert:list` 拉取为主 |
+| 远程结果聚合 | 远程执行下发、状态与日志已可联调，但执行列表、结果摘要和持久化仍待继续补齐 |
 | 真机端到端 | 当前 E2E 基于 Vite 多入口 + mocked preload，不覆盖 Electron 原生窗口与打包产物 |
 | 自动验证/验证码破解 | 明确不做，仅保留人工介入恢复路径 |
 
@@ -36,16 +40,16 @@
 
 下表说明本文 Spec 与 V1.0 已有 Spec 的关系。标注「扩展」的表示在原有能力基础上增量演进，标注「新增」的表示全新模块。
 
-| 本文 Spec | 关联旧 Spec                                     | 关系 | 说明                                                                        |
-| --------- | ----------------------------------------------- | ---- | --------------------------------------------------------------------------- |
+| 本文 Spec | 关联旧 Spec / 新专项 | 关系 | 说明 |
+| --------- | -------------------- | ---- | ---- |
 | SPEC-A01  | SPEC-013（任务流执行）、SPEC-014（采集模块 UI） | 扩展 | 在现有 TaskFlow / TaskService 基础上增加产品化任务 CRUD、批次追踪、模板复制 |
-| SPEC-A02  | SPEC-013                                        | 扩展 | 为现有 FlowRunner 增加定时调度、并发控制、执行队列                          |
-| SPEC-A03  | SPEC-011（内嵌浏览器）、SPEC-012（自动化引擎）  | 扩展 | 复用 TabManager + AutomationEngine，增加失败现场恢复与人工接管协议          |
-| SPEC-A04  | SPEC-012                                        | 扩展 | 利用已有 SelectorGenerator + 5 种 ActionType，增加交互式录制与模板持久化    |
-| SPEC-A05  | —                                               | 新增 | 全新结果管理模块                                                            |
-| SPEC-A06  | SPEC-011                                        | 扩展 | 在 TabManager session 隔离基础上增加登录态持久化与任务绑定                  |
-| SPEC-A07  | SPEC-008（日志服务）                            | 扩展 | 在 LogService 基础上增加按任务/批次/步骤的结构化执行日志                    |
-| SPEC-A08  | —                                               | 新增 | 一期质量验收基线                                                            |
+| SPEC-A02  | SPEC-013 + `remote-runner-control-plane-v1` + `capacity-aware-runner-scheduler-v1` | 扩展 | 调度层已不再只局限于单机 `FlowRunner`，而是延伸到远程执行与统一 Runner 池 |
+| SPEC-A03  | SPEC-011（内嵌浏览器）、SPEC-012（自动化引擎） | 扩展 | 复用 TabManager + AutomationEngine，增加失败现场恢复与人工接管协议 |
+| SPEC-A04  | SPEC-012 | 扩展 | 利用已有 SelectorGenerator + 5 种 ActionType，增加交互式录制与模板持久化 |
+| SPEC-A05  | — | 新增 | 全新结果管理模块 |
+| SPEC-A06  | SPEC-011 + `remote-runner-control-plane-v1` | 扩展 | 在本地 session 隔离基础上增加远程会话元数据与任务绑定 |
+| SPEC-A07  | SPEC-008（日志服务） | 扩展 | 在 LogService 基础上增加按任务/批次/步骤的结构化执行日志 |
+| SPEC-A08  | — | 新增 | 一期质量验收基线 |
 
 ---
 
@@ -150,6 +154,8 @@ CREATE TABLE task_batches (
 
 调度器负责在指定时间触发任务，执行队列负责管理并发、超时、重试、取消与批次状态流转。
 
+> 以下内容描述的是该模块的**目标产品形态**；当前真实落地边界见本节下方“当前实现边界”。
+
 **验收标准**
 
 | 类型     | 标准                                              |
@@ -188,6 +194,17 @@ interface ScheduleConfig {
 }
 ```
 
+**当前实现边界（2026-04-21）**
+
+| 维度 | 当前状态 | 说明 |
+| --- | --- | --- |
+| 本地调度骨架 | 已落地基础版 | `SchedulerService` 已具备 `runningCount`、队列与手动 `triggerTask()`，可提供 `scheduler:status` |
+| 自动 cron / once 触发 | 未完全落地 | `SchedulerService.start()` 当前只登记可调度任务 ID，不自动创建真实 timer / cron job |
+| 批次生命周期 | 已落地 | `BatchService` 已支持创建、开始、完成、失败、复跑来源记录 |
+| 远程执行控制面 | 已落地基础版 | 自动化页已接入 `RemoteRunnerPanel`，可完成连接、下发、查状态、日志和取消 |
+| 统一 Runner 调度池 | 已落地基础版 | 自动化页已接入 `RunnerSchedulerPanel`，可查看队列、lease、Runner 状态，并手动触发 dispatch / reconcile |
+| 调度自动恢复 | 待补齐 | 本地调度自动恢复、远程 lease 后台扫描和更稳的超时/重试策略仍待继续收口 |
+
 **IPC Channels**
 
 | Channel            | 方向            | 说明                                     |
@@ -196,6 +213,12 @@ interface ScheduleConfig {
 | `batch:list`       | renderer → main | 按任务 ID 获取批次列表                   |
 | `batch:detail`     | renderer → main | 获取单个批次详情（含 stepResults）       |
 | `batch:retry`      | renderer → main | 从失败批次发起复跑                       |
+
+**补充说明**
+
+- `scheduler:status` 当前主要覆盖本地 `SchedulerService` 的运行数、队列深度与已登记任务数。
+- 远程 Runner 与统一调度池的专用通道位于 `runner:*` 命名空间，详见 `docs/specs/capacity-aware-runner-scheduler-v1.md`。
+- 远程执行下发、状态与日志通道位于 `runner:connection:*` / `runner:execution:*` 命名空间，详见 `docs/specs/remote-runner-control-plane-v1.md`。
 
 ---
 
@@ -370,6 +393,16 @@ CREATE INDEX idx_results_batch ON extraction_results(batchId);
 | `result:export`         | renderer → main | 导出指定任务/批次的结果（返回文件路径） |
 | `result:markSuspicious` | renderer → main | 标记结果为可疑                          |
 
+**当前实现边界（2026-04-21）**
+
+| 能力 | 当前状态 | 说明 |
+| --- | --- | --- |
+| 结果列表 | 已落地 | 自动化页 `ResultTable` 已支持按任务 / 批次加载结果 |
+| 结果详情 | 已落地主进程能力 | 已有 `result:detail` 通道，渲染层仍以列表为主 |
+| 导出 | 已落地基础版 | 当前页面已提供 CSV 导出入口 |
+| 可疑标记 | 已落地主进程能力 | 已有 `result:markSuspicious`，页面级操作仍可继续补强 |
+| 远程结果聚合 | 待补齐 | 远程执行结果摘要与执行列表仍主要停留在专项 spec 中 |
+
 ---
 
 ## SPEC-A06：会话与登录态管理
@@ -503,6 +536,8 @@ CREATE INDEX idx_execlog_level ON execution_logs(level, createdAt);
 **描述**
 
 本 Spec 不新增业务能力，而是定义一期必须达到的产品质量底线，确保系统可以作为日常工具使用。
+
+> 下表是**一期目标验收标准**，不等同于“当前已全部通过”。当前真实完成度请以本文顶部“实施回写”与 `docs/overview/current-status.md` 为准。
 
 **验收 Checklist**
 

@@ -1,10 +1,10 @@
-# SPEC · Task-as-Code V1（草案）
+# SPEC · Task-as-Code V1
 
-> 状态：**草案 / 实施中（核心序列化层已落地）**  
+> 状态：**基础版已落地 / UI 导入导出与少量防御性尾项待补**  
 > 关联：[design/next-phase-ideas.md §2.2](../design/next-phase-ideas.md#22-方向-b--task-as-code任务即代码)  
 > 与主线关系：**副线增量**，不替代任务中心 UI，只新增「序列化 + 导入导出 + 校验」。
 
-## 实施进度（当前）
+## 当前实施状态（截至 2026-04-21）
 
 - ✅ 核心序列化层：[src/shared/serialization/](../../src/shared/serialization/README.md)（types / validate / yaml / secrets / mapping / loader）
 - ✅ CLI （`yclaw lint` / `yclaw import` / `yclaw export`）：[src/cli/](../../src/cli/) · `npm run yclaw -- <cmd> <path>`
@@ -14,8 +14,10 @@
 - ✅ 目录文件监听器（TAC-07）：`createWatcher(rootDir, opts)` 防抖 1s 默认，产出 added/changed/removed 事件
 - ✅ 高层服务 facade `TaskAsCodeService`（importPath / exportTask / exportTemplate / watchDirectory），DI Persistence 适配器
 - ✅ IPC handlers（`task:importYaml` / `task:exportYaml` / `task:watch:start` / `task:watch:stop` + `task:watch:event` 推送），纯 Node 可单测
-- ✅ 单元测试：[tests/unit/serialization/](../../tests/unit/serialization) + [tests/unit/cli/](../../tests/unit/cli) + [tests/unit/ipc/](../../tests/unit/ipc) + [tests/unit/services/task-as-code/](../../tests/unit/services/task-as-code) + [tests/unit/renderer/api/](../../tests/unit/renderer/api)（**875 用例 · 111 文件**，截至 2026-04-20）
+- ✅ 单元测试：[tests/unit/serialization/](../../tests/unit/serialization) + [tests/unit/cli/](../../tests/unit/cli) + [tests/unit/ipc/](../../tests/unit/ipc) + [tests/unit/services/task-as-code/](../../tests/unit/services/task-as-code) + [tests/unit/renderer/api/](../../tests/unit/renderer/api)
 - ✅ 示例：[examples/tasks/](../../examples/tasks/)
+- ✅ 根 README quick-start 已补齐 Task-as-Code / SARIF 用法
+- 🟡 UI 导入/导出按钮、`App.shutdown` 异步等待 dispose、防御性 watch 二次校验仍待补齐
 
 ### ⏳ 待实施 / 待补强（截至 2026-04-20 review）
 
@@ -25,7 +27,7 @@
 | ~~P0~~ | ~~主进程在启动时注册 `task-as-code-handlers` 到 `IpcController`~~ | — | ✅ 已完成：[`bootstrapTaskAsCode`](../../src/main/services/task-as-code/bootstrap.ts) 在 `App` 构造期装配 service+handlers 并注册 4 个 channel；shutdown 时 dispose；11 个测试（[bootstrap.spec.ts](../../tests/unit/services/task-as-code/bootstrap.spec.ts) + [bootstrap-edge.spec.ts](../../tests/unit/services/task-as-code/bootstrap-edge.spec.ts)） |
 | ~~P0~~ | ~~渲染端 preload 暴露 `window.api.taskAsCode.*` + 渲染端 hook~~ | — | ✅ 已完成：[`createTaskAsCodeApi`](../../src/renderer/shared/api/taskAsCode.ts) 工厂 + preload 通过 `contextBridge` 注入 `window.api.taskAsCode`；channel 常量与 envelope 类型迁至 [`@shared/constants/task-as-code`](../../src/shared/constants/task-as-code.ts)；10 个测试（[taskAsCode.spec.ts](../../tests/unit/renderer/api/taskAsCode.spec.ts) + [taskAsCode-edge.spec.ts](../../tests/unit/renderer/api/taskAsCode-edge.spec.ts)）。React hook 留给 UI 接入阶段实现 |
 | P1 | UI 导入/导出按钮（任务中心 + 模板中心） | TAC-01 / TAC-02 | 走新 IPC 通道；监听开关复用 `task:watch:start` |
-| P1 | 根 README 增加「Task-as-Code 用法」章节（quick-start） | TAC-08 | spec 要求；目前只在 docs/specs 里有，对外用户入口缺失 |
+| ~~P1~~ | ~~根 README 增加「Task-as-Code 用法」章节（quick-start）~~ | TAC-08 | ✅ 已完成：根 README 已补 `npm run yclaw -- …` 与 SARIF 用法 |
 | P1 | 导入幂等性端到端测试 | TAC-02 | ✅ 已完成：`Persistence.findExistingTaskCreatedAt` / `findExistingTemplateCreatedAt` 可选钩子 + 9 个幂等性单测（[service-idempotency.spec.ts](../../tests/unit/serialization/service-idempotency.spec.ts)） |
 | P1 | IPC payload 结构校验（exportYaml 的 TaskFlow / Template 字段） | 安全 | ✅ 已完成：`assertTaskFlow` / `assertExtractionTemplate` + 17 个单测 |
 | ~~P2~~ | ~~`loadDirectory` 重复 id 跨文件冲突给 warning issue~~ | — | ✅ 已存在：`insertEntry` 以 error issue 上报且不覆盖 |

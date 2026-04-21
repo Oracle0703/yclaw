@@ -34,6 +34,7 @@
 | 想了解产品定位 | [product/prd.md](product/prd.md) → [product/plan.md](product/plan.md) → [overview/roadmap.md](overview/roadmap.md) |
 | 想了解 V1 要交付什么 | [specs/v1.0-baseline.md](specs/v1.0-baseline.md) → [specs/v1.1-enhancements.md](specs/v1.1-enhancements.md) |
 | 想了解自动化主路线 | [specs/automation-browser-ops-v1.md](specs/automation-browser-ops-v1.md) → [plans/automation-browser-ops-v1.md](plans/automation-browser-ops-v1.md) |
+| 想了解 Runner 主线 | [specs/remote-runner-control-plane-v1.md](specs/remote-runner-control-plane-v1.md) → [specs/capacity-aware-runner-scheduler-v1.md](specs/capacity-aware-runner-scheduler-v1.md) |
 
 ### 2.2 现状与规划（overview / product）
 
@@ -52,10 +53,14 @@
 - [specs/v1.0-baseline.md](specs/v1.0-baseline.md)：V1.0 基线规格
 - [specs/v1.1-enhancements.md](specs/v1.1-enhancements.md)：V1.1 增强规格
 - [specs/automation-browser-ops-v1.md](specs/automation-browser-ops-v1.md)：自动化采集 V1 规格
-- [specs/headless-runner-v1.md](specs/headless-runner-v1.md)：Headless Runner / CLI 草案
-- [specs/task-as-code-v1.md](specs/task-as-code-v1.md)：任务即代码草案
-- [specs/mcp-integration-v1.md](specs/mcp-integration-v1.md)：MCP 集成草案
+- [specs/headless-runner-v1.md](specs/headless-runner-v1.md)：Headless Runner / CLI V1 规格
+- [specs/remote-runner-control-plane-v1.md](specs/remote-runner-control-plane-v1.md)：Remote Runner 控制面 V1 规格
+- [specs/capacity-aware-runner-scheduler-v1.md](specs/capacity-aware-runner-scheduler-v1.md)：容量感知 Runner 调度器 V1 规格
+- [specs/task-as-code-v1.md](specs/task-as-code-v1.md)：任务即代码 V1 规格
+- [specs/mcp-integration-v1.md](specs/mcp-integration-v1.md)：MCP 集成 V1 规格
 - [plans/automation-browser-ops-v1.md](plans/automation-browser-ops-v1.md)：自动化采集 V1 实施计划
+- [superpowers/plans/2026-04-20-remote-runner-control-plane-v1.md](superpowers/plans/2026-04-20-remote-runner-control-plane-v1.md)：Remote Runner 控制面 V1 agent 实施拆解
+- [superpowers/plans/2026-04-21-capacity-aware-runner-scheduler-v1.md](superpowers/plans/2026-04-21-capacity-aware-runner-scheduler-v1.md)：容量感知 Runner 调度器 V1 agent 实施拆解
 
 ### 2.5 设计与专项（design）
 
@@ -69,6 +74,7 @@
 
 - [reviews/code-review-remediation-list.md](reviews/code-review-remediation-list.md)：历史评审修复清单
 - [reviews/automation-browser-ops-v1.md](reviews/automation-browser-ops-v1.md)：自动化采集 V1 代码评审
+- [reviews/2026-04-20-task-as-code-review.md](reviews/2026-04-20-task-as-code-review.md)：Task-as-Code 代码评审记录
 - [reviews/pr16-analysis.md](reviews/pr16-analysis.md)、[reviews/pr16-second-review.md](reviews/pr16-second-review.md)：PR16 评审
 - [reviews/2026-04-17-uncommitted-review.md](reviews/2026-04-17-uncommitted-review.md)、[reviews/2026-04-17-uncommitted-fix.md](reviews/2026-04-17-uncommitted-fix.md)：2026-04-17 未提交改动审查与修复
 - [reviews/2026-04-17-package-size-optimization-record.md](reviews/2026-04-17-package-size-optimization-record.md)：2026-04-17 包体优化落地记录

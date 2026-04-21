@@ -3,6 +3,11 @@ import path from 'path';
 import fs from 'fs';
 import { getDatabasePath } from '../utils/paths';
 
+interface DatabaseServiceOptions {
+  dbName?: string;
+  database?: Database.Database;
+}
+
 /**
  * SQLite 数据库服务
  * - WAL 模式
@@ -11,12 +16,15 @@ import { getDatabasePath } from '../utils/paths';
 export class DatabaseService {
   private static instance: DatabaseService;
   private db: Database.Database | null = null;
+  private migrationsApplied = false;
   private dbDir: string;
   private dbPath: string;
 
-  constructor(dbName = 'yclaw.sqlite') {
+  constructor(options: string | DatabaseServiceOptions = 'yclaw.sqlite') {
+    const normalized = typeof options === 'string' ? { dbName: options } : options;
     this.dbDir = getDatabasePath();
-    this.dbPath = path.join(this.dbDir, dbName);
+    this.dbPath = path.join(this.dbDir, normalized.dbName ?? 'yclaw.sqlite');
+    this.db = normalized.database ?? null;
   }
 
   static getInstance(dbName?: string): DatabaseService {
@@ -30,15 +38,23 @@ export class DatabaseService {
    * 打开数据库连接
    */
   open(): void {
-    if (this.db) {
+    if (!this.db) {
+      fs.mkdirSync(this.dbDir, { recursive: true });
+      this.db = new Database(this.dbPath);
+    }
+
+    if (this.migrationsApplied) {
       return;
     }
 
-    fs.mkdirSync(this.dbDir, { recursive: true });
-    this.db = new Database(this.dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.runMigrations();
+    this.migrationsApplied = true;
+  }
+
+  migrate(): void {
+    this.open();
   }
 
   /**
@@ -84,6 +100,7 @@ export class DatabaseService {
     if (this.db) {
       this.db.close();
       this.db = null;
+      this.migrationsApplied = false;
     }
   }
 
@@ -303,5 +320,137 @@ export class DatabaseService {
         INSERT INTO migrations (version) VALUES (4);
       `);
     }
+
+    if (currentDbVersion < 5) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS remote_runner_connections (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          base_url TEXT NOT NULL,
+          auth_type TEXT NOT NULL DEFAULT 'token',
+          token_ref TEXT NOT NULL,
+          workspace_id TEXT NOT NULL,
+          tls_mode TEXT NOT NULL DEFAULT 'strict',
+          proxy_url TEXT,
+          status TEXT NOT NULL DEFAULT 'unknown',
+          last_seen_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_remote_runner_connections_updated
+          ON remote_runner_connections(updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_remote_runner_connections_status
+          ON remote_runner_connections(status, updated_at DESC);
+
+        INSERT INTO migrations (version) VALUES (5);
+      `);
+    }
+
+    if (currentDbVersion < 6) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS runner_nodes (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL,
+          name TEXT NOT NULL,
+          workspace_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          capabilities_json TEXT NOT NULL,
+          max_concurrency INTEGER NOT NULL,
+          running_count INTEGER NOT NULL,
+          cpu_usage REAL NOT NULL,
+          memory_usage REAL NOT NULL,
+          heartbeat_latency_ms INTEGER NOT NULL,
+          recent_failure_rate REAL NOT NULL,
+          last_heartbeat_at TEXT,
+          last_seen_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS runner_queue_items (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          task_type TEXT NOT NULL,
+          idempotency TEXT NOT NULL,
+          workspace_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          priority INTEGER NOT NULL,
+          reassign_attempts INTEGER NOT NULL,
+          last_error TEXT,
+          remote_dispatch_json TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS execution_leases (
+          id TEXT PRIMARY KEY,
+          execution_id TEXT NOT NULL,
+          queue_item_id TEXT NOT NULL,
+          runner_id TEXT NOT NULL,
+          task_id TEXT NOT NULL,
+          lease_token TEXT NOT NULL,
+          status TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          last_renewed_at TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS runner_health_samples (
+          id TEXT PRIMARY KEY,
+          runner_id TEXT NOT NULL,
+          cpu_usage REAL NOT NULL,
+          memory_usage REAL NOT NULL,
+          running_count INTEGER NOT NULL,
+          max_concurrency INTEGER NOT NULL,
+          heartbeat_latency_ms INTEGER NOT NULL,
+          recent_failure_rate REAL NOT NULL,
+          sampled_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS runner_dispatch_events (
+          id TEXT PRIMARY KEY,
+          event_type TEXT NOT NULL,
+          runner_id TEXT,
+          queue_item_id TEXT,
+          execution_id TEXT,
+          message TEXT NOT NULL,
+          metadata_json TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_runner_nodes_workspace_status
+          ON runner_nodes(workspace_id, status);
+        CREATE INDEX IF NOT EXISTS idx_runner_queue_items_type_status
+          ON runner_queue_items(task_type, status, created_at);
+        CREATE INDEX IF NOT EXISTS idx_execution_leases_status_expires
+          ON execution_leases(status, expires_at);
+        CREATE INDEX IF NOT EXISTS idx_runner_dispatch_events_created
+          ON runner_dispatch_events(created_at);
+
+        INSERT INTO migrations (version) VALUES (6);
+      `);
+    }
+
+    if (currentDbVersion < 7) {
+      if (!this.hasColumn('runner_queue_items', 'remote_dispatch_json')) {
+        this.db!.exec(`
+          ALTER TABLE runner_queue_items
+          ADD COLUMN remote_dispatch_json TEXT
+        `);
+      }
+
+      this.db!.exec(`
+        INSERT INTO migrations (version) VALUES (7);
+      `);
+    }
+  }
+
+  private hasColumn(tableName: string, columnName: string): boolean {
+    const columns = this.db!.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+      name: string;
+    }>;
+    return columns.some((column) => column.name === columnName);
   }
 }

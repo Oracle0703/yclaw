@@ -21,9 +21,9 @@
 | --- | --- |
 | 进程结构 | 1 个主进程 + 多业务渲染入口 + 1 个 `plugin-host` 宿主入口 |
 | 渲染入口 | `workbench`、`stock`、`automation`、`browser`、`plugin-center`，外加 `plugin-host` |
-| 主进程服务 | 配置、数据库、日志、托盘、更新、特性包、调度、批次、模板、结果、告警等 |
+| 主进程服务 | 配置、数据库、日志、托盘、更新、特性包、调度、批次、模板、结果、告警、Remote Runner、Runner Scheduler 等 |
 | 核心边界 | Electron IPC + `contextBridge` + 共享类型与常量 |
-| 当前重点 | 自动化 Browser Ops、AI 助手、插件权限、构建/打包链路 |
+| 当前重点 | 自动化 Browser Ops、Remote Runner、容量感知调度、AI 助手、插件权限、构建/打包链路 |
 
 ---
 
@@ -45,6 +45,8 @@ graph TB
         LOG[LogService<br/>按日轮转 7天]
         UPD[UpdateService<br/>自动更新]
         TRAY[TrayService<br/>系统托盘]
+        RRS[RemoteRunnerService<br/>远程执行控制面]
+        RQ[Runner Scheduler<br/>Registry / Queue / Lease]
     end
 
     subgraph AILayer["AI 服务层"]
@@ -86,6 +88,7 @@ graph TB
         DS[行情数据源]
         WCV[WebContentsView<br/>受控页面]
         LLMAPI[LLM API<br/>OpenAI / Ollama]
+        RRD[Remote Runner Daemon<br/>HTTP / SSE]
     end
 
     %% 主进程内部连接
@@ -123,6 +126,9 @@ graph TB
     AE --> DB
     DSM --> DB
     PL --> PM
+    RRS --> RRD
+    RQ --> RRS
+    RQ --> DB
 ```
 
 ---
@@ -160,8 +166,17 @@ graph LR
         R4[React App + WebContentsView]
     end
 
-    subgraph PluginProcess["渲染进程 #5 — Plugin Host（V1.0）"]
+    subgraph RendererProcess5["渲染进程 #5 — 插件中心"]
+        R5[React App<br/>Plugin Center]
+    end
+
+    subgraph PluginProcess["渲染进程 #6 — Plugin Host（V1.0）"]
         P1[共享 Plugin Host<br/>受限 preload]
+    end
+
+    subgraph RemoteRunnerProcess["外部进程 — Remote Runner"]
+        RR1[HTTP API / SSE]
+        RR2[Runner Runtime]
     end
 
     %% IPC 通道
@@ -169,12 +184,16 @@ graph LR
     MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess2
     MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess3
     MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess4
+    MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess5
     MainProcess <-->|"受限 IPC 通道"| PluginProcess
+    MainProcess <-->|"HTTP / SSE"| RemoteRunnerProcess
 
     %% 渲染进程间统一经主进程转发
     MainProcess -->|"EventBus fan-out"| RendererProcess1
     MainProcess -->|"EventBus fan-out"| RendererProcess2
     MainProcess -->|"EventBus fan-out"| RendererProcess3
+    MainProcess -->|"EventBus fan-out"| RendererProcess4
+    MainProcess -->|"EventBus fan-out"| RendererProcess5
 ```
 
 ### 进程隔离策略
@@ -184,6 +203,7 @@ graph LR
 | 主进程                  | 1           | 完整 Node.js API      | 系统服务、引擎、插件管理                        |
 | 渲染进程（模块）        | N（按模块） | 受限（contextBridge） | 每个业务模块独立渲染进程                        |
 | 渲染进程（Plugin Host） | 1（V1.0）   | 高度受限 preload      | 受信插件 UI 的共享宿主；V1.5 再升级为按插件隔离 |
+| 外部 Runner 进程        | N           | 独立 Node.js 运行时   | 通过 HTTP / SSE 暴露控制面 API 与日志流         |
 
 ---
 
@@ -290,8 +310,8 @@ sequenceDiagram
     participant DB as SQLite
 
     User->>UI: 选择股票 / 打开图表
-    UI->>IPC: stock:subscribe {symbol}
-    IPC->>DSM: 创建数据订阅
+    UI->>IPC: 请求股票数据 {symbol}
+    IPC->>DSM: 创建数据拉取 / 订阅
 
     alt REST 数据源
         DSM->>API: HTTP GET 历史数据
@@ -344,6 +364,54 @@ sequenceDiagram
     IPC->>Chat: 更新对话 UI
 ```
 
+### 3.5 Runner 调度与远程执行链路
+
+```mermaid
+sequenceDiagram
+    participant UI as Automation UI
+    participant IPC as IPC Controller
+    participant DQ as DispatchQueueService
+    participant REG as RunnerRegistryService
+    participant SCORE as CapacityScoringService
+    participant DISPATCH as RunnerDispatchService
+    participant LEASE as ExecutionLeaseService
+    participant RR as RemoteRunnerService
+    participant DAEMON as Remote Runner Daemon
+
+    UI->>IPC: runner:queue:enqueue
+    IPC->>DQ: 创建队列项
+    UI->>IPC: runner:dispatch:tick
+    IPC->>DISPATCH: 触发一次调度
+    DISPATCH->>DQ: 选择队头任务
+    DISPATCH->>REG: 获取可调度 Runner
+    REG-->>SCORE: 返回本地/远程统一节点
+    SCORE-->>DISPATCH: 最低分 Runner + scoreBreakdown
+
+    alt 选择远程 Runner
+        DISPATCH->>RR: startExecution(...)
+        RR->>DAEMON: POST /v1/executions
+        DAEMON-->>RR: executionId
+    else 选择本地 Runner
+        DISPATCH->>DISPATCH: LocalRunnerAdapter.dispatch(...)
+    end
+
+    DISPATCH->>LEASE: 创建 execution lease
+    LEASE-->>IPC: leased / expiresAt
+    IPC-->>UI: 刷新 RunnerSchedulerPanel
+```
+
+关键职责分层：
+
+| 组件 | 职责 |
+| --- | --- |
+| `RemoteRunnerService` | 管理远程连接、能力探测、执行下发、状态查询、日志拉取与取消 |
+| `RunnerRegistryService` | 聚合本地与远程 Runner 健康、容量、心跳、最近失败率 |
+| `DispatchQueueService` | 按 `inspect/collect/replay` 分队列，执行加权轮询 |
+| `CapacityScoringService` | 根据容量、资源、延迟、失败率与状态惩罚计算解释性分数 |
+| `RunnerDispatchService` | 选择 Runner、调用适配器、写入 dispatch 事件 |
+| `ExecutionLeaseService` | 管理 lease 创建、续约、释放和过期扫描 |
+| `LeaseReconciler` | 处理 orphan、自动重入队和告警终止 |
+
 ---
 
 ## 4. IPC 通信架构
@@ -381,13 +449,18 @@ graph TB
 示例：
   task:start              # 启动任务
   task:pause              # 暂停任务
-  stock:subscribe         # 订阅行情
+  task:list               # 查询任务列表
   stock:indicator:calc    # 计算指标
   plugin:install          # 安装插件
   plugin:permission:check # 权限检查
   config:get              # 读取配置
   config:set              # 写入配置
   log:export              # 导出日志
+  runner:connection:list  # 查询远程 Runner 连接与状态
+  runner:execution:start  # 下发远程执行
+  runner:queue:list       # 查询调度队列
+  runner:dispatch:tick    # 手动触发调度
+  runner:lease:reconcile  # 手动触发 orphan 托管
 ```
 
 ---
@@ -541,6 +614,8 @@ graph TB
 | 方向 | 当前已落地 | 后续演进 |
 | --- | --- | --- |
 | 插件系统 | 插件加载、基础权限校验、宿主页 | 按插件独立进程、资源隔离、进一步收敛 API 面 |
-| 自动化 | 基础执行、断点重试、结果/批次/模板/干预链路 | 真实复杂页面适配、调度恢复、录制能力增强 |
+| 自动化 | 基础执行、断点重试、结果/批次/模板/干预链路 | 真实复杂页面适配、录制能力增强 |
+| Remote Runner | 连接管理、能力探测、执行下发、状态查询、实时日志、最小 daemon | 会话治理、结果汇总、持久化与长连稳定性增强 |
+| Runner 调度 | 统一 Runner 池、加权队列、capacity score、lease/reconcile、调度面板 | 参数配置化、策略扩展、更多解释性与运维自动化 |
 | AI 助手 | Provider 抽象、工具注册、聊天面板 | 流式响应、更多工具、历史持久化增强 |
 | 打包发布 | 构建与多平台打包命令已存在 | 发行质量、包体、签名、平台验证持续完善 |

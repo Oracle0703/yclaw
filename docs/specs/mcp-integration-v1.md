@@ -1,13 +1,13 @@
-# SPEC · MCP 集成 V1（草案）
+# SPEC · MCP 集成 V1
 
-> 状态：**草案 / 实施中（M0-M4 主链路已落地，M5 验收收尾中）**  
+> 状态：**基础版已落地 / M5 验收收尾中**  
 > 关联：[design/next-phase-ideas.md §2.3](../design/next-phase-ideas.md#23-方向-c--mcpmodel-context-protocol集成)  
 > 与主线关系：**副线增量**，复用现有 `ToolRegistry` / `AIService`，不改变桌面 AI 助手交互。
 
 > MCP（Model Context Protocol）是 Anthropic 主导的开放协议，让 LLM 客户端（Claude Desktop、Cursor、Continue 等）能以标准方式调用外部工具与资源。  
 > 协议规范：<https://modelcontextprotocol.io>。
 
-## 当前实施进度（截至 2026-04-20）
+## 当前实施进度（截至 2026-04-21）
 
 - ✅ `src/mcp/shared/`、`src/mcp/server/`、`src/mcp/client/` 基础目录与协议适配层已落地。
 - ✅ MCP Server 已支持 `stdio` 与本机 `Streamable HTTP`，并具备 token / Bearer 鉴权。
@@ -23,6 +23,7 @@
 | --- | --- | --- |
 | P1 | 最终验收清单核对 | 对照 MCP-S01~07、MCP-C01~04、MCP-G01~03 逐条标记完成度 |
 | P1 | 文档持续对齐 | 后续若补资源、审计筛选或远程访问边界，需同步 README / spec / current-status |
+| P2 | 数据量与资源分页 | 结果、日志等资源仍需持续控制分页和截断策略，避免一次性加载过大上下文 |
 
 ---
 

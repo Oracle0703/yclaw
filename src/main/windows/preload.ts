@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ElectronAPI } from '@shared/types';
 import { createTaskAsCodeApi, type TaskAsCodeApi } from '@renderer/shared/api/taskAsCode';
+import { createRemoteRunnerApi } from '@renderer/shared/api/remoteRunner';
+import { createRunnerSchedulerApi } from '@renderer/shared/api/runnerScheduler';
 
 const electronAPI: ElectronAPI = {
   invoke: (channel: string, ...args: unknown[]) => {
@@ -18,11 +20,17 @@ const electronAPI: ElectronAPI = {
   },
 };
 
-const api: { taskAsCode: TaskAsCodeApi } = {
+const api: {
+  taskAsCode: TaskAsCodeApi;
+  remoteRunner: ReturnType<typeof createRemoteRunnerApi>;
+  runnerScheduler: ReturnType<typeof createRunnerSchedulerApi>;
+} = {
   taskAsCode: createTaskAsCodeApi({
     invoke: electronAPI.invoke,
     on: electronAPI.on,
   }),
+  remoteRunner: createRemoteRunnerApi({ invoke: electronAPI.invoke }),
+  runnerScheduler: createRunnerSchedulerApi({ invoke: electronAPI.invoke }),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

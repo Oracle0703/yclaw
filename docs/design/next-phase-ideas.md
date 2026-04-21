@@ -172,9 +172,9 @@
 
 | 方向 | 状态 | 关联文档 |
 | --- | --- | --- |
-| A · Headless Runner | 草案 / HR-M1 CLI 起步 + adapter 基础版 | [specs/headless-runner-v1.md](../specs/headless-runner-v1.md) |
-| B · Task-as-Code | 实施中（核心层已落地） | [specs/task-as-code-v1.md](../specs/task-as-code-v1.md) |
-| C · MCP 集成 | 实施中（Server + Client 主链路已落地） | [specs/mcp-integration-v1.md](../specs/mcp-integration-v1.md) |
+| A · Headless Runner | 基础版已落地（CLI + daemon 雏形），稳定化中 | [specs/headless-runner-v1.md](../specs/headless-runner-v1.md) |
+| B · Task-as-Code | 基础版已落地，UI 导入/导出入口待补 | [specs/task-as-code-v1.md](../specs/task-as-code-v1.md) |
+| C · MCP 集成 | 基础版已落地，M5 验收收尾中 | [specs/mcp-integration-v1.md](../specs/mcp-integration-v1.md) |
 | D · 数据出口/可观测性 | 仅本文档 | — |
 | E · Snapshot Replay | 仅本文档 | — |
 | F · 本地 LLM Provider | 仅本文档（建议并入 v1.1 增量） | — |

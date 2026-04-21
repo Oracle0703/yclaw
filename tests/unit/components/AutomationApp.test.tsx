@@ -122,6 +122,14 @@ vi.mock('@renderer/entries/automation/components/TemplateManager', () => ({
   TemplateManager: () => <div>TemplateManager</div>,
 }));
 
+vi.mock('@renderer/entries/automation/components/RemoteRunnerPanel', () => ({
+  RemoteRunnerPanel: () => <div>RemoteRunnerPanel</div>,
+}));
+
+vi.mock('@renderer/entries/automation/components/RunnerSchedulerPanel', () => ({
+  RunnerSchedulerPanel: () => <div>RunnerSchedulerPanel</div>,
+}));
+
 vi.mock('@renderer/shared/components/PageShell', () => ({
   PageShell: ({ children, extra }: { children: React.ReactNode; extra: React.ReactNode }) => (
     <div>
@@ -173,6 +181,12 @@ describe('Automation App', () => {
 
     expect(await screen.findByText('总步骤:3')).toBeDefined();
     expect(invokeMock).toHaveBeenCalledWith('task:get', { taskId: 'task-1' });
+  });
+
+  it('renders runner scheduler panel in automation page', () => {
+    render(<AutomationApp />);
+
+    expect(screen.getByText('RunnerSchedulerPanel')).toBeDefined();
   });
 
   it('loads persisted task steps into editor when selecting an existing task', async () => {

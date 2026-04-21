@@ -1,8 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runCli } from '@cli/yclaw';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+vi.mock('@mcp/server/serveStdio', () => ({
+  serveMcpStdio: vi.fn(),
+}));
+
+vi.mock('@mcp/server/serveHttp', () => ({
+  serveMcpHttp: vi.fn(),
+}));
+
+import { runCli } from '@cli/yclaw';
 
 class StringSink {
   chunks: string[] = [];
@@ -279,5 +288,29 @@ describe('cli · yclaw entry', () => {
 
     expect(code).toBe(2);
     expect(stderr.text()).toMatch(/task/i);
+  });
+
+  it('dispatches runner daemon to injected handler', async () => {
+    const stdout = new StringSink();
+    const runnerDaemon = vi.fn(async () => ({
+      exitCode: 0,
+      output: 'YClaw Remote Runner listening on http://127.0.0.1:7421',
+    }));
+
+    const code = await runCli({
+      argv: ['runner', 'daemon', '--port', '7421', '--token', 'dev-token', '--workspace', 'default'],
+      stdout,
+      stderr: new StringSink(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      runnerDaemon: runnerDaemon as any,
+    });
+
+    expect(code).toBe(0);
+    expect(runnerDaemon).toHaveBeenCalledWith({
+      port: 7421,
+      token: 'dev-token',
+      workspaceId: 'default',
+    });
+    expect(stdout.text()).toContain('Remote Runner listening');
   });
 });

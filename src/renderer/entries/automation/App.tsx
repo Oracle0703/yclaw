@@ -9,6 +9,8 @@ import type { TaskFlow, TaskStep } from '@shared/types';
 import { BatchList } from './components/BatchList';
 import { ExecutionPanel } from './components/ExecutionPanel';
 import { ResultTable } from './components/ResultTable';
+import { RemoteRunnerPanel } from './components/RemoteRunnerPanel';
+import { RunnerSchedulerPanel } from './components/RunnerSchedulerPanel';
 import { StepEditor } from './components/StepEditor';
 import { TaskList } from './components/TaskList';
 import { TemplateManager } from './components/TemplateManager';
@@ -169,6 +171,9 @@ export default function App() {
 
         {/* 右栏：编辑器 + 执行面板 */}
         <div className="yclaw-automation-main">
+          <RemoteRunnerPanel />
+          <RunnerSchedulerPanel />
+
           <TemplateManager
             draftFields={templateDraftFields}
             onSelectTemplate={(templateId) => setSelectedTemplateId(templateId)}

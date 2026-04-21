@@ -1,6 +1,6 @@
 # Task-as-Code 工作流 · 代码审查记录（2026-04-20）
 
-> 范围：`src/shared/serialization/`、`src/cli/`、`src/main/ipc/task-as-code-handlers.ts`、对应 `tests/unit/`、[docs/specs/task-as-code-v1.md](specs/task-as-code-v1.md)。
+> 范围：`src/shared/serialization/`、`src/cli/`、`src/main/ipc/task-as-code-handlers.ts`、对应 `tests/unit/`、[docs/specs/task-as-code-v1.md](../specs/task-as-code-v1.md)。
 > 当前状态：TS 0 / Vitest **246 用例 (25 文件) 全绿** / `lint:tasks` 0。
 > 更新记录：2026-04-20 首于本文检查后发现 § 1 / § 2 / § 4 中部分条目与实际代码不符，已在原位标记。
 
@@ -9,7 +9,7 @@
 | 文件 | 问题 | 严重度 | 状态 |
 | --- | --- | --- | --- |
 | `src/shared/serialization/validate.ts:90-120` | id 长度上限 64，但 name 200 / description 2000，量级不一致；建议在文档中说明 | 低 | 未处理 |
-| ~~`loader.ts`（同 id 静默覆盖）~~ | **误报**：`insertEntry` 已以 error issue 记录重复 id 且保留首次出现；有专门单测 [loader.spec.ts L124](../tests/unit/serialization/loader.spec.ts) | — | 已冲销 |
+| ~~`loader.ts`（同 id 静默覆盖）~~ | **误报**：`insertEntry` 已以 error issue 记录重复 id 且保留首次出现；有专门单测 [loader.spec.ts L124](../../tests/unit/serialization/loader.spec.ts) | — | 已冲销 |
 | `src/shared/serialization/service.ts:112,116` | `Persistence.upsert*` 失败仅靠抛错传递，未在文档强调 contract | 低 | 未处理 |
 | ~~`task-as-code-handlers.ts:exportYaml` payload 未校验~~ | 已加 `assertTaskFlow` / `assertExtractionTemplate` 运行时守卫 + 17 个单测 | — | 已修复 |
 | `src/cli/io.ts`（`checkRefs` 路径） | 仅当 inputs.length===1 且为目录时启用，CLI help 未说明 | 低 | 未处理 |
@@ -37,8 +37,8 @@
 ## 4. 测试覆盖缺口
 
 1. importPath 幂等性（同文件两次）。
-2. ~~IPC 异常 payload（`exportYaml` 字段缺失/类型错）~~ — 已补齐（[task-as-code-payload.spec.ts](../tests/unit/ipc/task-as-code-payload.spec.ts)）。
-3. ~~`loadDirectory` 重复 id 行为~~ — 已存在（[loader.spec.ts L124](../tests/unit/serialization/loader.spec.ts)）。
+2. ~~IPC 异常 payload（`exportYaml` 字段缺失/类型错）~~ — 已补齐（[task-as-code-payload.spec.ts](../../tests/unit/ipc/task-as-code-payload.spec.ts)）。
+3. ~~`loadDirectory` 重复 id 行为~~ — 已存在（[loader.spec.ts L124](../../tests/unit/serialization/loader.spec.ts)）。
 4. 大目录（接近 `LOADER_SAFETY.maxFiles`）压力。
 5. Watcher 高频变更（90+ 改动）防抖语义。
 6. Windows 路径分隔符兼容（当前仅 POSIX）。
@@ -46,7 +46,7 @@
 
 ## 5. 未完成任务总览（按优先级）
 
-详见 [specs/task-as-code-v1.md §「待实施 / 待补强」](specs/task-as-code-v1.md#实施进度当前)。摘要：
+详见 [specs/task-as-code-v1.md §「待实施 / 待补强」](../specs/task-as-code-v1.md#实施进度当前)。摘要：
 
 - **P0** 主进程装配 IPC handler；preload 暴露 `window.api.taskAsCode.*`；任务中心 Repository 适配 `Persistence`。
 - **P1** UI 导入/导出按钮；根 README 用法章节；幂等性 e2e；IPC payload 结构校验。

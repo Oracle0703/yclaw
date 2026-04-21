@@ -15,6 +15,7 @@ import { serveMcpStdio } from '../mcp/server/serveStdio';
 import { serveMcpHttp } from '../mcp/server/serveHttp';
 import type { McpServeArgs } from '../mcp/shared/types';
 import { runRunnerList, type RunnerListArgs, type RunnerListResult } from '../runner/cli/list';
+import { runRunnerDaemon, type RunnerDaemonArgs, type RunnerDaemonResult } from '../runner/cli/daemon';
 import { runRunnerTask, type RunnerRunArgs, type RunnerRunResult } from '../runner/cli/run';
 
 const HELP = `yclaw — Task-as-Code CLI
@@ -81,6 +82,7 @@ export interface CliOptions {
   mcpServe?: (args: McpServeArgs) => Promise<number>;
   runnerList?: (args: RunnerListArgs) => Promise<RunnerListResult>;
   runnerRun?: (args: RunnerRunArgs) => Promise<RunnerRunResult>;
+  runnerDaemon?: (args: RunnerDaemonArgs) => Promise<RunnerDaemonResult>;
 }
 
 /** 程序化入口：返回退出码而非 process.exit。 */
@@ -112,6 +114,9 @@ export async function runCli(options: CliOptions): Promise<number> {
   }
   if (command === 'mcp') {
     return runMcpCli(rest, { stdout, stderr, mcpServe: options.mcpServe });
+  }
+  if (command === 'runner') {
+    return runRunnerCli(rest, { stdout, stderr, runnerDaemon: options.runnerDaemon });
   }
 
   stderr.write(`yclaw: unknown command "${command}"\n${HELP}`);
@@ -288,6 +293,102 @@ async function runListCli(
 
   const runnerList = io.runnerList ?? runRunnerList;
   const result = await runnerList({ target, output, taskId, limit });
+  if (result.output) {
+    io.stdout.write(result.output.endsWith('\n') ? result.output : `${result.output}\n`);
+  }
+  if (result.error) {
+    io.stderr.write(result.error.endsWith('\n') ? result.error : `${result.error}\n`);
+  }
+  return result.exitCode;
+}
+
+async function runRunnerCli(
+  args: string[],
+  io: {
+    stdout: NonNullable<CliOptions['stdout']>;
+    stderr: NonNullable<CliOptions['stderr']>;
+    runnerDaemon?: CliOptions['runnerDaemon'];
+  },
+): Promise<number> {
+  if (args.length === 0 || args[0] === '-h' || args[0] === '--help') {
+    io.stderr.write('yclaw runner: subcommand is required\n');
+    return args.length === 0 ? 2 : 0;
+  }
+
+  const subcommand = args[0];
+  if (subcommand !== 'daemon') {
+    io.stderr.write(`yclaw runner: unknown subcommand "${subcommand}"\n`);
+    return 2;
+  }
+
+  let port = 7421;
+  let token: string | undefined;
+  let workspaceId = 'default';
+
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args[index]!;
+    if (arg === '--port') {
+      const next = args[index + 1];
+      if (!next || Number.isNaN(Number(next))) {
+        io.stderr.write('yclaw runner daemon: --port requires a number\n');
+        return 2;
+      }
+      port = Number(next);
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--port=')) {
+      const value = Number(arg.slice('--port='.length));
+      if (Number.isNaN(value)) {
+        io.stderr.write('yclaw runner daemon: --port requires a number\n');
+        return 2;
+      }
+      port = value;
+      continue;
+    }
+    if (arg === '--token') {
+      const next = args[index + 1];
+      if (!next) {
+        io.stderr.write('yclaw runner daemon: --token is required\n');
+        return 2;
+      }
+      token = next;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--token=')) {
+      token = arg.slice('--token='.length);
+      continue;
+    }
+    if (arg === '--workspace') {
+      const next = args[index + 1];
+      if (!next) {
+        io.stderr.write('yclaw runner daemon: --workspace is required\n');
+        return 2;
+      }
+      workspaceId = next;
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--workspace=')) {
+      workspaceId = arg.slice('--workspace='.length);
+      continue;
+    }
+    io.stderr.write(`yclaw runner daemon: unknown option "${arg}"\n`);
+    return 2;
+  }
+
+  if (!token) {
+    io.stderr.write('yclaw runner daemon: --token is required\n');
+    return 2;
+  }
+
+  const runnerDaemon = io.runnerDaemon ?? runRunnerDaemon;
+  const result = await runnerDaemon({
+    port,
+    token,
+    workspaceId,
+  });
   if (result.output) {
     io.stdout.write(result.output.endsWith('\n') ? result.output : `${result.output}\n`);
   }

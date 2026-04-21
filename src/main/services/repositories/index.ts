@@ -3,6 +3,8 @@ export { AlertRepository } from './AlertRepository';
 export { BatchRepository } from './BatchRepository';
 export { ExecutionLogRepository } from './ExecutionLogRepository';
 export { PluginRepository } from './PluginRepository';
+export { RemoteRunnerRepository } from './RemoteRunnerRepository';
+export { RunnerSchedulerRepository } from './RunnerSchedulerRepository';
 export { ResultRepository } from './ResultRepository';
 export { SessionRepository } from './SessionRepository';
 export { TaskRepository } from './TaskRepository';

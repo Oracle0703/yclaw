@@ -11,6 +11,8 @@
   "include": [
     "src/main/windows/preload.ts",
     "src/renderer/shared/api/taskAsCode.ts",
+    "src/renderer/shared/api/remoteRunner.ts",
+    "src/renderer/shared/api/runnerScheduler.ts",
     "src/shared"
   ]
 }

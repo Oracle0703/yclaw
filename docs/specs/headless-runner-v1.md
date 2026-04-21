@@ -1,20 +1,21 @@
-# SPEC · Headless Runner V1（草案）
+# SPEC · Headless Runner V1
 
-> 状态：**草案 / HR-M1 CLI 起步 + Playwright adapter 基础版（`run` 与 `list tasks/batches` 已落地）**
+> 状态：**实施中 / HR-M1 CLI 可用 + HR-M2 daemon 雏形（`run`、`list`、`runner daemon` 已落地）**
 > 关联：[design/next-phase-ideas.md §2.1](../design/next-phase-ideas.md#21-方向-a--headless-runner--cli产品形态升维)  
 > 与主线关系：**副线，不替代** [specs/automation-browser-ops-v1.md](automation-browser-ops-v1.md)；只新增「Headless Runner 模式」。
 
-## 当前实施状态（截至 2026-04-20）
+## 当前实施状态（截至 2026-04-21）
 
 | 项 | 状态 | 说明 |
 | --- | --- | --- |
 | HR-M0 依赖盘点 | ✅ 已完成 | 已扫描 `src/main`、`src/engines`、`src/shared`、`src/cli` 中对 `electron` 的直接依赖，并整理去耦边界 |
 | `AutomationPage` 最小接口 | ✅ 已完成 | 已新增 `src/engines/automation/types.ts` 中的 `AutomationPage` / `AutomationPageImage`，用于替代自动化执行链对 Electron `WebContents` 类型的暴露 |
 | 自动化执行链去 Electron 类型 | ✅ 已完成 | `AutomationEngine`、`FlowRunner`、`SelectorGenerator`、`TaskService.startTask/resumeTask` 已改为依赖 `AutomationPage`；新增边界测试防止回退 |
-| `src/runner/` 目录 | 🟡 已起步 | 已新增 `src/runner/cli/list.ts`，提供最小只读查询入口；RunnerHost / DaemonHost 仍未创建 |
-| CLI `run/list/daemon` | 🟡 部分实现 | 已支持 `yclaw run <taskId>`、`yclaw list tasks`、`yclaw list batches --task <id>`；`daemon` 尚未实现 |
+| `src/runner/` 目录 | ✅ 已建立 | 已包含 `cli/`、`browser/`、`daemon/` 三层结构；`RunnerHost` 抽象仍待继续提炼 |
+| CLI `run/list/daemon` | ✅ 基础可用 | 已支持 `yclaw run <taskId>`、`yclaw list tasks`、`yclaw list batches --task <id>`、`yclaw runner daemon --token <token>` |
 | Headless 浏览器后端 | 🟡 基础 adapter 已接入 | 已新增 Playwright 风格 `AutomationPage` adapter，可承接 `executeJavaScript()` / `capturePage()`；支持 `--browser-executable` / `YCLAW_BROWSER_EXECUTABLE` 指向系统 Chrome/Edge |
-| 桌面远程 Runner 配置 UI | ⬜ 未开始 | 仍停留在本 spec 草案 |
+| 最小 daemon HTTP API | ✅ 已落地 | 已提供 `/v1/runner/info`、`/v1/runner/health`、`/v1/tasks`、`/v1/sessions`、`/v1/executions` 与日志 SSE 子集 |
+| 桌面远程 Runner 配置 UI | 🟡 基础版已落地 | 自动化页已具备 `RemoteRunnerPanel` 与执行详情抽屉，但未演进为独立 Runner Center |
 
 ---
 
@@ -26,7 +27,7 @@
 | --- | --- | --- |
 | Desktop | `electron` 主进程内嵌 | 现有桌面端，**保持完全兼容** |
 | CLI | `yclaw <command>` | 服务器、CI、cron、脚本嵌入 |
-| Daemon | `yclaw daemon`（HTTP/IPC 端点） | 长驻服务，桌面端可远程连接 |
+| Daemon | `yclaw runner daemon`（HTTP 端点） | 长驻服务，桌面端可远程连接 |
 
 ---
 
@@ -45,7 +46,7 @@
 | --- | --- |
 | HR-01 | `yclaw run <taskId>` 可在无 Electron 环境下执行任务，产出与桌面端一致的批次记录与结果。 |
 | HR-02 | `yclaw list tasks` / `yclaw list batches --task <id>` 可读取任务与批次状态。 |
-| HR-03 | `yclaw daemon --port 7421` 启动后，桌面客户端可通过「远程 Runner」配置连接并复用其任务、结果、日志。 |
+| HR-03 | `yclaw runner daemon --port 7421 --token <token>` 启动后，桌面客户端可通过「远程 Runner」配置连接并复用其任务、执行状态与日志。 |
 | HR-04 | Headless 模式下使用的 SQLite 数据目录可通过 `--data-dir` / `YCLAW_DATA_DIR` 配置，且与桌面端可隔离。 |
 | HR-05 | 浏览器自动化在 headless 模式默认 `headless: true`，可通过 `--headed` 切换。 |
 | HR-06 | 现有桌面端使用方式 **零回归**：所有 Desktop 模式的功能保持原样。 |
@@ -92,23 +93,34 @@ yclaw list   tasks
 yclaw list   batches  --task <id>  [--limit 20]
 yclaw show   batch    <batchId>    [--with-logs]
 yclaw export results  --task <id>  --format jsonl|csv  --out <path>
-yclaw daemon          [--port 7421] [--bind 127.0.0.1]
+yclaw runner daemon   [--port 7421] --token <token> [--workspace default]
 yclaw config          [get|set|list]
 ```
 
-### 4.3 Daemon HTTP 协议（草案）
+### 4.3 Daemon HTTP 协议（当前已落地子集）
 
 | 路径 | 方法 | 说明 |
 | --- | --- | --- |
-| `GET /tasks` | 任务列表 |
-| `POST /tasks/:id/run` | 触发执行，返回 batchId |
-| `GET /batches/:id` | 批次状态 |
-| `GET /batches/:id/logs?stream=1` | SSE 实时日志 |
-| `GET /results?task=:id&limit=` | 结果分页 |
-| `POST /sessions/:id/refresh` | 重新建立登录态 |
+| `GET /v1/runner/info` | 查询 Runner 版本、能力、限制与协议版本 |
+| `GET /v1/runner/health` | 查询队列数、运行数与健康 metrics |
+| `GET /v1/tasks` | 查询远程任务列表 |
+| `POST /v1/tasks` | 创建远程任务与首个 revision |
+| `PUT /v1/tasks/:taskId` | 更新任务并生成新 revision |
+| `DELETE /v1/tasks/:taskId` | 删除远程任务 |
+| `GET /v1/sessions` | 查询会话列表 |
+| `POST /v1/sessions` | 创建会话 |
+| `PUT /v1/sessions/:sessionId` | 更新会话 |
+| `POST /v1/sessions/:sessionId/validate` | 校验会话 |
+| `DELETE /v1/sessions/:sessionId` | 删除会话 |
+| `POST /v1/executions` | 创建远程执行 |
+| `GET /v1/executions/:executionId` | 查询执行详情 |
+| `POST /v1/executions/:executionId/cancel` | 取消执行 |
+| `GET /v1/executions/:executionId/logs` | 查询历史日志 |
+| `GET /v1/executions/:executionId/logs/stream` | SSE 日志流 |
 
-- 默认 **仅监听 127.0.0.1**，不开放公网。
-- 鉴权：v1 仅支持 token（`YCLAW_TOKEN`），不做用户体系。
+- 当前 daemon 默认 **仅监听 `127.0.0.1`**，不开放公网。
+- 当前鉴权使用 `Authorization: Bearer <token>` + `X-YClaw-Workspace`，由 `yclaw runner daemon --token --workspace` 注入。
+- `GET /v1/tasks/:taskId`、revisions 查询、执行列表、结果摘要查询仍属于后续补齐项。
 
 ### 4.4 HR-M0 Electron 依赖盘点
 
@@ -148,10 +160,11 @@ yclaw config          [get|set|list]
 | 服务层边界 | `TaskService.startTask()` / `TaskService.resumeTask()` 不再使用 Electron 类型，方便后续 CLI/Daemon 注入 headless 页面句柄 |
 | 回归保护 | 新增 `tests/unit/engines/headless-boundary.spec.ts`，防止自动化执行链重新暴露 `electron` / `WebContents` |
 | CLI 起步 | 新增 `src/runner/cli/list.ts` 与 `src/runner/cli/run.ts`；`run` 会创建/启动/完成或失败 batch，并更新任务状态 |
+| Daemon 起步 | 新增 `src/runner/cli/daemon.ts`、`src/runner/daemon/RemoteRunnerServer.ts` 与 `InMemoryRemoteRunnerRuntime.ts`，支持最小远程联调 |
 | Headless adapter | 新增 `src/runner/browser/PlaywrightAutomationPage.ts`，将 Playwright `page.evaluate()` / `page.screenshot()` 适配为 `AutomationPage` |
 | 浏览器路径配置 | `yclaw run` 支持 `--browser-executable <path>`；也可通过 `YCLAW_BROWSER_EXECUTABLE` 指向系统 Chrome/Edge |
 | 当前限制 | 默认 `run` 已可执行空步骤任务；含页面动作任务会尝试启动 Playwright Chromium 或指定浏览器，本地需具备可用浏览器环境 |
-| 下一步 | 完成浏览器自动发现/分发策略、真实站点验收，再向 `daemon` 形态扩展 |
+| 下一步 | 完成浏览器自动发现/分发策略、真实站点验收，并把 daemon 从内存 runtime 推进到更稳定的持久化与恢复模型 |
 
 ---
 
@@ -163,7 +176,7 @@ yclaw config          [get|set|list]
 | `src/main/browser/*` | TabManager 需区分「真实窗口」与「headless Playwright」两种执行后端。 |
 | `src/main/plugin-loader/*` | 插件 v1 默认仅在 Desktop 模式下加载；headless 模式不加载（明确写入文档）。 |
 | `src/shared/*` | 新增 `RunnerCapabilities` 类型，用于宣告当前 host 的能力集合。 |
-| 测试 | 新增 `tests/unit/runner/cli.spec.ts`、`tests/integration/runner/daemon.spec.ts`。 |
+| 测试 | 已有 `tests/unit/runner/cli.spec.ts`、`tests/unit/runner/cli-run.spec.ts`、`tests/unit/runner/remote-runner-server.spec.ts`；更高层集成验收仍待补齐。 |
 
 ---
 
@@ -174,8 +187,8 @@ yclaw config          [get|set|list]
 | HR-M0 | 服务层依赖梳理：列出当前所有「直接 import electron」的位置，给出去耦计划。 |
 | HR-M1 | 进行中：自动化执行链已完成 `AutomationPage` 前置去耦，且已跑通 CLI `run`、`list tasks`、`list batches`。 |
 | HR-M2 | 部分起步：基础 Playwright adapter 已接入，并支持显式系统 Chrome/Edge 路径；浏览器自动发现/分发策略、复杂站点验收仍待实现。 |
-| HR-M3 | `DaemonHost` HTTP 端点 + 桌面端「远程 Runner」客户端配置 UI。 |
-| HR-M4 | 验收：完整跑通 HR-01 ~ HR-10。 |
+| HR-M3 | 基础完成：最小 HTTP daemon 与桌面端远程 Runner 配置 UI 已可联调。 |
+| HR-M4 | 收口中：补齐执行列表、结果摘要、持久化、恢复与文档示例，逐步跑通 HR-01 ~ HR-10。 |
 
 ---
 
