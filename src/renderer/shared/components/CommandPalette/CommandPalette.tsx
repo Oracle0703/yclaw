@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppstoreOutlined,
+  DatabaseOutlined,
   FundOutlined,
   GlobalOutlined,
   PlusOutlined,
@@ -38,6 +39,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 const ICON_MAP: Record<string, React.ReactNode> = {
   stock: <FundOutlined />,
   automation: <RobotOutlined />,
+  'data-center': <DatabaseOutlined />,
   browser: <GlobalOutlined />,
   'plugin-center': <AppstoreOutlined />,
   settings: <SettingOutlined />,
@@ -76,10 +78,18 @@ export default function CommandPalette() {
         execute: () => navigate('/automation'),
       },
       {
+        id: 'nav:data-center',
+        name: '跳转到数据中心',
+        icon: 'data-center',
+        shortcut: 'Ctrl+4',
+        category: 'navigation',
+        execute: () => navigate('/data-center'),
+      },
+      {
         id: 'nav:browser',
         name: '跳转到内嵌浏览器',
         icon: 'browser',
-        shortcut: 'Ctrl+4',
+        shortcut: 'Ctrl+5',
         category: 'navigation',
         execute: () => navigate('/browser'),
       },
@@ -87,7 +97,7 @@ export default function CommandPalette() {
         id: 'nav:plugin-center',
         name: '跳转到插件中心',
         icon: 'plugin-center',
-        shortcut: 'Ctrl+5',
+        shortcut: 'Ctrl+6',
         category: 'navigation',
         execute: () => navigate('/plugin-center'),
       },

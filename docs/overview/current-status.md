@@ -36,7 +36,7 @@
 
 ---
 
-## 2.1 规格 / 方案落地状态（截至 2026-04-21）
+## 2.1 规格 / 方案落地状态（截至 2026-04-22）
 
 | 文档 | 当前状态 | 实现情况 | 说明 |
 | --- | --- | --- | --- |
@@ -45,6 +45,8 @@
 | `docs/specs/automation-browser-ops-v1.md` | 部分完成到基础闭环 | 任务、批次、结果、会话、告警、执行日志、介入面板、模板等主链路已具备基础版 | 完整 Electron 成品态验收和部分深水区交互仍待补齐 |
 | `docs/specs/task-as-code-v1.md` | 基础版已落地 / UI 待补 | 核心序列化、CLI、IPC、preload 桥接、目录监听、Persistence 适配、README quick-start 与示例已落地 | 任务中心 / 模板中心 UI 导入导出入口、shutdown 等少量防御性尾项仍待补齐 |
 | `docs/specs/mcp-integration-v1.md` | 基础版已落地 / 验收收尾 | MCP Server `stdio/http`、token 鉴权、dangerous 标记、外部 MCP Client、设置页、AI 工具可见性、审计面板、Claude/Cursor 示例已落地 | 最终逐条验收、资源/审计筛选和远程访问边界仍待收口 |
+| `docs/specs/data-center-v1.md` | P0 已可用 / P1.5 持续完善中 | 已具备独立 `data-center` 模块、结果资产总览、结果详情、持久化导出任务、状态筛选、取消任务、失败重试、导出创建弹窗、数据集保存、本地只读 API、Webhook 目标保存/编辑/删除/连通性测试、API Token 生成/列表/模板/吊销、Webhook 导出底层链路、token 校验底层预留、数据质量一键扫描、质量规则启停配置、质量评分、批次洞察、findings / insight 持久化、自动化页跳转入口 | Token 更细权限治理、Webhook 更完整配置治理、复杂规则编辑器与长期趋势洞察仍属后续阶段 |
+| `docs/design/data-center.md` | 方案已转入实现并持续回写 | 数据中心的信息架构、导出任务模型、Webhook / Token / 本地 API 边界已形成专项主线，并由 `docs/specs/data-center-v1.md` 与 `docs/plans/data-center-v1.md` 承接落地 | 设计文档保留作上位方案说明，后续以 spec / status 为准同步现状 |
 | `docs/specs/headless-runner-v1.md` | HR-M1 CLI 可用 / HR-M2 daemon 雏形 | 已落地 `src/runner/cli/list.ts`、`src/runner/cli/run.ts`、`src/runner/cli/daemon.ts`、基础 Playwright adapter 与最小 `RemoteRunnerServer`，支持本地直连 SQLite 执行和最小 daemon 启动；支持 `--browser-executable` / `YCLAW_BROWSER_EXECUTABLE` 指向系统浏览器 | 浏览器自动发现、RunnerHost、复杂真实站点验收和更完整运行时治理仍待补齐 |
 | `docs/specs/remote-runner-control-plane-v1.md` | P0 基础版已落地 | 已具备 Runner 连接管理、能力探测、执行下发、状态查询、实时日志、取消执行、健康检查与最小 daemon 联调链路 | 会话治理、结果聚合、失败恢复策略与映射关系仍待继续收口 |
 | `docs/specs/capacity-aware-runner-scheduler-v1.md` | P0/P1 基础版已落地 | 已具备本地/远程统一 Runner 池、分队列加权轮询、容量评分、dispatch、lease、orphan reconcile、自动化页 `RunnerSchedulerPanel` 与最小运维操作 | 策略配置化、更细粒度可观测、更多异常策略与长时间稳定性验收仍待补齐 |
@@ -58,7 +60,7 @@
 | 文档 / 方向 | 当前状态 | 备注 |
 | --- | --- | --- |
 | `docs/design/dashboard-ideas.md` | 未开始 | 总控仪表盘重构尚未立项实现 |
-| `docs/design/next-phase-ideas.md` 的 D · 数据出口/可观测性 | 仅设计探索 | 尚未拆独立 spec，也未开始代码实现 |
+| `docs/design/next-phase-ideas.md` 的 D · 数据出口/可观测性 | 已拆为独立主线并进入实现 | 当前主线收口至 `docs/specs/data-center-v1.md` 与 `docs/plans/data-center-v1.md` |
 | `docs/design/next-phase-ideas.md` 的 E · Snapshot Replay | 仅设计探索 | 尚未拆独立 spec，也未开始代码实现 |
 | `docs/design/next-phase-ideas.md` 的 F · 本地 LLM Provider | 仅设计探索 | 建议后续并入 `docs/specs/v1.1-enhancements.md` 增量 |
 | `docs/specs/headless-runner-v1.md` 的浏览器自动发现/分发策略 / RunnerHost | 部分未开始 | CLI `run/list/daemon`、基础 Playwright adapter 与最小 remote daemon 已落地；自动发现、RunnerHost 和复杂调度策略仍未进入实现 |
@@ -91,6 +93,7 @@
 | `workbench` | 工作台首页、设置页、命令面板、AI 面板入口 |
 | `stock` | K 线图、技术指标展示基础能力 |
 | `automation` | 任务列表、步骤编辑、执行面板、批次/结果/模板管理，以及 `RemoteRunnerPanel`、`RunnerSchedulerPanel` |
+| `data-center` | 数据总览、结果资产、导出任务、状态筛选与取消、导出创建弹窗、数据集、Webhook 目标、API Token、本地只读 API、Webhook 出口底层能力、数据质量一键扫描、质量规则启停、结果评分、批次洞察 |
 | `browser` | 地址栏、标签栏、干预面板、录制面板、容器视图 |
 | `plugin-center` | 插件列表、权限展示、安装/启停/卸载操作 |
 | `plugin-host` | 受限宿主环境与桥接层 |
@@ -108,6 +111,7 @@
 | Remote Runner 控制面 | 连接管理、能力探测、执行下发、实时日志、取消执行、健康检查 |
 | Runner 调度底座 | 本地/远程统一 Runner 池、队列、容量评分、lease、orphan reconcile |
 | 自动化运营闭环 | 批次、结果、告警、会话、模板、执行日志、远程 Runner 与调度池基础链路 |
+| 数据出口中心 | 结果资产聚合、持久化导出、状态筛选、取消与重试、手动导出创建、数据集沉淀、Webhook 目标管理与测试、API Token 生成/模板/吊销、本地只读 API、Webhook 投递、token 校验底层雏形、数据质量扫描、规则启停、结果评分、批次洞察与 findings / insight 持久化 |
 
 ### 3.4 工程能力
 

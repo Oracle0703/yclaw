@@ -14,6 +14,11 @@ import { ResultRepository } from './repositories';
 export interface ResultQuery {
   taskId?: string;
   batchId?: string;
+  status?: ExtractionResult['status'][];
+  createdFrom?: string;
+  createdTo?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export interface ResultServiceOptions {
@@ -96,12 +101,17 @@ export class ResultService {
     };
   }
 
-  exportResults(query: ResultQuery, format: 'csv' | 'json'): string {
+  exportResults(query: ResultQuery, format: 'csv' | 'json' | 'jsonl'): string {
     const results = this.listResults(query);
     const outputPath = path.join(os.tmpdir(), `yclaw-results-${Date.now()}.${format}`);
 
     if (format === 'json') {
       fs.writeFileSync(outputPath, JSON.stringify(results, null, 2), 'utf8');
+      return outputPath;
+    }
+
+    if (format === 'jsonl') {
+      fs.writeFileSync(outputPath, results.map((item) => JSON.stringify(item)).join('\n'), 'utf8');
       return outputPath;
     }
 

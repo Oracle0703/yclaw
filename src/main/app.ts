@@ -19,6 +19,18 @@ import { ReviewService } from './services/ReviewService';
 import { TaskRevisionService } from './services/TaskRevisionService';
 import { WorkspaceService } from './services/WorkspaceService';
 import { OperationsMetricsService } from './services/OperationsMetricsService';
+import { DataCenterService } from './services/data-center/DataCenterService';
+import { DataQualityService } from './services/data-center/DataQualityService';
+import { DataExportService } from './services/data-center/DataExportService';
+import { DatasetService } from './services/data-center/DatasetService';
+import { WebhookTargetService } from './services/data-center/WebhookTargetService';
+import { ApiTokenService } from './services/data-center/ApiTokenService';
+import { LocalDataApiService } from './services/data-center/LocalDataApiService';
+import { WebhookDeliveryService } from './services/data-center/WebhookDeliveryService';
+import { CsvExporter } from './services/data-center/exporters/CsvExporter';
+import { JsonExporter } from './services/data-center/exporters/JsonExporter';
+import { JsonlExporter } from './services/data-center/exporters/JsonlExporter';
+import { WebhookExporter } from './services/data-center/exporters/WebhookExporter';
 import { TabManager } from './browser/TabManager';
 import { EVENTS, IPC_CHANNELS, RUNNER_SCHEDULER_DEFAULTS } from '@shared/constants';
 import { AIService } from './ai/AIService';
@@ -56,6 +68,13 @@ import {
   AlertRepository,
   BatchRepository,
   ExecutionLogRepository,
+  DataApiTokenRepository,
+  DataQualityBatchInsightRepository,
+  DataQualityFindingRepository,
+  DataDatasetRepository,
+  DataExportJobRepository,
+  DataQualityRuleRepository,
+  DataWebhookTargetRepository,
   PluginRepository,
   RemoteRunnerRepository,
   ReviewRepository,
@@ -70,6 +89,7 @@ import {
 import { registerRemoteRunnerHandlers } from './ipc/remote-runner-handlers';
 import { registerRunnerSchedulerHandlers } from './ipc/runner-scheduler-handlers';
 import { registerTaskOperationsHandlers } from './ipc/task-operations-handlers';
+import { registerDataCenterHandlers } from './ipc/data-center-handlers';
 import type {
   AIChatRequest,
   AIConfig,
@@ -131,6 +151,13 @@ export class App {
   private workspaceService: WorkspaceService;
   private taskRevisionService: TaskRevisionService;
   private operationsMetricsService: OperationsMetricsService;
+  private dataCenterService: DataCenterService;
+  private dataQualityService: DataQualityService;
+  private dataExportService: DataExportService;
+  private datasetService: DatasetService;
+  private webhookTargetService: WebhookTargetService;
+  private apiTokenService: ApiTokenService;
+  private localDataApiService: LocalDataApiService;
   private dataSourceManager: DataSourceManager;
   private indicatorLibrary: IndicatorLibrary;
   private taskAsCode: TaskAsCodeBootstrap;
@@ -165,6 +192,15 @@ export class App {
     const reviewRepository = new ReviewRepository(this.databaseService);
     const resultRepository = new ResultRepository(this.databaseService);
     const remoteRunnerRepository = new RemoteRunnerRepository(this.databaseService);
+    const dataExportJobRepository = new DataExportJobRepository(this.databaseService);
+    const dataDatasetRepository = new DataDatasetRepository(this.databaseService);
+    const dataWebhookTargetRepository = new DataWebhookTargetRepository(this.databaseService);
+    const dataApiTokenRepository = new DataApiTokenRepository(this.databaseService);
+    const dataQualityRuleRepository = new DataQualityRuleRepository(this.databaseService);
+    const dataQualityFindingRepository = new DataQualityFindingRepository(this.databaseService);
+    const dataQualityBatchInsightRepository = new DataQualityBatchInsightRepository(
+      this.databaseService,
+    );
     this.trayService = new TrayService({
       eventBus: this.eventBus,
       windowManager: this.windowManager,
@@ -256,6 +292,49 @@ export class App {
     });
     this.reviewService = new ReviewService({ reviewRepository });
     this.resultService = new ResultService({ resultRepository });
+    this.datasetService = new DatasetService({
+      repository: dataDatasetRepository,
+    });
+    this.apiTokenService = new ApiTokenService({
+      repository: dataApiTokenRepository,
+    });
+    const webhookDeliveryService = new WebhookDeliveryService({
+      auditRepository: dataExportJobRepository,
+    });
+    this.webhookTargetService = new WebhookTargetService({
+      repository: dataWebhookTargetRepository,
+      deliveryService: webhookDeliveryService,
+    });
+    this.dataExportService = new DataExportService({
+      resultService: this.resultService,
+      exportJobRepository: dataExportJobRepository,
+      exporters: {
+        csv: new CsvExporter(),
+        json: new JsonExporter(),
+        jsonl: new JsonlExporter(),
+        webhook: new WebhookExporter({
+          deliveryService: webhookDeliveryService,
+        }),
+      },
+    });
+    this.dataCenterService = new DataCenterService({
+      resultService: this.resultService,
+      batchService,
+      executionLogService: this.executionLogService,
+      dataExportJobRepository,
+    });
+    this.dataQualityService = new DataQualityService({
+      resultService: this.resultService,
+      ruleRepository: dataQualityRuleRepository,
+      findingRepository: dataQualityFindingRepository,
+      batchInsightRepository: dataQualityBatchInsightRepository,
+    });
+    this.localDataApiService = new LocalDataApiService({
+      dataCenterService: this.dataCenterService,
+      datasetService: this.datasetService,
+      dataExportService: this.dataExportService,
+      tokenVerifier: dataApiTokenRepository,
+    });
     this.operationsMetricsService = new OperationsMetricsService();
     const contextManager = new ContextManager({
       taskRepository,
@@ -366,6 +445,17 @@ export class App {
             this.collectOperationsAcceptanceSnapshot(taskId),
           ),
       },
+    });
+    registerDataCenterHandlers({
+      ipcController: this.ipcController,
+      eventBus: this.eventBus,
+      dataCenterService: this.dataCenterService,
+      dataExportService: this.dataExportService,
+      datasetService: this.datasetService,
+      webhookTargetService: this.webhookTargetService,
+      apiTokenService: this.apiTokenService,
+      localDataApiService: this.localDataApiService,
+      dataQualityService: this.dataQualityService,
     });
 
     // 窗口管理
@@ -894,7 +984,7 @@ export class App {
       const { taskId, batchId, format } = params as {
         taskId?: string;
         batchId?: string;
-        format: 'csv' | 'json';
+        format: 'csv' | 'json' | 'jsonl';
       };
       return this.resultService.exportResults({ taskId, batchId }, format);
     });

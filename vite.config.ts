@@ -36,6 +36,7 @@ export default defineConfig(({ mode }) => {
     const coreInputs = {
       workbench: resolve(__dirname, 'src/renderer/entries/workbench/index.html'),
       browser: resolve(__dirname, 'src/renderer/entries/browser/index.html'),
+      'data-center': resolve(__dirname, 'src/renderer/entries/data-center/index.html'),
       'plugin-host': resolve(__dirname, 'src/renderer/plugin-host/index.html'),
     };
 

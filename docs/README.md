@@ -54,12 +54,14 @@
 - [specs/v1.0-baseline.md](specs/v1.0-baseline.md)：V1.0 基线规格
 - [specs/v1.1-enhancements.md](specs/v1.1-enhancements.md)：V1.1 增强规格
 - [specs/automation-browser-ops-v1.md](specs/automation-browser-ops-v1.md)：自动化采集 V1 规格
+- [specs/data-center-v1.md](specs/data-center-v1.md)：数据中心 / 数据出口中心 V1 规格
 - [specs/headless-runner-v1.md](specs/headless-runner-v1.md)：Headless Runner / CLI V1 规格
 - [specs/remote-runner-control-plane-v1.md](specs/remote-runner-control-plane-v1.md)：Remote Runner 控制面 V1 规格
 - [specs/capacity-aware-runner-scheduler-v1.md](specs/capacity-aware-runner-scheduler-v1.md)：容量感知 Runner 调度器 V1 规格
 - [specs/task-as-code-v1.md](specs/task-as-code-v1.md)：任务即代码 V1 规格
 - [specs/mcp-integration-v1.md](specs/mcp-integration-v1.md)：MCP 集成 V1 规格
 - [specs/task-operations-center-v1.md](specs/task-operations-center-v1.md)：小团队任务运营中台 V1 规格
+- [plans/data-center-v1.md](plans/data-center-v1.md)：数据中心 V1 实施计划
 - [plans/automation-browser-ops-v1.md](plans/automation-browser-ops-v1.md)：自动化采集 V1 实施计划
 - [plans/task-operations-center-v1.md](plans/task-operations-center-v1.md)：小团队任务运营中台 V1 实施计划
 - [superpowers/plans/2026-04-20-remote-runner-control-plane-v1.md](superpowers/plans/2026-04-20-remote-runner-control-plane-v1.md)：Remote Runner 控制面 V1 agent 实施拆解
@@ -68,6 +70,7 @@
 ### 2.5 设计与专项（design）
 
 - [design/next-phase-ideas.md](design/next-phase-ideas.md)：下一阶段拓展思路（产品形态升维副线）
+- [design/data-center.md](design/data-center.md)：数据中心 / 数据出口中心设计方案
 - [design/ai-assistant.md](design/ai-assistant.md)：AI 运营助手设计方案
 - [design/dashboard-ideas.md](design/dashboard-ideas.md)：总控页面创意建议
 - [design/page-container-optimization.md](design/page-container-optimization.md)：页面容器优化建议

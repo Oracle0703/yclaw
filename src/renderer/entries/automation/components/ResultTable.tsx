@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Space, Table, Typography, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import type { ExtractionResult } from '@shared/types';
+import { IPC_CHANNELS } from '@shared/constants';
 import { useIpc } from '../../../shared/hooks';
 
 interface ResultTableProps {
@@ -10,7 +11,7 @@ interface ResultTableProps {
 }
 
 export function ResultTable({ taskId, batchId }: ResultTableProps) {
-  const { automation } = useIpc();
+  const { automation, invoke } = useIpc();
   const [results, setResults] = useState<ExtractionResult[]>([]);
 
   useEffect(() => {
@@ -51,6 +52,20 @@ export function ResultTable({ taskId, batchId }: ResultTableProps) {
             size="small"
             disabled={!taskId}
             onClick={() => {
+              void invoke(IPC_CHANNELS.WINDOW_OPEN, {
+                module: 'data-center',
+                options: { width: 1180, height: 760 },
+              }).catch((error) => {
+                message.error(error instanceof Error ? error.message : '打开数据中心失败');
+              });
+            }}
+          >
+            打开数据中心
+          </Button>
+          <Button
+            size="small"
+            disabled={!taskId}
+            onClick={() => {
               if (!taskId) {
                 return;
               }
@@ -60,7 +75,7 @@ export function ResultTable({ taskId, batchId }: ResultTableProps) {
               });
             }}
           >
-            导出 CSV
+            快速导出 CSV
           </Button>
         </Space>
       }
