@@ -6,3 +6,8 @@ export { SchedulerService } from './SchedulerService';
 export { SessionRegistry } from './SessionRegistry';
 export { TemplateService } from './TemplateService';
 export { AlertService } from './AlertService';
+export { DataCenterService } from './data-center/DataCenterService';
+export { DataQualityService } from './data-center/DataQualityService';
+export { DatasetService } from './data-center/DatasetService';
+export { WebhookTargetService } from './data-center/WebhookTargetService';
+export { ApiTokenService } from './data-center/ApiTokenService';

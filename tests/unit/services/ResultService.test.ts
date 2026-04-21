@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'fs';
 
 import { ResultService } from '@main/services/ResultService';
 
@@ -64,5 +65,32 @@ describe('ResultService', () => {
     service.markSuspicious('result-1');
 
     expect(mockRepository.markSuspicious).toHaveBeenCalledWith('result-1');
+  });
+
+  it('exports results as jsonl', () => {
+    mockRepository.listResults.mockReturnValueOnce([
+      {
+        id: 'result-1',
+        taskId: 'task-1',
+        batchId: 'batch-1',
+        templateId: null,
+        data: { price: 123 },
+        status: 'normal',
+        createdAt: '2026-04-15T00:00:00.000Z',
+      },
+    ]);
+    const writeSpy = vi.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
+    vi.spyOn(Date, 'now').mockReturnValue(123456);
+
+    const outputPath = service.exportResults({ taskId: 'task-1' }, 'jsonl');
+
+    expect(outputPath).toContain('123456.jsonl');
+    expect(writeSpy).toHaveBeenCalledWith(
+      expect.stringContaining('.jsonl'),
+      '{"id":"result-1","taskId":"task-1","batchId":"batch-1","templateId":null,"data":{"price":123},"status":"normal","createdAt":"2026-04-15T00:00:00.000Z"}',
+      'utf8',
+    );
+
+    writeSpy.mockRestore();
   });
 });

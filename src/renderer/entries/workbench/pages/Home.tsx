@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import {
   ArrowUpOutlined,
+  DatabaseOutlined,
   DeploymentUnitOutlined,
   FundOutlined,
   GlobalOutlined,
@@ -79,6 +80,14 @@ const modules: ModuleSummary[] = [
     tag: 'RPA',
     status: '队列高峰',
     icon: <RobotOutlined style={{ fontSize: 22 }} />,
+  },
+  {
+    id: 'data-center',
+    name: '数据中心',
+    description: '结果资产、导出任务与数据集统一管理。',
+    tag: 'DataOps',
+    status: '出口待补强',
+    icon: <DatabaseOutlined style={{ fontSize: 22 }} />,
   },
   {
     id: 'browser',
@@ -229,6 +238,7 @@ function getModuleId(moduleName: string) {
   const map: Record<string, string> = {
     股票分析: 'stock',
     自动化采集: 'automation',
+    数据中心: 'data-center',
     内嵌浏览器: 'browser',
     插件中心: 'plugin-center',
   };
@@ -244,6 +254,7 @@ export default function Home() {
     const routeMap: Record<string, string> = {
       stock: '/stock',
       automation: '/automation',
+      'data-center': '/data-center',
       browser: '/browser',
       'plugin-center': '/plugin-center',
     };

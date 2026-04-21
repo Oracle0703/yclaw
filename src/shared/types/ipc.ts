@@ -8,6 +8,20 @@ import type {
   TaskBatch,
   TaskBreakpoint,
 } from './task';
+import type {
+  DataApiToken,
+  DataQualityBatchInsight,
+  DataQualityBatchScore,
+  DataCenterOverview,
+  DataCenterResultDetail,
+  DataCenterResultQuery,
+  DataDataset,
+  DataExportJob,
+  DataWebhookTarget,
+  DataQualityScanResult,
+  DataQualityRuleConfig,
+  DataQualityRuleSaveInput,
+} from './data-center';
 import type { InterventionState, BrowserSession } from './browser';
 
 /** IPC 请求/响应的基础格式 */
@@ -61,7 +75,110 @@ export interface BatchDetailPayload {
 export interface ResultExportPayload {
   taskId?: string;
   batchId?: string;
-  format: 'csv' | 'json';
+  format: 'csv' | 'json' | 'jsonl';
+}
+
+export interface DataCenterExportsCreatePayload {
+  name: string;
+  datasetId?: string;
+  query: DataCenterResultQuery;
+  targetType: 'file' | 'webhook' | 'local-api';
+  targetConfig: Record<string, unknown>;
+  format: 'csv' | 'json' | 'jsonl';
+}
+
+export interface DataCenterExportsListPayload {
+  page?: number;
+  pageSize?: number;
+  status?: DataExportJob['status'];
+}
+
+export type DataCenterResultsListPayload = DataCenterResultQuery;
+
+export interface DataCenterResultsDetailPayload {
+  resultId: string;
+}
+
+export interface DataCenterDatasetsSavePayload {
+  dataset: Omit<DataDataset, 'createdAt' | 'updatedAt'> & {
+    createdAt?: string;
+    updatedAt?: string;
+  };
+}
+
+export interface DataCenterExportsRetryPayload {
+  exportJobId: string;
+}
+
+export interface DataCenterExportsCancelPayload {
+  exportJobId: string;
+}
+
+export interface DataCenterWebhookTestPayload {
+  webhook: Pick<DataWebhookTarget, 'url' | 'headers' | 'timeoutMs' | 'maxRetries'> & {
+    secret?: string;
+  };
+}
+
+export interface DataCenterWebhookSavePayload {
+  target: Omit<DataWebhookTarget, 'createdAt' | 'updatedAt' | 'secretHash'> & {
+    createdAt?: string;
+    updatedAt?: string;
+    secret?: string;
+    secretHash?: string | null;
+  };
+}
+
+export interface DataCenterWebhookDeletePayload {
+  targetId: string;
+}
+
+export interface DataCenterApiTokenPayload {
+  token: DataApiToken;
+}
+
+export interface DataCenterApiTokenCreatePayload {
+  name: string;
+  scopes: string[];
+}
+
+export interface DataCenterApiTokenRevokePayload {
+  tokenId: string;
+}
+
+export interface DataCenterApiTokenIssueResponse {
+  token: DataApiToken;
+  plainTextToken: string;
+}
+
+export interface DataCenterApiStatusResponse {
+  running: boolean;
+  port?: number;
+  host?: string;
+}
+
+export interface DataCenterQualityScanPayload {
+  query?: Partial<DataCenterResultQuery>;
+  limit?: number;
+}
+
+export interface DataCenterQualityBatchPayload {
+  batchId: string;
+}
+
+export interface DataCenterQualityRuleSavePayload {
+  rule: DataQualityRuleSaveInput;
+}
+
+export interface DataCenterPayloadMap {
+  overview: DataCenterOverview;
+  resultDetail: DataCenterResultDetail;
+  exportJob: DataExportJob;
+  dataset: DataDataset;
+  qualityScan: DataQualityScanResult;
+  qualityRule: DataQualityRuleConfig;
+  qualityBatchScore: DataQualityBatchScore;
+  qualityBatchInsight: DataQualityBatchInsight;
 }
 
 export interface SessionBindPayload {

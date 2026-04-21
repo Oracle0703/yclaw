@@ -445,6 +445,190 @@ export class DatabaseService {
         INSERT INTO migrations (version) VALUES (7);
       `);
     }
+
+    if (currentDbVersion < 8) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS data_export_jobs (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          dataset_id TEXT,
+          query_json TEXT NOT NULL,
+          target_type TEXT NOT NULL,
+          target_config_json TEXT NOT NULL,
+          format TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          result_count INTEGER NOT NULL DEFAULT 0,
+          output_path TEXT,
+          error TEXT,
+          retry_count INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          started_at TEXT,
+          finished_at TEXT,
+          FOREIGN KEY (dataset_id) REFERENCES data_datasets(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS data_export_audits (
+          id TEXT PRIMARY KEY,
+          export_job_id TEXT NOT NULL,
+          attempt INTEGER NOT NULL,
+          status TEXT NOT NULL,
+          target_type TEXT NOT NULL,
+          request_summary TEXT,
+          response_summary TEXT,
+          error TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (export_job_id) REFERENCES data_export_jobs(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS data_datasets (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT,
+          query_json TEXT NOT NULL,
+          field_mapping_json TEXT,
+          default_format TEXT NOT NULL DEFAULT 'jsonl',
+          api_enabled INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS data_webhook_targets (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          url TEXT NOT NULL,
+          headers_json TEXT,
+          secret_hash TEXT,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          timeout_ms INTEGER NOT NULL DEFAULT 10000,
+          max_retries INTEGER NOT NULL DEFAULT 3,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS data_api_tokens (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          token_hash TEXT NOT NULL,
+          scopes_json TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          last_used_at TEXT,
+          created_at TEXT NOT NULL,
+          revoked_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_data_export_jobs_status
+          ON data_export_jobs(status, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_data_export_audits_job
+          ON data_export_audits(export_job_id, attempt);
+        CREATE INDEX IF NOT EXISTS idx_data_datasets_updated
+          ON data_datasets(updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_data_webhook_targets_enabled
+          ON data_webhook_targets(enabled, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_data_api_tokens_enabled
+          ON data_api_tokens(enabled, created_at DESC);
+
+        INSERT INTO migrations (version) VALUES (8);
+      `);
+    }
+
+    if (currentDbVersion < 9) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS data_quality_rules (
+          rule_id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT NOT NULL,
+          severity TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          params_json TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_data_quality_rules_enabled
+          ON data_quality_rules(enabled, updated_at DESC);
+
+        INSERT INTO migrations (version) VALUES (9);
+      `);
+    }
+
+    if (currentDbVersion < 10) {
+      const addColumn = (columnName: string, ddl: string): void => {
+        if (!this.hasColumn('data_quality_rules', columnName)) {
+          this.db!.exec(`ALTER TABLE data_quality_rules ADD COLUMN ${ddl}`);
+        }
+      };
+
+      addColumn('rule_type', 'rule_type TEXT');
+      addColumn('scope', 'scope TEXT');
+      addColumn('field_path', 'field_path TEXT');
+      addColumn('operator', 'operator TEXT');
+      addColumn('expected_value_json', 'expected_value_json TEXT');
+      addColumn('weight', 'weight REAL NOT NULL DEFAULT 1');
+      addColumn('group_json', 'group_json TEXT');
+
+      this.db!.exec(`
+        INSERT INTO migrations (version) VALUES (10);
+      `);
+    }
+
+    if (currentDbVersion < 11) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS data_quality_findings (
+          id TEXT PRIMARY KEY,
+          scan_id TEXT NOT NULL,
+          rule_id TEXT NOT NULL,
+          severity TEXT NOT NULL,
+          result_id TEXT NOT NULL,
+          task_id TEXT NOT NULL,
+          batch_id TEXT NOT NULL,
+          message TEXT NOT NULL,
+          field_path TEXT,
+          actual_value_json TEXT,
+          expected_value_json TEXT,
+          score_impact INTEGER NOT NULL DEFAULT 0,
+          fingerprint TEXT,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_data_quality_findings_batch
+          ON data_quality_findings(batch_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_data_quality_findings_scan
+          ON data_quality_findings(scan_id, created_at DESC);
+
+        INSERT INTO migrations (version) VALUES (11);
+      `);
+    }
+
+    if (currentDbVersion < 12) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS data_quality_batch_insights (
+          id TEXT PRIMARY KEY,
+          batch_id TEXT NOT NULL UNIQUE,
+          task_id TEXT NOT NULL,
+          score INTEGER NOT NULL,
+          grade TEXT NOT NULL,
+          total_results INTEGER NOT NULL,
+          issue_count INTEGER NOT NULL,
+          affected_results INTEGER NOT NULL,
+          failed_rate REAL NOT NULL,
+          suspicious_rate REAL NOT NULL,
+          duplicate_rate REAL NOT NULL,
+          top_rules_json TEXT NOT NULL,
+          top_fields_json TEXT NOT NULL,
+          severity_breakdown_json TEXT NOT NULL,
+          status_breakdown_json TEXT NOT NULL,
+          score_trend_hint TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_data_quality_batch_insights_task
+          ON data_quality_batch_insights(task_id, created_at DESC);
+
+        INSERT INTO migrations (version) VALUES (12);
+      `);
+    }
   }
 
   private hasColumn(tableName: string, columnName: string): boolean {

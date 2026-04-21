@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { FeaturePackageCatalogItem, FeaturePackageInstallResult, IpcResponse } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/constants';
+import { createDataCenterApi } from '../api/dataCenter';
 
 /**
  * IPC 调用 Hook — 渲染进程调用主进程的统一接口
@@ -49,7 +50,12 @@ export function useIpc() {
     [invoke],
   );
 
-  return { invoke, automation, featurePackages };
+  const dataCenter = useMemo(
+    () => createDataCenterApi({ invoke, on: window.electronAPI.on }),
+    [invoke],
+  );
+
+  return { invoke, automation, featurePackages, dataCenter };
 }
 
 /**

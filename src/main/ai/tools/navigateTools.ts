@@ -15,7 +15,7 @@ export function createNavigateTool(openWindow: (module: string) => void): AITool
     confirmationLevel: 1,
     async execute(params) {
       const module = params.module as string;
-      const validModules = ['workbench', 'stock', 'automation', 'browser', 'plugin-center'];
+      const validModules = ['workbench', 'stock', 'automation', 'data-center', 'browser', 'plugin-center'];
 
       if (!validModules.includes(module)) {
         return {
@@ -46,7 +46,7 @@ export const navigateTool: AITool = {
   confirmationLevel: 1,
   async execute(params) {
     const module = params.module as string;
-    const validModules = ['workbench', 'stock', 'automation', 'browser', 'plugin-center'];
+    const validModules = ['workbench', 'stock', 'automation', 'data-center', 'browser', 'plugin-center'];
 
     if (!validModules.includes(module)) {
       return {

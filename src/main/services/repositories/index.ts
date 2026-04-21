@@ -1,6 +1,13 @@
 export { AIRepository } from './AIRepository';
 export { AlertRepository } from './AlertRepository';
 export { BatchRepository } from './BatchRepository';
+export { DataApiTokenRepository } from './DataApiTokenRepository';
+export { DataQualityBatchInsightRepository } from './DataQualityBatchInsightRepository';
+export { DataQualityFindingRepository } from './DataQualityFindingRepository';
+export { DataDatasetRepository } from './DataDatasetRepository';
+export { DataExportJobRepository } from './DataExportJobRepository';
+export { DataQualityRuleRepository } from './DataQualityRuleRepository';
+export { DataWebhookTargetRepository } from './DataWebhookTargetRepository';
 export { ExecutionLogRepository } from './ExecutionLogRepository';
 export { PluginRepository } from './PluginRepository';
 export { RemoteRunnerRepository } from './RemoteRunnerRepository';

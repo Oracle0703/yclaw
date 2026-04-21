@@ -46,6 +46,16 @@ export default function App() {
                   />
                 }
               />
+              <Route
+                path="/data-center"
+                element={
+                  <FeatureModulePage
+                    moduleId="data-center"
+                    title="数据中心"
+                    description="结果资产、导出任务、数据集与开放接口统一收口。"
+                  />
+                }
+              />
               <Route path="/browser" element={<BrowserPage />} />
               <Route
                 path="/plugin-center"

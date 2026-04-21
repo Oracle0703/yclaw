@@ -144,6 +144,33 @@ export const IPC_CHANNELS = {
   REMOTE_RUNNER_EXECUTION_CANCEL: 'runner:execution:cancel',
   REMOTE_RUNNER_EXECUTION_LOGS: 'runner:execution:logs',
   REMOTE_RUNNER_LOG_EVENT: 'runner:log:event',
+
+  // Data Center
+  DATA_CENTER_OVERVIEW: 'datacenter:overview',
+  DATA_CENTER_RESULTS_LIST: 'datacenter:results:list',
+  DATA_CENTER_RESULTS_DETAIL: 'datacenter:results:detail',
+  DATA_CENTER_EXPORTS_CREATE: 'datacenter:exports:create',
+  DATA_CENTER_EXPORTS_LIST: 'datacenter:exports:list',
+  DATA_CENTER_EXPORTS_RETRY: 'datacenter:exports:retry',
+  DATA_CENTER_EXPORTS_CANCEL: 'datacenter:exports:cancel',
+  DATA_CENTER_DATASETS_LIST: 'datacenter:datasets:list',
+  DATA_CENTER_DATASETS_SAVE: 'datacenter:datasets:save',
+  DATA_CENTER_WEBHOOKS_LIST: 'datacenter:webhooks:list',
+  DATA_CENTER_WEBHOOKS_SAVE: 'datacenter:webhooks:save',
+  DATA_CENTER_WEBHOOKS_TEST: 'datacenter:webhooks:test',
+  DATA_CENTER_WEBHOOKS_DELETE: 'datacenter:webhooks:delete',
+  DATA_CENTER_API_TOKENS_LIST: 'datacenter:apitokens:list',
+  DATA_CENTER_API_TOKENS_CREATE: 'datacenter:apitokens:create',
+  DATA_CENTER_API_TOKENS_REVOKE: 'datacenter:apitokens:revoke',
+  DATA_CENTER_API_STATUS: 'datacenter:api:status',
+  DATA_CENTER_API_START: 'datacenter:api:start',
+  DATA_CENTER_API_STOP: 'datacenter:api:stop',
+  DATA_CENTER_QUALITY_SCAN: 'datacenter:quality:scan',
+  DATA_CENTER_QUALITY_SCORE_BATCH: 'datacenter:quality:score:batch',
+  DATA_CENTER_QUALITY_INSIGHT_BATCH: 'datacenter:quality:insight:batch',
+  DATA_CENTER_QUALITY_RULES_LIST: 'datacenter:quality:rules:list',
+  DATA_CENTER_QUALITY_RULES_SAVE: 'datacenter:quality:rules:save',
+  DATA_CENTER_EXPORT_UPDATED: 'datacenter:exportupdated',
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

@@ -3,6 +3,7 @@ import type { PropsWithChildren } from 'react';
 import {
   AppstoreOutlined,
   BarsOutlined,
+  DatabaseOutlined,
   DeploymentUnitOutlined,
   FundOutlined,
   GlobalOutlined,
@@ -33,6 +34,11 @@ const MODULE_MENU: NonNullable<MenuProps['items']> = [
     key: '/automation',
     label: '自动化',
     icon: <RobotOutlined />,
+  },
+  {
+    key: '/data-center',
+    label: '数据中心',
+    icon: <DatabaseOutlined />,
   },
   {
     key: '/browser',
