@@ -67,6 +67,62 @@ export interface ToolResult {
   error?: string;
 }
 
+export interface AITaskOpsTaskSummary {
+  id: string;
+  name: string;
+  status: string;
+  updatedAt: string;
+  currentRevisionId?: string | null;
+}
+
+export interface AITaskOpsRunnerSummary {
+  id: string;
+  name: string;
+  kind: string;
+  status: string;
+  runningCount: number;
+  maxConcurrency: number;
+}
+
+export interface AITaskOpsResultSummary {
+  taskId: string;
+  batchId: string;
+  status: string;
+  qualityStatus?: string;
+  revisionId?: string;
+}
+
+export interface AITaskOperationsContext {
+  workspaces: Array<{
+    id: string;
+    name: string;
+  }>;
+  tasks: AITaskOpsTaskSummary[];
+  alerts: Array<{
+    id: string;
+    taskId: string;
+    batchId?: string;
+    message: string;
+    createdAt: string;
+    read: boolean;
+    status?: string;
+    level?: string;
+    assignee?: string | null;
+  }>;
+  reviews: Array<{
+    id: string;
+    taskId: string;
+    batchId?: string | null;
+    reviewType: string;
+    conclusion?: string | null;
+    owner?: string | null;
+    followUpActions: string[];
+    createdAt: string;
+  }>;
+  runners: AITaskOpsRunnerSummary[];
+  results: AITaskOpsResultSummary[];
+}
+
 export interface AIServiceContext {
   currentModule: string;
   systemMetrics: {
@@ -85,6 +141,7 @@ export interface AIServiceContext {
     version: string;
     enabled: boolean;
   }>;
+  taskOperations?: AITaskOperationsContext;
 }
 
 export interface AIChatRequest {

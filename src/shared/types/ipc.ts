@@ -90,13 +90,29 @@ export interface ResultExportResponse {
   path: string;
 }
 
+export type AlertLevel = 'info' | 'warning' | 'critical';
+
+export type AlertStatus =
+  | 'new'
+  | 'claimed'
+  | 'processing'
+  | 'escalated'
+  | 'recovered'
+  | 'closed'
+  | 'ignored';
+
 export interface AlertRecord {
   id: string;
+  workspaceId?: string;
   taskId: string;
   batchId?: string;
   message: string;
   createdAt: string;
   read: boolean;
+  status?: AlertStatus;
+  assignee?: string | null;
+  level?: AlertLevel;
+  resolution?: string | null;
 }
 
 export interface AutomationBrowserOpsPayloadMap {

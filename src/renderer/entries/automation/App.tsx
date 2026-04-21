@@ -1,19 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Input, Space, Tag, message } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
 import { EVENTS, IPC_CHANNELS } from '@shared/constants';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
-import type { TaskFlow, TaskStep } from '@shared/types';
+import type { OperationsAcceptanceMetric, TaskFlow, TaskStep } from '@shared/types';
 import { BatchList } from './components/BatchList';
 import { ExecutionPanel } from './components/ExecutionPanel';
+import { OpsSummary } from './components/OpsSummary';
+import { AlertInbox } from './components/AlertInbox';
+import { DutySchedulePanel } from './components/DutySchedulePanel';
 import { ResultTable } from './components/ResultTable';
 import { RemoteRunnerPanel } from './components/RemoteRunnerPanel';
+import { ReviewPanel } from './components/ReviewPanel';
 import { RunnerSchedulerPanel } from './components/RunnerSchedulerPanel';
 import { StepEditor } from './components/StepEditor';
 import { TaskList } from './components/TaskList';
+import { TaskRevisionDrawer } from './components/TaskRevisionDrawer';
 import { TemplateManager } from './components/TemplateManager';
+import { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 
 interface SelectedTaskSummary {
   id: string;
@@ -21,11 +27,12 @@ interface SelectedTaskSummary {
 }
 
 export default function App() {
-  const { invoke } = useIpc();
+  const { invoke, taskOperations } = useIpc();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTaskSummary, setSelectedTaskSummary] = useState<SelectedTaskSummary | null>(null);
   const [taskName, setTaskName] = useState('');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [acceptanceMetrics, setAcceptanceMetrics] = useState<OperationsAcceptanceMetric[]>([]);
   const [steps, setSteps] = useState<TaskStep[]>([]);
   const [execStatus, setExecStatus] = useState('idle');
   const [execStep, setExecStep] = useState(0);
@@ -33,6 +40,7 @@ export default function App() {
   const [hasBreakpoint, setHasBreakpoint] = useState(false);
   const [showExecution, setShowExecution] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [revisionDrawerOpen, setRevisionDrawerOpen] = useState(false);
 
   const templateDraftFields = steps
     .filter((step) => step.action.type === 'extract' && step.action.selector)
@@ -88,6 +96,20 @@ export default function App() {
 
   const totalSteps = steps.length > 0 ? steps.length : (selectedTaskSummary?.stepsCount ?? 0);
 
+  useEffect(() => {
+    if (!selectedTaskId || !taskOperations?.getAcceptanceMetrics) {
+      setAcceptanceMetrics([]);
+      return;
+    }
+
+    void taskOperations
+      .getAcceptanceMetrics({ taskId: selectedTaskId })
+      .then((metrics) => {
+        setAcceptanceMetrics(Array.isArray(metrics) ? metrics as OperationsAcceptanceMetric[] : []);
+      })
+      .catch(() => setAcceptanceMetrics([]));
+  }, [selectedTaskId, taskOperations]);
+
   useIpcEvent(EVENTS.TASK_STARTED, (_data: unknown) => {
     const data = _data as { flowId?: string };
     if (data.flowId && selectedTaskId && data.flowId !== selectedTaskId) {
@@ -132,6 +154,7 @@ export default function App() {
       extra={
         <Space wrap className="yclaw-page-actions">
           <Tag color="processing">Automation</Tag>
+          <WorkspaceSwitcher />
           <Input
             aria-label="任务名称"
             placeholder="请输入任务名称"
@@ -153,6 +176,9 @@ export default function App() {
           <Button onClick={() => void handleSaveTask()} disabled={steps.length === 0}>
             保存任务
           </Button>
+          <Button onClick={() => setRevisionDrawerOpen(true)} disabled={!selectedTaskId}>
+            任务版本
+          </Button>
           <Button
             type="primary"
             icon={<ThunderboltOutlined />}
@@ -171,6 +197,17 @@ export default function App() {
 
         {/* 右栏：编辑器 + 执行面板 */}
         <div className="yclaw-automation-main">
+          <OpsSummary
+            summary={{
+              queued: selectedTaskId ? 1 : 0,
+              running: execStatus === 'running' ? 1 : 0,
+              failed: execStatus === 'failed' ? 1 : 0,
+              waitingIntervention: hasBreakpoint ? 1 : 0,
+            }}
+            acceptanceMetrics={acceptanceMetrics}
+          />
+          <AlertInbox />
+          <DutySchedulePanel />
           <RemoteRunnerPanel />
           <RunnerSchedulerPanel />
 
@@ -188,6 +225,7 @@ export default function App() {
           <BatchList taskId={selectedTaskId} onSelectBatch={setSelectedBatchId} />
 
           <ResultTable taskId={selectedTaskId} batchId={selectedBatchId} />
+          <ReviewPanel taskId={selectedTaskId} selectedTemplateId={selectedTemplateId} />
 
           {showExecution && (
             <ProCard className="yclaw-panel-card" title="执行面板" style={{ flex: 'none' }}>
@@ -212,6 +250,12 @@ export default function App() {
               />
             </ProCard>
           )}
+
+          <TaskRevisionDrawer
+            taskId={selectedTaskId}
+            open={revisionDrawerOpen}
+            onClose={() => setRevisionDrawerOpen(false)}
+          />
         </div>
       </div>
     </PageShell>

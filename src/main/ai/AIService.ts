@@ -22,6 +22,7 @@ import { ToolRegistry } from './ToolRegistry';
 import { createTaskListTool } from './tools/taskTools';
 import { systemStatusTool } from './tools/systemTools';
 import { navigateTool, createNavigateTool } from './tools/navigateTools';
+import { taskOpsTools } from './tools/taskOpsTools';
 import type { LLMProvider } from './types';
 import type { AIRepository, TaskRepository } from '../services/repositories';
 
@@ -92,6 +93,7 @@ export class AIService {
     // Register built-in tools
     this.toolRegistry.register(createTaskListTool(this.taskRepository));
     this.toolRegistry.register(systemStatusTool);
+    taskOpsTools.forEach((tool) => this.toolRegistry.register(tool));
     if (opts.openWindow) {
       this.toolRegistry.register(createNavigateTool(opts.openWindow));
     } else {

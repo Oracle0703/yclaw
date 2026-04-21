@@ -6,3 +6,7 @@ export { SchedulerService } from './SchedulerService';
 export { SessionRegistry } from './SessionRegistry';
 export { TemplateService } from './TemplateService';
 export { AlertService } from './AlertService';
+export { ReviewService } from './ReviewService';
+export { WorkspaceService } from './WorkspaceService';
+export { TaskRevisionService } from './TaskRevisionService';
+export { OperationsMetricsService } from './OperationsMetricsService';

@@ -15,6 +15,7 @@ interface TaskListRow {
   scheduleJson?: string | null;
   nextRunAt?: string | null;
   lastRunAt?: string | null;
+  currentRevisionId?: string | null;
   latestBatchJson?: string | null;
 }
 
@@ -52,6 +53,7 @@ export class TaskRepository {
     } | null;
     nextRunAt?: string | null;
     lastRunAt?: string | null;
+    currentRevisionId?: string | null;
     latestBatch?: {
       id: string;
       taskId: string;
@@ -69,6 +71,7 @@ export class TaskRepository {
           tasks.schedule_json AS scheduleJson,
           tasks.next_run_at AS nextRunAt,
           tasks.last_run_at AS lastRunAt,
+          tasks.current_revision_id AS currentRevisionId,
           tasks.updated_at AS updatedAt,
           (
             SELECT json_object(
@@ -93,6 +96,7 @@ export class TaskRepository {
       schedule: parseJson(task.scheduleJson, null),
       nextRunAt: task.nextRunAt ?? null,
       lastRunAt: task.lastRunAt ?? null,
+      currentRevisionId: task.currentRevisionId ?? null,
       updatedAt: task.updatedAt,
       latestBatch: parseJson(task.latestBatchJson, null),
     }));

@@ -29,6 +29,10 @@ describe('TemplateRepository', () => {
       id: 'template-1',
       name: '价格模板',
       fields: [{ name: 'price', selector: '.price', attribute: 'textContent' }],
+      version: 'v1',
+      description: null,
+      deprecated: false,
+      pluginDependencies: [],
       createdAt: '2026-04-16T00:00:00.000Z',
       updatedAt: '2026-04-17T00:00:00.000Z',
     };
@@ -40,6 +44,10 @@ describe('TemplateRepository', () => {
         'template-1',
         '价格模板',
         JSON.stringify([{ name: 'price', selector: '.price', attribute: 'textContent' }]),
+        'v1',
+        null,
+        0,
+        JSON.stringify([]),
         '2026-04-16T00:00:00.000Z',
         '2026-04-17T00:00:00.000Z',
       ],
@@ -52,6 +60,10 @@ describe('TemplateRepository', () => {
         id: 'template-1',
         name: '价格模板',
         fields: JSON.stringify([{ name: 'price', selector: '.price', attribute: 'textContent' }]),
+        version: 'v2',
+        description: '价格模板说明',
+        deprecated: 1,
+        plugin_dependencies: JSON.stringify(['ocr-helper']),
         created_at: '2026-04-16T00:00:00.000Z',
         updated_at: '2026-04-17T00:00:00.000Z',
       },
@@ -62,10 +74,60 @@ describe('TemplateRepository', () => {
         id: 'template-1',
         name: '价格模板',
         fields: [{ name: 'price', selector: '.price', attribute: 'textContent' }],
+        version: 'v2',
+        description: '价格模板说明',
+        deprecated: true,
+        pluginDependencies: ['ocr-helper'],
         createdAt: '2026-04-16T00:00:00.000Z',
         updatedAt: '2026-04-17T00:00:00.000Z',
       },
     ]);
+  });
+
+  it('gets a single template with governance metadata', () => {
+    executor.get.mockReturnValueOnce({
+      id: 'template-1',
+      name: '价格模板',
+      fields: JSON.stringify([{ name: 'price', selector: '.price', attribute: 'textContent' }]),
+      version: 'v2',
+      description: '价格模板说明',
+      deprecated: 0,
+      plugin_dependencies: JSON.stringify(['ocr-helper']),
+      created_at: '2026-04-16T00:00:00.000Z',
+      updated_at: '2026-04-17T00:00:00.000Z',
+    });
+
+    expect(repository.getTemplate('template-1')).toEqual({
+      id: 'template-1',
+      name: '价格模板',
+      fields: [{ name: 'price', selector: '.price', attribute: 'textContent' }],
+      version: 'v2',
+      description: '价格模板说明',
+      deprecated: false,
+      pluginDependencies: ['ocr-helper'],
+      createdAt: '2026-04-16T00:00:00.000Z',
+      updatedAt: '2026-04-17T00:00:00.000Z',
+    });
+  });
+
+  it('updates template governance columns', () => {
+    repository.updateTemplateGovernance('template-1', {
+      version: 'v2',
+      deprecated: true,
+      description: '价格模板说明',
+      pluginDependencies: ['ocr-helper'],
+    });
+
+    expect(executor.run).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE extraction_templates'),
+      [
+        'v2',
+        '价格模板说明',
+        1,
+        JSON.stringify(['ocr-helper']),
+        'template-1',
+      ],
+    );
   });
 
   it('clears task bindings before delete and can attach template to task', () => {

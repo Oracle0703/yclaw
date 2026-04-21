@@ -2,7 +2,13 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { ExtractionResult } from '@shared/types';
+import type {
+  BatchQualitySummary,
+  CrossBatchQualityAnalysis,
+  ExtractionResult,
+  ResultQualityRule,
+  ResultQualityStatus,
+} from '@shared/types';
 import { ResultRepository } from './repositories';
 
 export interface ResultQuery {
@@ -36,6 +42,9 @@ export class ResultService {
       templateId: result.templateId ?? null,
       data: result.data,
       status: result.status,
+      ...(result.qualityStatus !== undefined ? { qualityStatus: result.qualityStatus } : {}),
+      ...(result.evidenceRefs !== undefined ? { evidenceRefs: result.evidenceRefs } : {}),
+      ...(result.revisionId !== undefined ? { revisionId: result.revisionId } : {}),
       sourceUrl: result.sourceUrl,
       screenshot: result.screenshot,
       createdAt: result.createdAt,
@@ -56,6 +65,35 @@ export class ResultService {
 
   markSuspicious(resultId: string): void {
     this.resultRepository.markSuspicious(resultId);
+  }
+
+  analyzeCrossBatchQuality(
+    taskId: string,
+    rule: ResultQualityRule = {},
+  ): CrossBatchQualityAnalysis {
+    const results = this.listResults({ taskId });
+    const batchGroups = new Map<string, ExtractionResult[]>();
+
+    for (const result of results) {
+      const group = batchGroups.get(result.batchId) ?? [];
+      group.push(result);
+      batchGroups.set(result.batchId, group);
+    }
+
+    const batchSummaries = Array.from(batchGroups.entries()).map(([batchId, batchResults]) =>
+      summarizeBatchQuality(batchId, batchResults, rule),
+    );
+
+    return {
+      taskId,
+      totalResults: results.length,
+      failedResults: results.filter(isFailedResult).length,
+      missingRequiredFieldResults: results.filter((result) =>
+        hasMissingRequiredField(result, rule.requiredFields ?? []),
+      ).length,
+      tracedResults: results.filter(isTraceableResult).length,
+      batchSummaries,
+    };
   }
 
   exportResults(query: ResultQuery, format: 'csv' | 'json'): string {
@@ -84,4 +122,63 @@ export class ResultService {
     fs.writeFileSync(outputPath, [header, ...lines].join('\n'), 'utf8');
     return outputPath;
   }
+}
+
+function summarizeBatchQuality(
+  batchId: string,
+  results: ExtractionResult[],
+  rule: ResultQualityRule,
+): BatchQualitySummary {
+  const failedResults = results.filter(isFailedResult).length;
+  const missingRequiredFieldResults = results.filter((result) =>
+    hasMissingRequiredField(result, rule.requiredFields ?? []),
+  ).length;
+  const minBatchResultCount = rule.minBatchResultCount ?? 0;
+
+  return {
+    batchId,
+    totalResults: results.length,
+    failedResults,
+    missingRequiredFieldResults,
+    qualityStatus: resolveBatchQualityStatus({
+      failedResults,
+      missingRequiredFieldResults,
+      totalResults: results.length,
+      minBatchResultCount,
+    }),
+  };
+}
+
+function resolveBatchQualityStatus(input: {
+  failedResults: number;
+  missingRequiredFieldResults: number;
+  totalResults: number;
+  minBatchResultCount: number;
+}): ResultQualityStatus {
+  if (input.failedResults > 0 || input.totalResults < input.minBatchResultCount) {
+    return 'failed';
+  }
+
+  if (input.missingRequiredFieldResults > 0) {
+    return 'warning';
+  }
+
+  return 'passed';
+}
+
+function isFailedResult(result: ExtractionResult): boolean {
+  return result.status === 'failed' || result.qualityStatus === 'failed';
+}
+
+function hasMissingRequiredField(result: ExtractionResult, requiredFields: string[]): boolean {
+  return requiredFields.some((field) => {
+    const value = result.data[field];
+    return value === undefined || value === null || value === '';
+  });
+}
+
+function isTraceableResult(result: ExtractionResult): boolean {
+  return Boolean(result.batchId)
+    && Boolean(result.revisionId)
+    && (result.evidenceRefs?.length ?? 0) > 0;
 }

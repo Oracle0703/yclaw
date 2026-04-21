@@ -13,6 +13,9 @@ interface ResultRow {
   template_id?: string | null;
   data: string;
   status: ExtractionResult['status'];
+  quality_status?: ExtractionResult['qualityStatus'] | null;
+  evidence_refs?: string | null;
+  revision_id?: string | null;
   source_url?: string | null;
   screenshot?: string | null;
   created_at: string;
@@ -22,6 +25,33 @@ export class ResultRepository {
   constructor(private readonly executor: ResultRepositoryExecutor) {}
 
   saveResult(result: ExtractionResult): void {
+    if (
+      result.qualityStatus !== undefined
+      || result.evidenceRefs !== undefined
+      || result.revisionId !== undefined
+    ) {
+      this.executor.run(
+        `INSERT INTO extraction_results (
+          id, task_id, batch_id, template_id, data, status, quality_status, evidence_refs, revision_id, source_url, screenshot, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          result.id,
+          result.taskId,
+          result.batchId,
+          result.templateId ?? null,
+          JSON.stringify(result.data),
+          result.status,
+          result.qualityStatus ?? null,
+          result.evidenceRefs ? JSON.stringify(result.evidenceRefs) : null,
+          result.revisionId ?? null,
+          result.sourceUrl ?? null,
+          result.screenshot ?? null,
+          result.createdAt,
+        ],
+      );
+      return;
+    }
+
     this.executor.run(
       `INSERT INTO extraction_results (
         id, task_id, batch_id, template_id, data, status, source_url, screenshot, created_at
@@ -57,7 +87,7 @@ export class ResultRepository {
 
     return this.executor
       .all<ResultRow>(
-        `SELECT id, task_id, batch_id, template_id, data, status, source_url, screenshot, created_at
+        `SELECT id, task_id, batch_id, template_id, data, status, quality_status, evidence_refs, revision_id, source_url, screenshot, created_at
          FROM extraction_results
          ${whereClause}
          ORDER BY created_at DESC`,
@@ -68,7 +98,7 @@ export class ResultRepository {
 
   getResult(resultId: string): ExtractionResult | null {
     const row = this.executor.get<ResultRow>(
-      `SELECT id, task_id, batch_id, template_id, data, status, source_url, screenshot, created_at
+      `SELECT id, task_id, batch_id, template_id, data, status, quality_status, evidence_refs, revision_id, source_url, screenshot, created_at
        FROM extraction_results
        WHERE id = ?`,
       [resultId],
@@ -86,7 +116,7 @@ export class ResultRepository {
 }
 
 function mapResultRow(row: ResultRow): ExtractionResult {
-  return {
+  const result: ExtractionResult = {
     id: row.id,
     taskId: row.task_id,
     batchId: row.batch_id,
@@ -97,6 +127,18 @@ function mapResultRow(row: ResultRow): ExtractionResult {
     screenshot: row.screenshot ?? undefined,
     createdAt: row.created_at,
   };
+
+  if (row.quality_status != null) {
+    result.qualityStatus = row.quality_status;
+  }
+  if (row.evidence_refs) {
+    result.evidenceRefs = parseJson(row.evidence_refs, []);
+  }
+  if (row.revision_id != null) {
+    result.revisionId = row.revision_id;
+  }
+
+  return result;
 }
 
 function parseJson<T>(value: string, fallback: T): T {

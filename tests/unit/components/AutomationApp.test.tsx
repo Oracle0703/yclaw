@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { IPC_CHANNELS } from '@shared/constants';
 
 const { invokeMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
@@ -8,6 +9,10 @@ const { invokeMock } = vi.hoisted(() => ({
 
 const { messageErrorMock } = vi.hoisted(() => ({
   messageErrorMock: vi.fn(),
+}));
+
+const { opsSummaryPropsMock } = vi.hoisted(() => ({
+  opsSummaryPropsMock: vi.fn(),
 }));
 
 vi.mock('antd', () => ({
@@ -130,6 +135,37 @@ vi.mock('@renderer/entries/automation/components/RunnerSchedulerPanel', () => ({
   RunnerSchedulerPanel: () => <div>RunnerSchedulerPanel</div>,
 }));
 
+vi.mock('@renderer/entries/automation/components/WorkspaceSwitcher', () => ({
+  WorkspaceSwitcher: () => <div>WorkspaceSwitcher</div>,
+}));
+
+vi.mock('@renderer/entries/automation/components/DutySchedulePanel', () => ({
+  DutySchedulePanel: () => <div>DutySchedulePanel</div>,
+}));
+
+vi.mock('@renderer/entries/automation/components/OpsSummary', () => ({
+  OpsSummary: ({
+    acceptanceMetrics,
+  }: {
+    acceptanceMetrics?: Array<{ key: string; label: string; value: number }>;
+  }) => {
+    opsSummaryPropsMock({ acceptanceMetrics });
+    return (
+      <div>
+        OpsSummary
+        {acceptanceMetrics?.map((metric) => (
+          <span key={metric.key}>{metric.label}</span>
+        ))}
+      </div>
+    );
+  },
+}));
+
+vi.mock('@renderer/entries/automation/components/TaskRevisionDrawer', () => ({
+  TaskRevisionDrawer: ({ open }: { open?: boolean }) =>
+    open ? <div>TaskRevisionDrawer</div> : null,
+}));
+
 vi.mock('@renderer/shared/components/PageShell', () => ({
   PageShell: ({ children, extra }: { children: React.ReactNode; extra: React.ReactNode }) => (
     <div>
@@ -139,35 +175,72 @@ vi.mock('@renderer/shared/components/PageShell', () => ({
   ),
 }));
 
-vi.mock('@renderer/shared/hooks', () => ({
-  useIpc: () => ({
-    invoke: invokeMock,
-  }),
-  useIpcEvent: vi.fn(),
-}));
+vi.mock('@renderer/shared/hooks', () => {
+  const taskOperations = {
+      getAcceptanceMetrics: (payload?: unknown) =>
+        invokeMock(IPC_CHANNELS.OPS_ACCEPTANCE_METRICS, payload ?? {}),
+  };
+
+  return {
+    useIpc: () => ({
+      invoke: invokeMock,
+      taskOperations,
+    }),
+    useIpcEvent: vi.fn(),
+  };
+});
 
 import AutomationApp from '@renderer/entries/automation/App';
 
 describe('Automation App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    invokeMock.mockResolvedValue({
-      id: 'task-1',
-      name: '采集任务',
-      steps: [
-        {
-          id: 'step-1',
-          name: '打开页面',
-          action: { type: 'click', selector: '#open' },
-        },
-        {
-          id: 'step-2',
-          name: '采集数据',
-          action: { type: 'extract', selector: '.price' },
-        },
-      ],
-      createdAt: '2026-04-16T00:00:00.000Z',
-      updatedAt: '2026-04-16T00:00:00.000Z',
+    invokeMock.mockImplementation((channel: string, payload?: { taskId?: string; name?: string; steps?: unknown[] }) => {
+      if (channel === IPC_CHANNELS.TASK_GET) {
+        return Promise.resolve({
+          id: 'task-1',
+          name: '采集任务',
+          steps: [
+            {
+              id: 'step-1',
+              name: '打开页面',
+              action: { type: 'click', selector: '#open' },
+            },
+            {
+              id: 'step-2',
+              name: '采集数据',
+              action: { type: 'extract', selector: '.price' },
+            },
+          ],
+          createdAt: '2026-04-16T00:00:00.000Z',
+          updatedAt: '2026-04-16T00:00:00.000Z',
+        });
+      }
+
+      if (channel === IPC_CHANNELS.TASK_SAVE) {
+        return Promise.resolve({
+          id: payload?.taskId ?? 'task-new-1',
+          name: payload?.name ?? '采集任务',
+          steps: payload?.steps ?? [],
+          createdAt: '2026-04-16T00:00:00.000Z',
+          updatedAt: '2026-04-16T00:00:00.000Z',
+        });
+      }
+
+      if (channel === IPC_CHANNELS.OPS_ACCEPTANCE_METRICS) {
+        return Promise.resolve([
+          {
+            key: 'taskSuccessRate',
+            label: payload?.taskId ? '任务执行成功率' : '全局任务执行成功率',
+            value: payload?.taskId ? 1 : 0.92,
+            target: 0.9,
+            unit: 'ratio',
+            passed: true,
+          },
+        ]);
+      }
+
+      return Promise.resolve(null);
     });
   });
 
@@ -187,6 +260,36 @@ describe('Automation App', () => {
     render(<AutomationApp />);
 
     expect(screen.getByText('RunnerSchedulerPanel')).toBeDefined();
+  });
+
+  it('renders workspace switcher and ops summary in automation page', () => {
+    render(<AutomationApp />);
+
+    expect(screen.getByText('WorkspaceSwitcher')).toBeDefined();
+    expect(screen.getByText('OpsSummary')).toBeDefined();
+    expect(screen.getByText('DutySchedulePanel')).toBeDefined();
+  });
+
+  it('loads acceptance metrics for selected task and passes them to OpsSummary', async () => {
+    render(<AutomationApp />);
+
+    fireEvent.click(screen.getByRole('button', { name: '选择任务' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.OPS_ACCEPTANCE_METRICS, {
+        taskId: 'task-1',
+      });
+      expect(opsSummaryPropsMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          acceptanceMetrics: [
+            expect.objectContaining({
+              key: 'taskSuccessRate',
+              label: '任务执行成功率',
+            }),
+          ],
+        }),
+      );
+    });
   });
 
   it('loads persisted task steps into editor when selecting an existing task', async () => {
@@ -308,20 +411,33 @@ describe('Automation App', () => {
   });
 
   it('shows an error when saving a task fails', async () => {
-    invokeMock.mockResolvedValueOnce({
-      id: 'task-1',
-      name: '采集任务',
-      steps: [
-        {
-          id: 'step-1',
-          name: '打开页面',
-          action: { type: 'click', selector: '#open' },
-        },
-      ],
-      createdAt: '2026-04-16T00:00:00.000Z',
-      updatedAt: '2026-04-16T00:00:00.000Z',
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === IPC_CHANNELS.TASK_GET) {
+        return Promise.resolve({
+          id: 'task-1',
+          name: '采集任务',
+          steps: [
+            {
+              id: 'step-1',
+              name: '打开页面',
+              action: { type: 'click', selector: '#open' },
+            },
+          ],
+          createdAt: '2026-04-16T00:00:00.000Z',
+          updatedAt: '2026-04-16T00:00:00.000Z',
+        });
+      }
+
+      if (channel === IPC_CHANNELS.TASK_SAVE) {
+        return Promise.reject(new Error('save task failed'));
+      }
+
+      if (channel === IPC_CHANNELS.OPS_ACCEPTANCE_METRICS) {
+        return Promise.resolve([]);
+      }
+
+      return Promise.resolve(null);
     });
-    invokeMock.mockRejectedValueOnce(new Error('save task failed'));
 
     render(<AutomationApp />);
 

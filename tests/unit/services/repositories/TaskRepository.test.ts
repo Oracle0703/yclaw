@@ -46,6 +46,7 @@ describe('TaskRepository', () => {
         scheduleJson: JSON.stringify({ type: 'cron', cron: '*/5 * * * *' }),
         nextRunAt: '2026-04-17 10:00:00',
         lastRunAt: null,
+        currentRevisionId: 'revision-1',
         updatedAt: '2026-04-17 09:00:00',
         latestBatchJson: JSON.stringify({
           id: 'batch-1',
@@ -65,6 +66,7 @@ describe('TaskRepository', () => {
         schedule: { type: 'cron', cron: '*/5 * * * *' },
         nextRunAt: '2026-04-17 10:00:00',
         lastRunAt: null,
+        currentRevisionId: 'revision-1',
         updatedAt: '2026-04-17 09:00:00',
         latestBatch: {
           id: 'batch-1',

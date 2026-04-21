@@ -445,6 +445,237 @@ export class DatabaseService {
         INSERT INTO migrations (version) VALUES (7);
       `);
     }
+
+    if (currentDbVersion < 8) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS workspaces (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT,
+          default_runner_policy TEXT,
+          notification_policy TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS workspace_members (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          role TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active',
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_members_workspace
+          ON workspace_members(workspace_id, role);
+
+        INSERT INTO migrations (version) VALUES (8);
+      `);
+    }
+
+    if (currentDbVersion < 9) {
+      if (!this.hasColumn('tasks', 'current_revision_id')) {
+        this.db!.exec(`
+          ALTER TABLE tasks
+          ADD COLUMN current_revision_id TEXT
+        `);
+      }
+
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS task_revisions (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          version TEXT NOT NULL,
+          snapshot TEXT NOT NULL,
+          change_summary TEXT,
+          review_status TEXT NOT NULL DEFAULT 'pending',
+          reviewer TEXT,
+          created_by TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_task_revisions_task_created
+          ON task_revisions(task_id, created_at DESC);
+
+        INSERT INTO migrations (version) VALUES (9);
+      `);
+    }
+
+    if (currentDbVersion < 10) {
+      if (!this.hasColumn('alerts', 'status')) {
+        this.db!.exec(`
+          ALTER TABLE alerts
+          ADD COLUMN status TEXT NOT NULL DEFAULT 'new'
+        `);
+      }
+      if (!this.hasColumn('alerts', 'assignee')) {
+        this.db!.exec(`
+          ALTER TABLE alerts
+          ADD COLUMN assignee TEXT
+        `);
+      }
+      if (!this.hasColumn('alerts', 'level')) {
+        this.db!.exec(`
+          ALTER TABLE alerts
+          ADD COLUMN level TEXT NOT NULL DEFAULT 'warning'
+        `);
+      }
+      if (!this.hasColumn('alerts', 'resolution')) {
+        this.db!.exec(`
+          ALTER TABLE alerts
+          ADD COLUMN resolution TEXT
+        `);
+      }
+      if (!this.hasColumn('alerts', 'updated_at')) {
+        this.db!.exec(`
+          ALTER TABLE alerts
+          ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        `);
+      }
+
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS alert_actions (
+          id TEXT PRIMARY KEY,
+          alert_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          operator TEXT,
+          note TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (alert_id) REFERENCES alerts(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS task_reviews (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          batch_id TEXT,
+          review_type TEXT NOT NULL,
+          reason_category TEXT,
+          conclusion TEXT,
+          owner TEXT,
+          follow_up_actions TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_task_reviews_task_created
+          ON task_reviews(task_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_alert_actions_alert_created
+          ON alert_actions(alert_id, created_at DESC);
+      `);
+
+      if (!this.hasColumn('extraction_results', 'quality_status')) {
+        this.db!.exec(`
+          ALTER TABLE extraction_results
+          ADD COLUMN quality_status TEXT
+        `);
+      }
+      if (!this.hasColumn('extraction_results', 'evidence_refs')) {
+        this.db!.exec(`
+          ALTER TABLE extraction_results
+          ADD COLUMN evidence_refs TEXT
+        `);
+      }
+      if (!this.hasColumn('extraction_results', 'revision_id')) {
+        this.db!.exec(`
+          ALTER TABLE extraction_results
+          ADD COLUMN revision_id TEXT
+        `);
+      }
+
+      this.db!.exec(`
+        INSERT INTO migrations (version) VALUES (10);
+      `);
+    }
+
+    if (currentDbVersion < 11) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS template_review_links (
+          review_id TEXT NOT NULL,
+          template_id TEXT NOT NULL,
+          linked_at TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (review_id, template_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_template_review_links_review
+          ON template_review_links(review_id, linked_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_template_review_links_template
+          ON template_review_links(template_id, linked_at DESC);
+
+        INSERT INTO migrations (version) VALUES (11);
+      `);
+    }
+
+    if (currentDbVersion < 12) {
+      if (!this.hasColumn('alerts', 'workspace_id')) {
+        this.db!.exec(`
+          ALTER TABLE alerts
+          ADD COLUMN workspace_id TEXT
+        `);
+      }
+
+      this.db!.exec(`
+        CREATE INDEX IF NOT EXISTS idx_alerts_workspace_created
+          ON alerts(workspace_id, created_at DESC);
+
+        INSERT INTO migrations (version) VALUES (12);
+      `);
+    }
+
+    if (currentDbVersion < 13) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS workspace_duty_shifts (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          member_id TEXT NOT NULL,
+          starts_at TEXT NOT NULL,
+          ends_at TEXT NOT NULL,
+          notes TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+          FOREIGN KEY (member_id) REFERENCES workspace_members(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workspace_duty_shifts_workspace_time
+          ON workspace_duty_shifts(workspace_id, starts_at, ends_at);
+
+        INSERT INTO migrations (version) VALUES (13);
+      `);
+    }
+
+    if (currentDbVersion < 14) {
+      if (!this.hasColumn('extraction_templates', 'version')) {
+        this.db!.exec(`
+          ALTER TABLE extraction_templates
+          ADD COLUMN version TEXT NOT NULL DEFAULT 'v1'
+        `);
+      }
+      if (!this.hasColumn('extraction_templates', 'description')) {
+        this.db!.exec(`
+          ALTER TABLE extraction_templates
+          ADD COLUMN description TEXT
+        `);
+      }
+      if (!this.hasColumn('extraction_templates', 'deprecated')) {
+        this.db!.exec(`
+          ALTER TABLE extraction_templates
+          ADD COLUMN deprecated INTEGER NOT NULL DEFAULT 0
+        `);
+      }
+      if (!this.hasColumn('extraction_templates', 'plugin_dependencies')) {
+        this.db!.exec(`
+          ALTER TABLE extraction_templates
+          ADD COLUMN plugin_dependencies TEXT NOT NULL DEFAULT '[]'
+        `);
+      }
+
+      this.db!.exec(`
+        INSERT INTO migrations (version) VALUES (14);
+      `);
+    }
   }
 
   private hasColumn(tableName: string, columnName: string): boolean {

@@ -1,4 +1,5 @@
 export type { IpcResponse, WindowOpenParams, LogWriteParams, ElectronAPI, AlertRecord } from './ipc';
+export type { AlertLevel, AlertStatus } from './ipc';
 export type { PluginManifest, PluginRegistryEntry } from './plugin';
 export { PluginStatus } from './plugin';
 export type {
@@ -14,8 +15,14 @@ export type {
   TaskSchedulingMetadata,
   ExtractionField,
   ExtractionTemplate,
+  TemplateGovernanceUpdate,
   ExtractionResult,
   ExtractionResultStatus,
+  ResultQualityStatus,
+  ResultEvidenceRef,
+  ResultQualityRule,
+  BatchQualitySummary,
+  CrossBatchQualityAnalysis,
 } from './task';
 export { TaskStatus } from './task';
 export type { ActionType } from './task';
@@ -87,3 +94,35 @@ export type {
   McpClientServerStatus,
 } from './ai';
 export type { Tab, BrowserSession, FlowRunnerStatus, InterventionState } from './browser';
+export type {
+  WorkspaceMemberRole,
+  WorkspaceMemberStatus,
+  WorkspaceRunnerPolicy,
+  WorkspaceNotificationPolicy,
+  WorkspaceDutyPolicy,
+  WorkspaceDutyShiftRecord,
+  CreateWorkspaceDutyShiftInput,
+  WorkspaceRecord,
+  WorkspaceMember,
+  CreateWorkspaceInput,
+  TaskRevisionReviewStatus,
+  TaskRevisionRecord,
+  PublishTaskRevisionInput,
+  ReviewTaskRevisionInput,
+  TaskRevisionChangeType,
+  TaskRevisionChange,
+  TaskRevisionComparison,
+  TaskReviewType,
+  TaskReviewRecord,
+  CreateTaskReviewInput,
+  TemplateBackflowDraftStatus,
+  TemplateBackflowRiskLevel,
+  TemplateBackflowChangeType,
+  TemplateBackflowProposedChange,
+  TemplateBackflowDraft,
+  TemplateBackflowApplyResult,
+  OperationsAcceptanceMetricKey,
+  OperationsAcceptanceMetric,
+  AlertActionType,
+  AlertActionRecord,
+} from './task-operations';

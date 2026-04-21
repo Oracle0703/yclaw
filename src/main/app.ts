@@ -15,6 +15,10 @@ import { TemplateService } from './services/TemplateService';
 import { AlertService } from './services/AlertService';
 import { ExecutionLogService } from './services/ExecutionLogService';
 import { ResultService } from './services/ResultService';
+import { ReviewService } from './services/ReviewService';
+import { TaskRevisionService } from './services/TaskRevisionService';
+import { WorkspaceService } from './services/WorkspaceService';
+import { OperationsMetricsService } from './services/OperationsMetricsService';
 import { TabManager } from './browser/TabManager';
 import { EVENTS, IPC_CHANNELS, RUNNER_SCHEDULER_DEFAULTS } from '@shared/constants';
 import { AIService } from './ai/AIService';
@@ -54,14 +58,18 @@ import {
   ExecutionLogRepository,
   PluginRepository,
   RemoteRunnerRepository,
+  ReviewRepository,
   ResultRepository,
   RunnerSchedulerRepository,
   SessionRepository,
   TaskRepository,
+  TaskRevisionRepository,
   TemplateRepository,
+  WorkspaceRepository,
 } from './services/repositories';
 import { registerRemoteRunnerHandlers } from './ipc/remote-runner-handlers';
 import { registerRunnerSchedulerHandlers } from './ipc/runner-scheduler-handlers';
+import { registerTaskOperationsHandlers } from './ipc/task-operations-handlers';
 import type {
   AIChatRequest,
   AIConfig,
@@ -72,6 +80,7 @@ import type {
   IndicatorType,
   DataSourceConfig,
   InterventionState,
+  RunnerNode,
   RunnerQueueItem,
   TaskFlow,
 } from '@shared/types';
@@ -117,7 +126,11 @@ export class App {
   private templateService: TemplateService;
   private executionLogService: ExecutionLogService;
   private alertService: AlertService;
+  private reviewService: ReviewService;
   private resultService: ResultService;
+  private workspaceService: WorkspaceService;
+  private taskRevisionService: TaskRevisionService;
+  private operationsMetricsService: OperationsMetricsService;
   private dataSourceManager: DataSourceManager;
   private indicatorLibrary: IndicatorLibrary;
   private taskAsCode: TaskAsCodeBootstrap;
@@ -147,12 +160,11 @@ export class App {
     const alertRepository = new AlertRepository(this.databaseService);
     const batchRepository = new BatchRepository(this.databaseService);
     const executionLogRepository = new ExecutionLogRepository(this.databaseService);
+    const workspaceRepository = new WorkspaceRepository(this.databaseService);
+    const taskRevisionRepository = new TaskRevisionRepository(this.databaseService);
+    const reviewRepository = new ReviewRepository(this.databaseService);
     const resultRepository = new ResultRepository(this.databaseService);
     const remoteRunnerRepository = new RemoteRunnerRepository(this.databaseService);
-    const contextManager = new ContextManager({
-      taskRepository,
-      pluginRepository,
-    });
     this.trayService = new TrayService({
       eventBus: this.eventBus,
       windowManager: this.windowManager,
@@ -166,14 +178,6 @@ export class App {
       sessionPartition: this.getBrowserSessionPartition(),
     });
     const toolRegistry = new ToolRegistry();
-    this.aiService = new AIService({
-      config: this.configService.get('ai'),
-      openWindow: (module: string) => this.windowManager.openWindow({ module }),
-      taskRepository,
-      aiRepository,
-      contextManager,
-      toolRegistry,
-    });
     this.mcpClientManager = new McpClientManager({
       toolRegistry,
       logService: this.logService,
@@ -239,12 +243,64 @@ export class App {
     this.schedulerService = new SchedulerService({ taskService: this.taskService });
     this.sessionRegistry = new SessionRegistry({ sessionRepository });
     this.templateService = new TemplateService({ templateRepository });
+    this.workspaceService = new WorkspaceService({ workspaceRepository });
+    this.taskRevisionService = new TaskRevisionService({
+      taskRepository,
+      revisionRepository: taskRevisionRepository,
+    });
     this.executionLogService = new ExecutionLogService({ executionLogRepository });
     this.alertService = new AlertService({
       alertRepository,
       executionLogService: this.executionLogService,
+      dutyPolicyProvider: this.workspaceService,
     });
+    this.reviewService = new ReviewService({ reviewRepository });
     this.resultService = new ResultService({ resultRepository });
+    this.operationsMetricsService = new OperationsMetricsService();
+    const contextManager = new ContextManager({
+      taskRepository,
+      pluginRepository,
+      taskOpsContextProvider: {
+        collect: () => ({
+          workspaces: this.workspaceService.listWorkspaces().slice(0, 10).map((workspace) => ({
+            id: workspace.id,
+            name: workspace.name,
+          })),
+          tasks: taskRepository.getTasks().slice(0, 10).map((task) => ({
+            id: task.id,
+            name: task.name,
+            status: task.status,
+            updatedAt: task.updatedAt,
+            currentRevisionId: task.currentRevisionId ?? null,
+          })),
+          alerts: this.alertService.listAlerts({}).slice(0, 10),
+          reviews: this.reviewService.listReviews({}).slice(0, 10),
+          runners: (this.runnerSchedulerService.listRunners() as RunnerNode[]).slice(0, 10).map((runner) => ({
+            id: runner.id,
+            name: runner.name,
+            kind: runner.kind,
+            status: runner.status,
+            runningCount: runner.runningCount,
+            maxConcurrency: runner.maxConcurrency,
+          })),
+          results: this.resultService.listResults({}).slice(0, 10).map((result) => ({
+            taskId: result.taskId,
+            batchId: result.batchId,
+            status: result.status,
+            qualityStatus: result.qualityStatus,
+            revisionId: result.revisionId,
+          })),
+        }),
+      },
+    });
+    this.aiService = new AIService({
+      config: this.configService.get('ai'),
+      openWindow: (module: string) => this.windowManager.openWindow({ module }),
+      taskRepository,
+      aiRepository,
+      contextManager,
+      toolRegistry,
+    });
     this.dataSourceManager = new DataSourceManager({ eventBus: this.eventBus });
     this.indicatorLibrary = new IndicatorLibrary();
     this.taskAsCode = bootstrapTaskAsCode({
@@ -295,6 +351,21 @@ export class App {
     registerRunnerSchedulerHandlers({
       ipcController: this.ipcController,
       service: this.runnerSchedulerService,
+    });
+    registerTaskOperationsHandlers({
+      ipcController: this.ipcController,
+      workspaceService: this.workspaceService as never,
+      taskRevisionService: this.taskRevisionService as never,
+      reviewService: this.reviewService as never,
+      alertService: this.alertService as never,
+      templateService: this.templateService as never,
+      resultService: this.resultService as never,
+      operationsMetricsService: {
+        buildAcceptanceMetrics: (taskId?: string) =>
+          this.operationsMetricsService.buildAcceptanceMetrics(
+            this.collectOperationsAcceptanceSnapshot(taskId),
+          ),
+      },
     });
 
     // 窗口管理
@@ -627,23 +698,54 @@ export class App {
     });
 
     this.ipcController.handle(IPC_CHANNELS.TEMPLATE_SAVE, (params: unknown) => {
-      const { id, name, fields } = (params as {
+      const { id, name, fields, version, description, deprecated, pluginDependencies } = (params as {
         id?: string;
         name: string;
         fields: Array<{ name: string; selector: string; attribute: string }>;
+        version?: string;
+        description?: string | null;
+        deprecated?: boolean;
+        pluginDependencies?: string[];
       }) ?? { name: '', fields: [] };
 
       if (!name || !Array.isArray(fields)) {
         throw new Error('Invalid template payload');
       }
 
-      return this.templateService.saveTemplate({ id, name, fields });
+      return this.templateService.saveTemplate({
+        id,
+        name,
+        fields,
+        version,
+        description,
+        deprecated,
+        pluginDependencies,
+      });
     });
 
     this.ipcController.handle(IPC_CHANNELS.TEMPLATE_DELETE, (params: unknown) => {
       const { templateId } = params as { templateId: string };
       this.templateService.deleteTemplate(templateId);
       return { templateId };
+    });
+
+    this.ipcController.handle(IPC_CHANNELS.TEMPLATE_GOVERNANCE_UPDATE, (params: unknown) => {
+      const { templateId, governance } = params as {
+        templateId: string;
+        governance: {
+          version?: string;
+          description?: string | null;
+          deprecated?: boolean;
+          pluginDependencies?: string[];
+        };
+      };
+
+      if (!templateId || typeof governance !== 'object' || governance === null) {
+        throw new Error('Invalid template governance payload');
+      }
+
+      this.templateService.updateTemplateGovernance(templateId, governance);
+      return { templateId, governance };
     });
 
     this.ipcController.handle(IPC_CHANNELS.RECORDER_START, async (params: unknown) => {
@@ -659,7 +761,11 @@ export class App {
     this.ipcController.handle(IPC_CHANNELS.ALERT_LIST, (params: unknown) => {
       const { taskId } = (params as { taskId?: string }) ?? {};
       const created = this.alertService.aggregateFromExecutionLogs(10);
+      const escalated = this.alertService.autoEscalateAlerts();
       created.forEach((alert) => {
+        this.eventBus.emit(IPC_CHANNELS.ALERT_PUSHED, alert);
+      });
+      escalated.forEach((alert) => {
         this.eventBus.emit(IPC_CHANNELS.ALERT_PUSHED, alert);
       });
       return this.alertService.listAlerts({ taskId });
@@ -841,6 +947,21 @@ export class App {
       const image = await view.webContents.capturePage();
       return image.toDataURL();
     });
+  }
+
+  private collectOperationsAcceptanceSnapshot(taskId?: string) {
+    const scopedTaskIds = taskId
+      ? [taskId]
+      : this.taskService.listTasks().map((task) => task.id);
+
+    const batches = scopedTaskIds.flatMap((id) => this.taskService.listBatches(id));
+
+    return {
+      batches,
+      alerts: this.alertService.listAlerts(taskId ? { taskId } : {}),
+      results: this.resultService.listResults(taskId ? { taskId } : {}),
+      reviews: this.reviewService.listReviews(taskId ? { taskId } : {}),
+    };
   }
 
   shutdown(): void {

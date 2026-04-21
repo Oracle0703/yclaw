@@ -6,15 +6,21 @@ import type { AIServiceContext } from '@shared/types';
 import os from 'os';
 import type { PluginRepository, TaskRepository } from '../services/repositories';
 
+export interface TaskOpsContextProvider {
+  collect(): AIServiceContext['taskOperations'];
+}
+
 export interface ContextManagerOptions {
   taskRepository?: Pick<TaskRepository, 'getTasks'>;
   pluginRepository?: Pick<PluginRepository, 'getInstalledPlugins'>;
+  taskOpsContextProvider?: TaskOpsContextProvider;
 }
 
 export class ContextManager {
   private currentModule = 'workbench';
   private taskRepository: Pick<TaskRepository, 'getTasks'>;
   private pluginRepository: Pick<PluginRepository, 'getInstalledPlugins'>;
+  private taskOpsContextProvider?: TaskOpsContextProvider;
 
   constructor(options: ContextManagerOptions = {}) {
     if (!options.taskRepository) {
@@ -27,6 +33,7 @@ export class ContextManager {
 
     this.taskRepository = options.taskRepository;
     this.pluginRepository = options.pluginRepository;
+    this.taskOpsContextProvider = options.taskOpsContextProvider;
   }
 
   setCurrentModule(module: string): void {
@@ -46,6 +53,7 @@ export class ContextManager {
         updatedAt: task.updatedAt,
       }));
     const installedPlugins = this.pluginRepository.getInstalledPlugins().slice(0, 5);
+    const taskOperations = this.taskOpsContextProvider?.collect();
 
     return {
       currentModule: this.currentModule,
@@ -61,6 +69,7 @@ export class ContextManager {
       },
       recentTasks,
       installedPlugins,
+      ...(taskOperations ? { taskOperations } : {}),
     };
   }
 
@@ -88,6 +97,19 @@ export class ContextManager {
       for (const plugin of ctx.installedPlugins) {
         lines.push(`- ${plugin.name} v${plugin.version} (${plugin.enabled ? '启用' : '禁用'})`);
       }
+    }
+
+    if (ctx.taskOperations) {
+      const pendingAlerts = ctx.taskOperations.alerts.filter((alert) => !alert.read).length;
+      const criticalAlerts = ctx.taskOperations.alerts.filter((alert) => alert.level === 'critical').length;
+      const onlineRunners = ctx.taskOperations.runners.filter((runner) => runner.status === 'online').length;
+
+      lines.push('', '## 任务运营中台');
+      lines.push(`- 工作区数量: ${ctx.taskOperations.workspaces.length}`);
+      lines.push(`- 待处理告警: ${pendingAlerts}`);
+      lines.push(`- Critical 告警: ${criticalAlerts}`);
+      lines.push(`- 复盘记录: ${ctx.taskOperations.reviews.length}`);
+      lines.push(`- Runner 在线数: ${onlineRunners}/${ctx.taskOperations.runners.length}`);
     }
 
     lines.push(

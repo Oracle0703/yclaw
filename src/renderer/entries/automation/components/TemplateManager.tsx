@@ -70,6 +70,23 @@ export function TemplateManager({ onSelectTemplate, draftFields = [] }: Template
     }
   };
 
+  const handleMarkDeprecated = async (template: ExtractionTemplate) => {
+    setLoading(true);
+    try {
+      await automation.updateTemplateGovernance(template.id, {
+        version: template.version ?? 'v1',
+        description: template.description ?? null,
+        deprecated: true,
+        pluginDependencies: template.pluginDependencies ?? [],
+      });
+      message.success('模板已标记废弃');
+      await loadTemplates();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '更新模板治理信息失败');
+      setLoading(false);
+    }
+  };
+
   return (
     <ProCard
       className="yclaw-panel-card"
@@ -106,6 +123,13 @@ export function TemplateManager({ onSelectTemplate, draftFields = [] }: Template
                 <Button key="select" type="link" onClick={() => onSelectTemplate?.(template.id)}>
                   使用模板
                 </Button>,
+                <Button
+                  key="deprecated"
+                  type="link"
+                  onClick={() => void handleMarkDeprecated(template)}
+                >
+                  标记废弃
+                </Button>,
                 <Popconfirm
                   key="delete"
                   title="确认删除模板？"
@@ -119,7 +143,7 @@ export function TemplateManager({ onSelectTemplate, draftFields = [] }: Template
             >
               <List.Item.Meta
                 title={template.name}
-                description={`字段 ${template.fields.length} 个 · 更新于 ${template.updatedAt}`}
+                description={describeTemplate(template)}
               />
             </List.Item>
           )}
@@ -127,4 +151,20 @@ export function TemplateManager({ onSelectTemplate, draftFields = [] }: Template
       </Space>
     </ProCard>
   );
+}
+
+function describeTemplate(template: ExtractionTemplate): string {
+  const parts = [
+    `版本 ${template.version ?? 'v1'}`,
+    template.deprecated ? '已废弃' : '可用',
+    `依赖 ${(template.pluginDependencies ?? []).join(', ') || '无'}`,
+    `字段 ${template.fields.length} 个`,
+    `更新于 ${template.updatedAt}`,
+  ];
+
+  if (template.description) {
+    parts.splice(3, 0, template.description);
+  }
+
+  return parts.join(' · ');
 }

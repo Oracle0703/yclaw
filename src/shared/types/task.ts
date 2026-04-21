@@ -31,6 +31,7 @@ export interface TaskFlow {
   scheduling?: TaskSchedulingMetadata;
   sessionId?: string | null;
   templateId?: string | null;
+  currentRevisionId?: string | null;
   enabled?: boolean;
   tags?: string[];
   lastRunAt?: string | null;
@@ -121,11 +122,30 @@ export interface ExtractionTemplate {
   id: string;
   name: string;
   fields: ExtractionField[];
+  version?: string;
+  description?: string | null;
+  deprecated?: boolean;
+  pluginDependencies?: string[];
   createdAt: string;
   updatedAt: string;
 }
 
+export interface TemplateGovernanceUpdate {
+  version?: string;
+  description?: string | null;
+  deprecated?: boolean;
+  pluginDependencies?: string[];
+}
+
 export type ExtractionResultStatus = 'normal' | 'suspicious' | 'failed';
+
+export type ResultQualityStatus = 'passed' | 'warning' | 'failed';
+
+export interface ResultEvidenceRef {
+  kind: string;
+  refId: string;
+  label?: string;
+}
 
 export interface ExtractionResult {
   id: string;
@@ -134,7 +154,32 @@ export interface ExtractionResult {
   templateId?: string | null;
   data: Record<string, unknown>;
   status: ExtractionResultStatus;
+  qualityStatus?: ResultQualityStatus;
+  evidenceRefs?: ResultEvidenceRef[];
+  revisionId?: string;
   sourceUrl?: string;
   screenshot?: string;
   createdAt: string;
+}
+
+export interface ResultQualityRule {
+  requiredFields?: string[];
+  minBatchResultCount?: number;
+}
+
+export interface BatchQualitySummary {
+  batchId: string;
+  totalResults: number;
+  failedResults: number;
+  missingRequiredFieldResults: number;
+  qualityStatus: ResultQualityStatus;
+}
+
+export interface CrossBatchQualityAnalysis {
+  taskId: string;
+  totalResults: number;
+  failedResults: number;
+  missingRequiredFieldResults: number;
+  tracedResults: number;
+  batchSummaries: BatchQualitySummary[];
 }

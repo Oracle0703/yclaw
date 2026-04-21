@@ -103,6 +103,10 @@ describe('TemplateManager', () => {
               id: 'template-1',
               name: '价格采集',
               fields: [{ name: 'price', selector: '.price', attribute: 'textContent' }],
+              version: 'v2',
+              deprecated: true,
+              description: '价格模板说明',
+              pluginDependencies: ['ocr-helper'],
               createdAt: '2026-04-15T00:00:00.000Z',
               updatedAt: '2026-04-15T00:00:00.000Z',
             },
@@ -118,6 +122,9 @@ describe('TemplateManager', () => {
     render(<TemplateManager onSelectTemplate={vi.fn()} />);
 
     expect(await screen.findByText('价格采集')).toBeDefined();
+    expect(screen.getByText(/版本 v2/)).toBeDefined();
+    expect(screen.getByText(/已废弃/)).toBeDefined();
+    expect(screen.getByText(/依赖 ocr-helper/)).toBeDefined();
     expect(window.electronAPI.invoke).toHaveBeenCalledTimes(1);
   });
 
@@ -129,6 +136,28 @@ describe('TemplateManager', () => {
     fireEvent.click(screen.getByRole('button', { name: /使用模板/ }));
 
     expect(onSelectTemplate).toHaveBeenCalledWith('template-1');
+  });
+
+  it('marks template as deprecated through governance update', async () => {
+    render(<TemplateManager onSelectTemplate={vi.fn()} />);
+
+    await screen.findByText('价格采集');
+    fireEvent.click(screen.getByRole('button', { name: /标记废弃/ }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.invoke).toHaveBeenCalledWith(
+        IPC_CHANNELS.TEMPLATE_GOVERNANCE_UPDATE,
+        {
+          templateId: 'template-1',
+          governance: {
+            version: 'v2',
+            description: '价格模板说明',
+            deprecated: true,
+            pluginDependencies: ['ocr-helper'],
+          },
+        },
+      );
+    });
   });
 
   it('ignores stale template responses after saving refreshes the list', async () => {

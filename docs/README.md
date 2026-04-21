@@ -42,6 +42,7 @@
 - [overview/roadmap.md](overview/roadmap.md)：后续拓展方向与近期主路线
 - [product/prd.md](product/prd.md)：产品愿景、角色与场景
 - [product/plan.md](product/plan.md)：可行性分析与阶段计划
+- [product/task-operations-center.md](product/task-operations-center.md)：小团队任务运营中台需求扩展
 
 ### 2.3 架构与代码结构（architecture）
 
@@ -58,7 +59,9 @@
 - [specs/capacity-aware-runner-scheduler-v1.md](specs/capacity-aware-runner-scheduler-v1.md)：容量感知 Runner 调度器 V1 规格
 - [specs/task-as-code-v1.md](specs/task-as-code-v1.md)：任务即代码 V1 规格
 - [specs/mcp-integration-v1.md](specs/mcp-integration-v1.md)：MCP 集成 V1 规格
+- [specs/task-operations-center-v1.md](specs/task-operations-center-v1.md)：小团队任务运营中台 V1 规格
 - [plans/automation-browser-ops-v1.md](plans/automation-browser-ops-v1.md)：自动化采集 V1 实施计划
+- [plans/task-operations-center-v1.md](plans/task-operations-center-v1.md)：小团队任务运营中台 V1 实施计划
 - [superpowers/plans/2026-04-20-remote-runner-control-plane-v1.md](superpowers/plans/2026-04-20-remote-runner-control-plane-v1.md)：Remote Runner 控制面 V1 agent 实施拆解
 - [superpowers/plans/2026-04-21-capacity-aware-runner-scheduler-v1.md](superpowers/plans/2026-04-21-capacity-aware-runner-scheduler-v1.md)：容量感知 Runner 调度器 V1 agent 实施拆解
 

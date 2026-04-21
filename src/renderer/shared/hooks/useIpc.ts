@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { FeaturePackageCatalogItem, FeaturePackageInstallResult, IpcResponse } from '@shared/types';
 import { IPC_CHANNELS } from '@shared/constants';
+import { createTaskOperationsApi } from '../api/taskOperations';
 
 /**
  * IPC 调用 Hook — 渲染进程调用主进程的统一接口
@@ -32,6 +33,8 @@ export function useIpc() {
         invoke(IPC_CHANNELS.TEMPLATE_SAVE, { name, fields }),
       deleteTemplate: (templateId: string) =>
         invoke(IPC_CHANNELS.TEMPLATE_DELETE, { templateId }),
+      updateTemplateGovernance: (templateId: string, governance: unknown) =>
+        invoke(IPC_CHANNELS.TEMPLATE_GOVERNANCE_UPDATE, { templateId, governance }),
       startRecorder: (tabId: number) => invoke(IPC_CHANNELS.RECORDER_START, { tabId }),
       stopRecorder: (tabId: number) => invoke(IPC_CHANNELS.RECORDER_STOP, { tabId }),
       listAlerts: (taskId?: string) => invoke(IPC_CHANNELS.ALERT_LIST, { taskId }),
@@ -49,7 +52,9 @@ export function useIpc() {
     [invoke],
   );
 
-  return { invoke, automation, featurePackages };
+  const taskOperations = useMemo(() => createTaskOperationsApi({ invoke }), [invoke]);
+
+  return { invoke, automation, featurePackages, taskOperations };
 }
 
 /**
