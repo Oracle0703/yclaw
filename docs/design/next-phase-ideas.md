@@ -77,9 +77,11 @@
 
 ---
 
-### 2.4 方向 D — 数据出口与可观测性（暂未拆 spec）
+### 2.4 方向 D — 数据出口与可观测性（已拆设计方案）
 
 让结果数据可被外部 BI / Notebook 直接消费；让任务运行有标准可观测输出。
+
+> 已拆出详细设计：[data-center.md](data-center.md)。该方案将 D 方向收敛为独立一级菜单「数据中心」，先做结果资产与数据出口，再逐步扩展 Webhook、本地 API、质量规则与批次洞察。
 
 - **数据侧**
   - SQLite 之外，提供「结果表导出 Parquet/CSV/JSONL」批量出口。
@@ -175,6 +177,6 @@
 | A · Headless Runner | 基础版已落地（CLI + daemon 雏形），稳定化中 | [specs/headless-runner-v1.md](../specs/headless-runner-v1.md) |
 | B · Task-as-Code | 基础版已落地，UI 导入/导出入口待补 | [specs/task-as-code-v1.md](../specs/task-as-code-v1.md) |
 | C · MCP 集成 | 基础版已落地，M5 验收收尾中 | [specs/mcp-integration-v1.md](../specs/mcp-integration-v1.md) |
-| D · 数据出口/可观测性 | 仅本文档 | — |
+| D · 数据出口/可观测性 | 已拆设计方案 | [design/data-center.md](data-center.md) |
 | E · Snapshot Replay | 仅本文档 | — |
 | F · 本地 LLM Provider | 仅本文档（建议并入 v1.1 增量） | — |
