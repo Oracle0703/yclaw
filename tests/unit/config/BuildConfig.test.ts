@@ -141,6 +141,22 @@ describe('SPEC-022: Build Configuration', () => {
     });
   });
 
+  describe('feature package manifest', () => {
+    it('should declare every packaged feature module', () => {
+      const manifest = JSON.parse(
+        readFileSync(resolve(rootDir, 'resources/feature-manifest.json'), 'utf-8'),
+      ) as { packages: Array<{ id: string; module: string; sourceDirectory?: string }> };
+      const packagesByModule = new Map(manifest.packages.map((pkg) => [pkg.module, pkg]));
+
+      for (const moduleName of ['stock', 'automation', 'data-center', 'plugin-center']) {
+        const pkg = packagesByModule.get(moduleName);
+        expect(pkg).toBeDefined();
+        expect(pkg?.id).toBe(moduleName);
+        expect(pkg?.sourceDirectory).toBe(`feature-packs/${moduleName}`);
+      }
+    });
+  });
+
   describe('core renderer dependencies', () => {
     it('should not import @ant-design/pro-components in core package paths', () => {
       const coreFiles = [

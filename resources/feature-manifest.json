@@ -17,6 +17,14 @@
       "sourceDirectory": "feature-packs/automation"
     },
     {
+      "id": "data-center",
+      "module": "data-center",
+      "displayName": "数据中心",
+      "version": "1.0.0",
+      "description": "结果资产、导出任务、数据集与开放接口功能包。",
+      "sourceDirectory": "feature-packs/data-center"
+    },
+    {
       "id": "plugin-center",
       "module": "plugin-center",
       "displayName": "插件中心",
