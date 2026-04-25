@@ -141,6 +141,15 @@ describe('SPEC-022: Build Configuration', () => {
     });
   });
 
+  describe('GitHub Actions workflows', () => {
+    it('should keep release packaging installs deterministic and skip lifecycle scripts', () => {
+      const content = readFileSync(resolve(rootDir, '.github/workflows/release.yml'), 'utf-8');
+      expect(content).toContain('run: npm ci --no-audit --ignore-scripts');
+      expect(content).not.toContain('rm -rf node_modules package-lock.json');
+      expect(content).not.toContain('npm install --no-audit');
+    });
+  });
+
   describe('feature package manifest', () => {
     it('should declare every packaged feature module', () => {
       const manifest = JSON.parse(

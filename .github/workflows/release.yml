@@ -44,11 +44,7 @@ jobs:
           registry-url: https://registry.npmjs.org/
 
       - name: Install dependencies
-        shell: bash
-        run: |
-          # Work around npm optional dependency lockfile corruption for Rollup native packages.
-          rm -rf node_modules package-lock.json
-          npm install --no-audit
+        run: npm ci --no-audit --ignore-scripts
 
       - name: Verify build inputs
         run: npm run build
