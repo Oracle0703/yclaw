@@ -7,8 +7,8 @@
  * 错误处理：所有 invoke 调用统一 unwrap `IpcResponse`，失败时抛出包含 `code`/`message` 的 Error。
  */
 
-import type { IpcResponse, TaskFlow, ExtractionTemplate } from '@shared/types';
-import { TAC_CHANNELS, type WatchEventEnvelope } from '@shared/constants/task-as-code';
+import type { IpcResponse, TaskFlow, ExtractionTemplate } from '../../../shared/types';
+import { TAC_CHANNELS, type WatchEventEnvelope } from '../../../shared/constants/task-as-code';
 
 export interface TaskAsCodeInvoker {
   invoke: <T = unknown>(channel: string, ...args: unknown[]) => Promise<IpcResponse<T>>;

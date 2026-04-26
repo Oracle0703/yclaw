@@ -33,6 +33,7 @@ const mockAIRepository = {
   saveAIMessage: vi.fn(),
   deleteAIConversation: vi.fn(() => true),
 };
+const mockStartTask = vi.fn();
 
 import { AIService } from '@main/ai/AIService';
 
@@ -43,6 +44,7 @@ describe('AIService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStartTask.mockReset();
     contextManager = new ContextManager({
       taskRepository: mockTaskRepository,
       pluginRepository: mockPluginRepository,
@@ -126,6 +128,23 @@ describe('AIService', () => {
     expect(toolNames).toContain('navigate');
   });
 
+  it('should register task_start when startTask is injected', () => {
+    const serviceWithTaskStart = new AIService({
+      provider: 'openai',
+      apiKey: 'test-key',
+      baseUrl: 'https://api.test.com/v1',
+      model: 'gpt-test',
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
+      startTask: mockStartTask,
+    });
+
+    const toolNames = serviceWithTaskStart.getToolRegistry().list().map((tool) => tool.name);
+    expect(toolNames).toContain('task_start');
+  });
+
   it('should execute task_list tool via injected task repository', async () => {
     mockTaskRepository.getTasks.mockReturnValueOnce([
       { id: 'task-1', name: '任务一', status: 'running', updatedAt: '2026-04-17 14:00:00' },
@@ -146,6 +165,51 @@ describe('AIService', () => {
         total: 2,
         running: 1,
         success: 1,
+      },
+    });
+  });
+
+  it('should execute task_start tool via injected task starter', async () => {
+    mockTaskRepository.getTasks.mockReturnValueOnce([
+      { id: 'task-1', name: '早盘巡检', status: 'idle', updatedAt: '2026-04-17 14:00:00' },
+    ]);
+    mockStartTask.mockReturnValueOnce({
+      taskId: 'task-1',
+      status: 'running',
+    });
+
+    const serviceWithTaskStart = new AIService({
+      provider: 'openai',
+      apiKey: 'test-key',
+      baseUrl: 'https://api.test.com/v1',
+      model: 'gpt-test',
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
+      startTask: mockStartTask,
+    });
+
+    const result = await serviceWithTaskStart.getToolRegistry().execute(
+      'task_start',
+      {
+        taskName: '早盘巡检',
+      },
+      {
+        currentModule: 'workbench',
+        systemMetrics: { cpu: 0, memory: 0, disk: 0, uptime: 0 },
+        recentTasks: [],
+        installedPlugins: [],
+      },
+    );
+
+    expect(mockStartTask).toHaveBeenCalledWith('task-1');
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        taskId: 'task-1',
+        taskName: '早盘巡检',
+        status: 'running',
       },
     });
   });
@@ -276,7 +340,7 @@ describe('AIService', () => {
     const response = await service.chat({ message: '执行危险工具' });
 
     expect(execute).not.toHaveBeenCalled();
-    expect(response.message.content).toContain('工具 mcp.mock.danger 需要用户确认');
+    expect(response.message.content).toContain('我准备执行操作：mcp.mock.danger');
     expect(response.message.content).toContain('"action": "refresh"');
     expect(response.pendingToolCall).toEqual({
       name: 'mcp.mock.danger',
@@ -284,6 +348,48 @@ describe('AIService', () => {
         action: 'refresh',
       },
     });
+  });
+
+  it('should return a conversational pending reply for task_start directives', async () => {
+    mockTaskRepository.getTasks.mockReturnValueOnce([
+      { id: 'task-1', name: '早盘巡检', status: 'idle', updatedAt: '2026-04-17 14:00:00' },
+    ]);
+    const serviceWithTaskStart = new AIService({
+      provider: 'openai',
+      apiKey: 'test-key',
+      baseUrl: 'https://api.test.com/v1',
+      model: 'gpt-test',
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
+      startTask: mockStartTask,
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: 'YCLAW_TOOL_CALL {"name":"task_start","params":{"taskName":"早盘巡检"}}',
+              },
+            },
+          ],
+        }),
+    });
+
+    const response = await serviceWithTaskStart.chat({ message: '帮我启动早盘巡检' });
+
+    expect(mockStartTask).not.toHaveBeenCalled();
+    expect(response.pendingToolCall).toEqual({
+      name: 'task_start',
+      params: {
+        taskName: '早盘巡检',
+      },
+    });
+    expect(response.message.content).toContain('我可以帮你启动任务「早盘巡检」');
+    expect(response.message.content).toContain('确认后我会立即发起执行');
   });
 
   it('should maintain conversation history', async () => {

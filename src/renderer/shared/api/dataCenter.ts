@@ -1,4 +1,4 @@
-import { IPC_CHANNELS } from '@shared/constants';
+import { IPC_CHANNELS } from '../../../shared/constants';
 
 type Invoke = (channel: string, payload?: unknown) => Promise<unknown>;
 type On = (channel: string, callback: (...args: unknown[]) => void) => () => void;

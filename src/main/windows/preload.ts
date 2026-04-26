@@ -1,9 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { ElectronAPI } from '@shared/types';
-import { createTaskAsCodeApi, type TaskAsCodeApi } from '@renderer/shared/api/taskAsCode';
-import { createRemoteRunnerApi } from '@renderer/shared/api/remoteRunner';
-import { createRunnerSchedulerApi } from '@renderer/shared/api/runnerScheduler';
-import { createDataCenterApi } from '@renderer/shared/api/dataCenter';
+import type { ElectronAPI } from '../../shared/types';
+import { createTaskAsCodeApi, type TaskAsCodeApi } from '../../renderer/shared/api/taskAsCode';
+import { createRemoteRunnerApi } from '../../renderer/shared/api/remoteRunner';
+import { createRunnerSchedulerApi } from '../../renderer/shared/api/runnerScheduler';
+import { createDataCenterApi } from '../../renderer/shared/api/dataCenter';
 
 const electronAPI: ElectronAPI = {
   invoke: (channel: string, ...args: unknown[]) => {

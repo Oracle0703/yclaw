@@ -193,4 +193,21 @@ describe('SPEC-022: Build Configuration', () => {
       }
     });
   });
+
+  describe('preload runtime imports', () => {
+    it('should avoid tsconfig path aliases in files executed directly by Electron preload', () => {
+      const runtimeFiles = [
+        'src/main/windows/preload.ts',
+        'src/renderer/shared/api/taskAsCode.ts',
+        'src/renderer/shared/api/remoteRunner.ts',
+        'src/renderer/shared/api/runnerScheduler.ts',
+        'src/renderer/shared/api/dataCenter.ts',
+      ];
+
+      for (const file of runtimeFiles) {
+        const content = readFileSync(resolve(rootDir, file), 'utf-8');
+        expect(content).not.toMatch(/from ['"]@(?:shared|renderer|main|mcp|runner|engines|cli)\//);
+      }
+    });
+  });
 });

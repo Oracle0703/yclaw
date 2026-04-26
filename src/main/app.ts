@@ -375,6 +375,7 @@ export class App {
     this.aiService = new AIService({
       config: this.configService.get('ai'),
       openWindow: (module: string) => this.windowManager.openWindow({ module }),
+      startTask: (taskId: string) => this.taskService.startTask(taskId, this.getTaskWebContents()),
       taskRepository,
       aiRepository,
       contextManager,

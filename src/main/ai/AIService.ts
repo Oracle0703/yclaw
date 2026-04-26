@@ -19,12 +19,13 @@ import type {
 import type { ContextManager } from './ContextManager';
 import { OpenAIProvider, OllamaProvider } from './LLMProvider';
 import { ToolRegistry } from './ToolRegistry';
-import { createTaskListTool } from './tools/taskTools';
+import { createTaskListTool, createTaskStartTool } from './tools/taskTools';
 import { systemStatusTool } from './tools/systemTools';
 import { navigateTool, createNavigateTool } from './tools/navigateTools';
 import { taskOpsTools } from './tools/taskOpsTools';
 import type { LLMProvider } from './types';
 import type { AIRepository, TaskRepository } from '../services/repositories';
+import type { TaskState } from '../services/TaskService';
 
 import crypto from 'crypto';
 
@@ -42,6 +43,7 @@ interface ToolDirectiveResolution {
 export interface AIServiceOptions {
   config?: Partial<AIConfig>;
   openWindow?: (module: string) => void;
+  startTask?: (taskId: string) => TaskState;
   contextManager?: ContextManager;
   toolRegistry?: ToolRegistry;
   aiRepository?: Pick<AIRepository, 'saveAIConversation' | 'saveAIMessage' | 'deleteAIConversation'>;
@@ -92,6 +94,9 @@ export class AIService {
 
     // Register built-in tools
     this.toolRegistry.register(createTaskListTool(this.taskRepository));
+    if (opts.startTask) {
+      this.toolRegistry.register(createTaskStartTool(this.taskRepository, opts.startTask));
+    }
     this.toolRegistry.register(systemStatusTool);
     taskOpsTools.forEach((tool) => this.toolRegistry.register(tool));
     if (opts.openWindow) {
@@ -109,6 +114,7 @@ export class AIService {
     const optionKeys: Array<keyof AIServiceOptions> = [
       'config',
       'openWindow',
+      'startTask',
       'contextManager',
       'toolRegistry',
       'aiRepository',
@@ -124,6 +130,7 @@ export class AIService {
     const {
       config,
       openWindow,
+      startTask,
       contextManager,
       toolRegistry,
       aiRepository,
@@ -137,6 +144,7 @@ export class AIService {
         ...config,
       },
       openWindow,
+      startTask,
       contextManager,
       toolRegistry,
       aiRepository,
@@ -301,16 +309,7 @@ export class AIService {
 
     if (tool.confirmationLevel >= 2) {
       return {
-        content: [
-          `工具 ${tool.name} 需要用户确认，尚未执行。`,
-          '',
-          '参数：',
-          '```json',
-          JSON.stringify(directive.params, null, 2),
-          '```',
-          '',
-          '请在工具执行面板确认后再继续。',
-        ].join('\n'),
+        content: this.formatPendingToolResult(tool.name, directive.params),
         pendingToolCall: {
           name: tool.name,
           params: directive.params,
@@ -363,6 +362,10 @@ export class AIService {
     params: Record<string, unknown>,
     result: ToolResult,
   ): string {
+    if (toolName === 'task_start') {
+      return this.formatTaskStartResult(params, result);
+    }
+
     if (!result.success) {
       return [
         `工具调用失败：${toolName}`,
@@ -389,5 +392,60 @@ export class AIService {
       JSON.stringify(result.data, null, 2),
       '```',
     ].join('\n');
+  }
+
+  private formatPendingToolResult(toolName: string, params: Record<string, unknown>): string {
+    if (toolName === 'task_start') {
+      const taskLabel =
+        (typeof params.taskName === 'string' && params.taskName.trim()) ||
+        (typeof params.taskId === 'string' && params.taskId.trim()) ||
+        '该任务';
+      return [
+        `我可以帮你启动任务「${taskLabel}」。`,
+        '',
+        '确认后我会立即发起执行。',
+      ].join('\n');
+    }
+
+    return [
+      `我准备执行操作：${toolName}`,
+      '',
+      '参数：',
+      '```json',
+      JSON.stringify(params, null, 2),
+      '```',
+      '',
+      '请确认是否继续。',
+    ].join('\n');
+  }
+
+  private formatTaskStartResult(
+    params: Record<string, unknown>,
+    result: ToolResult,
+  ): string {
+    if (!result.success) {
+      return result.error
+        ? `启动任务失败：${result.error}`
+        : '启动任务失败，请稍后再试。';
+    }
+
+    const data = (result.data ?? {}) as {
+      taskId?: string;
+      taskName?: string;
+      status?: string;
+    };
+    const taskLabel =
+      data.taskName ||
+      (typeof params.taskName === 'string' ? params.taskName : undefined) ||
+      (typeof params.taskId === 'string' ? params.taskId : undefined) ||
+      '目标任务';
+
+    return [
+      `已帮你启动任务「${taskLabel}」。`,
+      data.status ? `当前状态：${data.status}` : null,
+      data.taskId ? `任务 ID：${data.taskId}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 }

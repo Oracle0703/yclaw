@@ -995,7 +995,15 @@ canvas {
 
 .yclaw-theme-toggle {
   inset-inline-end: 24px;
-  inset-block-end: 24px;
+  inset-block-start: 88px;
+  inset-block-end: auto;
+}
+
+@media (max-width: 960px) {
+  .yclaw-theme-toggle {
+    inset-inline-end: 18px;
+    inset-block-start: 76px;
+  }
 }
 
 :root[data-theme='dark'] .yclaw-menu-footer {

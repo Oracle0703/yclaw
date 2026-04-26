@@ -1,5 +1,5 @@
-import { IPC_CHANNELS } from '@shared/constants';
-import type { RunnerConnection } from '@shared/types';
+import { IPC_CHANNELS } from '../../../shared/constants';
+import type { RunnerConnection } from '../../../shared/types';
 
 type Invoke = (channel: string, payload?: unknown) => Promise<unknown>;
 

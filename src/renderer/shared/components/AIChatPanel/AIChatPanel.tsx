@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CloseOutlined, RobotOutlined, SendOutlined, UserOutlined } from '@ant-design/icons';
 import { Avatar, Badge, Button, Input, Space, Spin, Typography } from 'antd';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type {
   AIChatResponse,
   AIPendingToolCall,
-  AIToolDef,
   ChatMessage,
   ToolResult,
 } from '@shared/types';
@@ -101,15 +100,8 @@ export default function AIChatPanel() {
   } = useAIChatStore();
 
   const [inputValue, setInputValue] = useState('');
-  const [availableTools, setAvailableTools] = useState<AIToolDef[]>([]);
-  const [toolName, setToolName] = useState('');
-  const [toolParamsText, setToolParamsText] = useState('{}');
   const [pendingToolCall, setPendingToolCall] = useState<AIPendingToolCall | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const selectedTool = useMemo(
-    () => availableTools.find((tool) => tool.name === toolName.trim()) ?? null,
-    [availableTools, toolName],
-  );
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -130,25 +122,6 @@ export default function AIChatPanel() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggle]);
 
-  const loadTools = useCallback(async () => {
-    try {
-      const response = await window.electronAPI.invoke<AIToolDef[]>(IPC_CHANNELS.AI_TOOLS_LIST);
-      if (response.success && Array.isArray(response.data)) {
-        setAvailableTools(response.data);
-      }
-    } catch {
-      setAvailableTools([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    void loadTools();
-  }, [isOpen, loadTools]);
-
   const addAssistantMessage = useCallback(
     (content: string) => {
       addMessage({
@@ -162,6 +135,59 @@ export default function AIChatPanel() {
   );
 
   const formatToolPayload = useCallback((value: unknown) => JSON.stringify(value, null, 2), []);
+
+  const formatToolExecutionMessage = useCallback(
+    (name: string, params: Record<string, unknown>, payload: unknown) => {
+      if (name === 'task_start') {
+        const data = (payload ?? {}) as {
+          taskId?: string;
+          taskName?: string;
+          status?: string;
+        };
+        const taskLabel =
+          data.taskName ||
+          (typeof params.taskName === 'string' ? params.taskName : undefined) ||
+          (typeof params.taskId === 'string' ? params.taskId : undefined) ||
+          '目标任务';
+
+        return [
+          `已帮你启动任务「${taskLabel}」。`,
+          data.status ? `当前状态：${data.status}` : null,
+          data.taskId ? `任务 ID：${data.taskId}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n');
+      }
+
+      return [
+        `已执行操作「${name}」。`,
+        payload ? `返回结果：\n\`\`\`json\n${formatToolPayload(payload)}\n\`\`\`` : null,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+    },
+    [formatToolPayload],
+  );
+
+  const describePendingToolCall = useCallback((toolCall: AIPendingToolCall) => {
+    if (toolCall.name === 'task_start') {
+      const label =
+        (typeof toolCall.params.taskName === 'string' && toolCall.params.taskName.trim()) ||
+        (typeof toolCall.params.taskId === 'string' && toolCall.params.taskId.trim()) ||
+        '目标任务';
+      return {
+        title: '确认开始任务',
+        summary: `助手准备帮你启动任务「${label}」。`,
+        confirmText: '确认开始任务',
+      };
+    }
+
+    return {
+      title: '确认执行操作',
+      summary: `助手准备执行操作「${toolCall.name}」。`,
+      confirmText: '确认执行',
+    };
+  }, []);
 
   const executeTool = useCallback(
     async (name: string, params: Record<string, unknown>) => {
@@ -177,59 +203,21 @@ export default function AIChatPanel() {
         }
 
         if (!response.data.success) {
-          addAssistantMessage(`工具执行失败：${response.data.error ?? '未知错误'}`);
+          if (name === 'task_start') {
+            addAssistantMessage(`启动任务失败：${response.data.error ?? '未知错误'}`);
+            return;
+          }
+          addAssistantMessage(`执行操作失败：${response.data.error ?? '未知错误'}`);
           return;
         }
 
-        addAssistantMessage(`工具结果：\n\`\`\`json\n${formatToolPayload(response.data.data)}\n\`\`\``);
+        addAssistantMessage(formatToolExecutionMessage(name, params, response.data.data));
       } catch {
-        addAssistantMessage('工具执行失败：无法连接主进程。');
+        addAssistantMessage(name === 'task_start' ? '启动任务失败：无法连接主进程。' : '执行操作失败：无法连接主进程。');
       }
     },
-    [addAssistantMessage, formatToolPayload],
+    [addAssistantMessage, formatToolExecutionMessage],
   );
-
-  const requestToolExecution = useCallback(async () => {
-    const normalizedName = toolName.trim();
-    if (!normalizedName) {
-      addAssistantMessage('请输入要执行的工具名。');
-      return;
-    }
-
-    const matchedTool = availableTools.find((tool) => tool.name === normalizedName);
-    if (!matchedTool) {
-      addAssistantMessage(`未找到工具：${normalizedName}`);
-      return;
-    }
-
-    let parsedParams: Record<string, unknown>;
-    try {
-      const parsed = toolParamsText.trim().length === 0 ? {} : JSON.parse(toolParamsText);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        throw new Error('工具参数必须是 JSON 对象');
-      }
-      parsedParams = parsed as Record<string, unknown>;
-    } catch (error) {
-      addAssistantMessage(
-        error instanceof Error ? error.message : '工具参数解析失败，请输入合法 JSON。',
-      );
-      return;
-    }
-
-    addAssistantMessage(
-      `准备调用工具：${matchedTool.name}\n参数：\n\`\`\`json\n${formatToolPayload(parsedParams)}\n\`\`\``,
-    );
-
-    if (matchedTool.confirmationLevel >= 2) {
-      setPendingToolCall({
-        name: matchedTool.name,
-        params: parsedParams,
-      });
-      return;
-    }
-
-    await executeTool(matchedTool.name, parsedParams);
-  }, [addAssistantMessage, availableTools, executeTool, formatToolPayload, toolName, toolParamsText]);
 
   const sendMessage = useCallback(async () => {
     const content = inputValue.trim();
@@ -252,20 +240,11 @@ export default function AIChatPanel() {
         conversationId: conversationId ?? undefined,
       });
 
-      if (response.success && response.data) {
-        if (response.data.executedToolCall) {
-          addAssistantMessage(
-            `准备调用工具：${response.data.executedToolCall.name}\n参数：\n\`\`\`json\n${formatToolPayload(response.data.executedToolCall.params)}\n\`\`\``,
-          );
-          setToolName(response.data.executedToolCall.name);
-          setToolParamsText(formatToolPayload(response.data.executedToolCall.params));
-        }
+      if (response.success && response.data?.message) {
         addMessage(response.data.message);
         setConversationId(response.data.conversationId);
         if (response.data.pendingToolCall) {
           setPendingToolCall(response.data.pendingToolCall);
-          setToolName(response.data.pendingToolCall.name);
-          setToolParamsText(formatToolPayload(response.data.pendingToolCall.params));
         }
       } else {
         addMessage({
@@ -290,10 +269,8 @@ export default function AIChatPanel() {
     conversationId,
     isLoading,
     addMessage,
-    addAssistantMessage,
     setConversationId,
     setLoading,
-    formatToolPayload,
   ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -332,6 +309,8 @@ export default function AIChatPanel() {
   }
 
   // Expanded panel
+  const pendingToolMeta = pendingToolCall ? describePendingToolCall(pendingToolCall) : null;
+
   return (
     <div
       data-testid="ai-chat-panel"
@@ -384,7 +363,7 @@ export default function AIChatPanel() {
             <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
               你好！我是 YClaw 运营助手。
               <br />
-              可以问我关于任务状态、系统资源等问题。
+              你可以直接问我任务状态、系统资源，或者让我帮你启动任务。
             </Typography.Paragraph>
             <Space direction="vertical" size={4}>
               <Button
@@ -400,10 +379,19 @@ export default function AIChatPanel() {
                 size="small"
                 type="dashed"
                 onClick={() => {
-                  setInputValue('系统资源使用情况如何？');
+                  setInputValue('帮我看看现在有哪些任务在运行');
                 }}
               >
-                系统资源使用情况如何？
+                帮我看看现在有哪些任务在运行
+              </Button>
+              <Button
+                size="small"
+                type="dashed"
+                onClick={() => {
+                  setInputValue('帮我启动一个任务');
+                }}
+              >
+                帮我启动一个任务
               </Button>
             </Space>
           </div>
@@ -439,40 +427,6 @@ export default function AIChatPanel() {
           gap: 8,
         }}
       >
-        <Typography.Text strong>工具执行</Typography.Text>
-        <Input
-          value={toolName}
-          placeholder="输入工具名，例如 task_list"
-          onChange={(event) => setToolName(event.target.value)}
-        />
-        <TextArea
-          value={toolParamsText}
-          placeholder="输入工具参数 JSON，可留空"
-          onChange={(event) => setToolParamsText(event.target.value)}
-          autoSize={{ minRows: 2, maxRows: 4 }}
-        />
-        <Space wrap>
-          {availableTools.map((tool) => (
-            <Button
-              key={tool.name}
-              size="small"
-              onClick={() => {
-                setToolName(tool.name);
-              }}
-            >
-              {tool.name}
-              {tool.confirmationLevel >= 2 ? '（需确认）' : ''}
-            </Button>
-          ))}
-        </Space>
-        {selectedTool ? (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {selectedTool.description}
-          </Typography.Text>
-        ) : null}
-        <Button onClick={() => void requestToolExecution()} disabled={!toolName.trim()}>
-          执行工具
-        </Button>
         {pendingToolCall ? (
           <div
             style={{
@@ -481,10 +435,26 @@ export default function AIChatPanel() {
               backgroundColor: 'rgba(220, 38, 38, 0.08)',
             }}
           >
-            <Typography.Text strong>危险工具需确认</Typography.Text>
+            <Typography.Text strong>{pendingToolMeta?.title}</Typography.Text>
             <Typography.Paragraph style={{ marginBottom: 8 }}>
-              即将执行 `{pendingToolCall.name}`，请确认参数是否正确。
+              {pendingToolMeta?.summary}
             </Typography.Paragraph>
+            <Typography.Paragraph style={{ marginBottom: 8 }}>
+              参数：
+            </Typography.Paragraph>
+            <pre
+              style={{
+                marginTop: 0,
+                marginBottom: 12,
+                padding: '8px 10px',
+                borderRadius: 6,
+                background: 'rgba(15, 23, 42, 0.55)',
+                overflow: 'auto',
+                fontSize: 12,
+              }}
+            >
+              <code>{formatToolPayload(pendingToolCall.params)}</code>
+            </pre>
             <Space>
               <Button
                 type="primary"
@@ -495,11 +465,11 @@ export default function AIChatPanel() {
                   void executeTool(currentCall.name, currentCall.params);
                 }}
               >
-                确认执行工具
+                {pendingToolMeta?.confirmText}
               </Button>
               <Button
                 onClick={() => {
-                  addAssistantMessage(`已取消工具调用：${pendingToolCall.name}`);
+                  addAssistantMessage(`已取消本次操作。`);
                   setPendingToolCall(null);
                 }}
               >
@@ -524,7 +494,7 @@ export default function AIChatPanel() {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="问我任何问题..."
+          placeholder="直接问我，或说“帮我启动某个任务”"
           autoSize={{ minRows: 1, maxRows: 3 }}
           style={{ flex: 1 }}
         />

@@ -4,6 +4,7 @@
   "description": "可扩展、模块化、插件驱动的跨平台桌面工作台容器",
   "main": "dist/main/main/index.js",
   "scripts": {
+    "predev": "node scripts/ensure-dev-runtime.cjs",
     "dev": "tsx scripts/dev.ts",
     "build": "npm run build:core && npm run build:features && npm run build:main",
     "build:renderer": "npm run build:core",

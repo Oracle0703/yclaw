@@ -32,21 +32,18 @@ vi.mock('antd', () => {
       onKeyDown={onKeyDown}
     />
   );
-  const Input = Object.assign(({
-    value,
-    onChange,
-    placeholder,
-  }: {
-    value?: string;
-    onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
-    placeholder?: string;
-  }) => (
-    <input
-      value={value ?? ''}
-      placeholder={placeholder}
-      onChange={onChange}
-    />
-  ), { TextArea });
+  const Input = Object.assign(
+    ({
+      value,
+      onChange,
+      placeholder,
+    }: {
+      value?: string;
+      onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+      placeholder?: string;
+    }) => <input value={value ?? ''} placeholder={placeholder} onChange={onChange} />,
+    { TextArea },
+  );
 
   return {
     Avatar: ({ children, icon }: { children?: React.ReactNode; icon?: React.ReactNode }) => (
@@ -85,6 +82,8 @@ import { useAIChatStore } from '@renderer/shared/components/AIChatPanel/store';
 describe('AIChatPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(window.electronAPI.invoke).mockReset();
+    vi.mocked(window.electronAPI.invoke).mockResolvedValue({ success: true, data: null });
     useAIChatStore.setState({
       messages: [],
       conversationId: null,
@@ -93,124 +92,18 @@ describe('AIChatPanel', () => {
     });
   });
 
-  it('executes a non-dangerous tool and shows tool call summary', async () => {
-    vi.mocked(window.electronAPI.invoke)
-      .mockResolvedValueOnce({
-        success: true,
-        data: [
-          {
-            name: 'mcp.mock.echo',
-            description: '回显输入',
-            parameters: {},
-            confirmationLevel: 0,
-            source: 'mcp:mock',
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          success: true,
-          data: {
-            echoed: 'hello tool',
-          },
-        },
-      });
-
+  it('renders a conversational empty state without the manual tool console', () => {
     render(<AIChatPanel />);
 
-    await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.AI_TOOLS_LIST);
-    });
-
-    fireEvent.change(screen.getByPlaceholderText('输入工具名，例如 task_list'), {
-      target: { value: 'mcp.mock.echo' },
-    });
-    fireEvent.change(screen.getByPlaceholderText('输入工具参数 JSON，可留空'), {
-      target: { value: '{"text":"hello tool"}' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '执行工具' }));
-
-    await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.AI_TOOL_EXECUTE, {
-        name: 'mcp.mock.echo',
-        params: {
-          text: 'hello tool',
-        },
-      });
-    });
-
-    expect(screen.getByText(/准备调用工具：mcp\.mock\.echo/)).toBeTruthy();
-    expect(screen.getByText(/"text": "hello tool"/)).toBeTruthy();
+    expect(screen.getByText(/你好！我是 YClaw 运营助手。/)).toBeTruthy();
+    expect(screen.getByPlaceholderText('直接问我，或说“帮我启动某个任务”')).toBeTruthy();
+    expect(screen.queryByText('工具执行')).toBeNull();
+    expect(screen.queryByPlaceholderText('输入工具名，例如 task_list')).toBeNull();
+    expect(screen.queryByPlaceholderText('输入工具参数 JSON，可留空')).toBeNull();
   });
 
-  it('requires confirmation before executing a dangerous tool', async () => {
+  it('shows pending task-start confirmation from chat and executes it after approval', async () => {
     vi.mocked(window.electronAPI.invoke)
-      .mockResolvedValueOnce({
-        success: true,
-        data: [
-          {
-            name: 'mcp.mock.danger',
-            description: '危险操作',
-            parameters: {},
-            confirmationLevel: 2,
-            source: 'mcp:mock',
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          success: true,
-          data: {
-            accepted: true,
-          },
-        },
-      });
-
-    render(<AIChatPanel />);
-
-    await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.AI_TOOLS_LIST);
-    });
-
-    fireEvent.change(screen.getByPlaceholderText('输入工具名，例如 task_list'), {
-      target: { value: 'mcp.mock.danger' },
-    });
-    fireEvent.change(screen.getByPlaceholderText('输入工具参数 JSON，可留空'), {
-      target: { value: '{"action":"refresh"}' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '执行工具' }));
-
-    expect(screen.getByText(/危险工具需确认/)).toBeTruthy();
-    expect(window.electronAPI.invoke).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByRole('button', { name: '确认执行工具' }));
-
-    await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.AI_TOOL_EXECUTE, {
-        name: 'mcp.mock.danger',
-        params: {
-          action: 'refresh',
-        },
-      });
-    });
-  });
-
-  it('shows pending confirmation from AI chat response and executes it after approval', async () => {
-    vi.mocked(window.electronAPI.invoke)
-      .mockResolvedValueOnce({
-        success: true,
-        data: [
-          {
-            name: 'mcp.mock.danger',
-            description: '危险操作',
-            parameters: {},
-            confirmationLevel: 2,
-            source: 'mcp:mock',
-          },
-        ],
-      })
       .mockResolvedValueOnce({
         success: true,
         data: {
@@ -218,13 +111,13 @@ describe('AIChatPanel', () => {
           message: {
             id: 'assistant-pending',
             role: 'assistant',
-            content: '工具 mcp.mock.danger 需要用户确认，尚未执行。',
+            content: '我可以帮你启动任务「早盘巡检」。',
             timestamp: 3,
           },
           pendingToolCall: {
-            name: 'mcp.mock.danger',
+            name: 'task_start',
             params: {
-              action: 'refresh',
+              taskName: '早盘巡检',
             },
           },
         },
@@ -234,94 +127,75 @@ describe('AIChatPanel', () => {
         data: {
           success: true,
           data: {
-            accepted: true,
+            taskId: 'task-1',
+            taskName: '早盘巡检',
+            status: 'running',
           },
         },
       });
 
     render(<AIChatPanel />);
 
-    await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.AI_TOOLS_LIST);
-    });
-
     const input = screen.getByTestId('ai-chat-input');
-    fireEvent.change(input, { target: { value: '帮我刷新登录态' } });
+    fireEvent.change(input, { target: { value: '帮我启动早盘巡检' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => {
-      expect(screen.getByText(/危险工具需确认/)).toBeTruthy();
-      expect(screen.getByText(/即将执行 `mcp\.mock\.danger`/)).toBeTruthy();
+      expect(screen.getAllByText('确认开始任务')).toHaveLength(2);
+      expect(screen.getByText('助手准备帮你启动任务「早盘巡检」。')).toBeTruthy();
+      expect(screen.getByText(/"taskName": "早盘巡检"/)).toBeTruthy();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '确认执行工具' }));
+    fireEvent.click(screen.getByRole('button', { name: '确认开始任务' }));
 
     await waitFor(() => {
       expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.AI_TOOL_EXECUTE, {
-        name: 'mcp.mock.danger',
+        name: 'task_start',
         params: {
-          action: 'refresh',
+          taskName: '早盘巡检',
         },
       });
+      expect(screen.getByText(/已帮你启动任务「早盘巡检」。/)).toBeTruthy();
+      expect(screen.getByText(/当前状态：running/)).toBeTruthy();
     });
   });
 
-  it('shows executed tool summary from AI chat response before tool result', async () => {
-    vi.mocked(window.electronAPI.invoke)
-      .mockResolvedValueOnce({
-        success: true,
-        data: [
-          {
-            name: 'mcp.mock.echo',
-            description: '回显输入',
-            parameters: {},
-            confirmationLevel: 0,
-            source: 'mcp:mock',
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        success: true,
-        data: {
-          conversationId: 'conv-auto-tool',
-          executedToolCall: {
-            name: 'mcp.mock.echo',
-            params: {
-              text: 'ping',
-            },
-          },
-          message: {
-            id: 'assistant-auto-tool',
-            role: 'assistant',
-            content: '已调用工具：mcp.mock.echo\n\n结果：\n```json\n{"text":"pong"}\n```',
-            timestamp: 4,
+  it('renders task-start replies as normal conversation instead of a tool console', async () => {
+    vi.mocked(window.electronAPI.invoke).mockResolvedValueOnce({
+      success: true,
+      data: {
+        conversationId: 'conv-auto-tool',
+        executedToolCall: {
+          name: 'task_start',
+          params: {
+            taskName: '盘后复盘',
           },
         },
-      });
+        message: {
+          id: 'assistant-auto-tool',
+          role: 'assistant',
+          content: '已帮你启动任务「盘后复盘」。\n当前状态：running',
+          timestamp: 4,
+        },
+      },
+    });
 
     render(<AIChatPanel />);
 
-    await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenCalledWith(IPC_CHANNELS.AI_TOOLS_LIST);
-    });
-
     const input = screen.getByTestId('ai-chat-input');
-    fireEvent.change(input, { target: { value: '帮我回显 ping' } });
+    fireEvent.change(input, { target: { value: '帮我启动盘后复盘' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => {
-      expect(screen.getByText(/准备调用工具：mcp\.mock\.echo/)).toBeTruthy();
-      expect(screen.getByText(/"text": "ping"/)).toBeTruthy();
-      expect(screen.getByText(/已调用工具：mcp\.mock\.echo/)).toBeTruthy();
+      expect(screen.getByText(/已帮你启动任务「盘后复盘」。/)).toBeTruthy();
+      expect(screen.getByText(/当前状态：running/)).toBeTruthy();
     });
+
+    expect(screen.queryByText('工具执行')).toBeNull();
   });
 
-  it('sends stored conversation id on follow-up messages', async () => {
+  it('sends the stored conversation id on follow-up messages', async () => {
     vi.mocked(window.electronAPI.invoke)
-      .mockResolvedValueOnce({
-        success: true,
-        data: [],
-      })
       .mockResolvedValueOnce({
         success: true,
         data: {
@@ -361,7 +235,7 @@ describe('AIChatPanel', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => {
-      expect(window.electronAPI.invoke).toHaveBeenNthCalledWith(3, 'ai:chat', {
+      expect(window.electronAPI.invoke).toHaveBeenNthCalledWith(2, IPC_CHANNELS.AI_CHAT, {
         message: '第二条',
         conversationId: 'conv-1',
       });
