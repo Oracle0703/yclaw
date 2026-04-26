@@ -148,6 +148,11 @@ describe('SPEC-022: Build Configuration', () => {
       expect(content).not.toContain('rm -rf node_modules package-lock.json');
       expect(content).not.toContain('npm install --no-audit');
     });
+
+    it('should skip Electron-native postinstall rebuilds in CI verification', () => {
+      const content = readFileSync(resolve(rootDir, '.github/workflows/ci.yml'), 'utf-8');
+      expect(content).toContain('SKIP_POSTINSTALL: 1');
+    });
   });
 
   describe('feature package manifest', () => {
