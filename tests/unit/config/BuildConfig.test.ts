@@ -154,10 +154,8 @@ describe('SPEC-022: Build Configuration', () => {
       expect(content).toContain('SKIP_POSTINSTALL: 1');
       expect(content).toContain('npm_config_progress: false');
       expect(content).toContain('npm_config_fund: false');
-      expect(content).toContain('timeout-minutes: 3');
-      expect(content).toContain('npm ci --prefer-offline --no-audit --ignore-scripts --no-progress');
-      expect(content).toContain('--fetch-retries=0');
-      expect(content).toContain('--fetch-timeout=30000');
+      expect(content).toContain('timeout-minutes: 6');
+      expect(content).toContain('run: npm ci --no-audit --ignore-scripts');
       expect(content).not.toContain('rm -rf node_modules package-lock.json');
       expect(content).not.toContain('npm install --no-audit');
     });

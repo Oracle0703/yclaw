@@ -30,8 +30,8 @@ jobs:
           registry-url: https://registry.npmjs.org/
 
       - name: Install dependencies
-        timeout-minutes: 3
-        run: npm ci --prefer-offline --no-audit --ignore-scripts --no-progress --fetch-retries=0 --fetch-timeout=30000
+        timeout-minutes: 6
+        run: npm ci --no-audit --ignore-scripts
 
       - name: Lint
         run: npm run lint
