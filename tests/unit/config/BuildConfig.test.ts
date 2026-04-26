@@ -154,10 +154,10 @@ describe('SPEC-022: Build Configuration', () => {
       expect(content).toContain('SKIP_POSTINSTALL: 1');
       expect(content).toContain('npm_config_progress: false');
       expect(content).toContain('npm_config_fund: false');
-      expect(content).toContain('timeout-minutes: 6');
-      expect(content).toContain('run: npm ci --no-audit --ignore-scripts');
-      expect(content).not.toContain('rm -rf node_modules package-lock.json');
-      expect(content).not.toContain('npm install --no-audit');
+      expect(content).toContain('timeout-minutes: 12');
+      expect(content).toContain('rm -rf node_modules package-lock.json');
+      expect(content).toContain('npm install --no-audit --no-fund');
+      expect(content).toContain('prevents `electron-builder install-app-deps`');
     });
   });
 
