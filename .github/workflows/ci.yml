@@ -28,7 +28,20 @@ jobs:
           registry-url: https://registry.npmjs.org/
 
       - name: Install dependencies
-        run: npm ci --no-audit --ignore-scripts
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if npm ci --no-audit --ignore-scripts --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+
+            echo "npm ci failed on attempt $attempt, retrying after backoff..."
+            sleep $((attempt * 5))
+          done
 
       - name: Lint
         run: npm run lint
