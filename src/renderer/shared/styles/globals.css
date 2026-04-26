@@ -1145,6 +1145,11 @@ canvas {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+.browser-workspace-grid.is-douyin-analysis {
+  grid-template-columns: minmax(240px, 0.95fr) minmax(280px, 1.1fr) minmax(260px, 0.95fr);
+  align-items: start;
+}
+
 .browser-workspace-section {
   display: flex;
   flex-direction: column;
@@ -1232,6 +1237,11 @@ canvas {
   cursor: pointer;
 }
 
+.browser-workspace-list-item[data-selected='true'] {
+  border-color: rgba(37, 99, 235, 0.38);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
+}
+
 .browser-review-queue-card {
   display: flex;
   flex-direction: column;
@@ -1278,6 +1288,21 @@ canvas {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.browser-download-confirm {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--yclaw-text-secondary);
+  font-size: 13px;
+}
+
+.browser-download-record {
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.92);
 }
 
 .browser-workspace-guardrail,

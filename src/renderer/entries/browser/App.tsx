@@ -6,12 +6,32 @@ import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
 import { useLoading } from '../../shared/hooks/useLoading';
 import { AddressBar } from './components/AddressBar';
+import { DouyinInsightPanel } from './components/DouyinInsightPanel';
+import { DouyinSearchPanel } from './components/DouyinSearchPanel';
+import { DouyinTargetPanel } from './components/DouyinTargetPanel';
 import { InterventionPanel } from './components/InterventionPanel';
 import { RecorderPanel } from './components/RecorderPanel';
 import { TabBar } from './components/TabBar';
 import { WebViewContainer } from './components/WebViewContainer';
 import type { AIChatResponse, AIConfig, TaskFlow, TaskStep } from '@shared/types';
 import type { InterventionState, Tab } from '@shared/types/browser';
+import type {
+  DouyinAnalysisTarget,
+  DouyinCommentInsight,
+  DouyinDownloadRecord,
+  DouyinDownloadRequest,
+  DouyinSearchItem,
+} from './douyin/types';
+import {
+  buildDouyinDraftPrompt,
+  buildDouyinInsight,
+  buildDouyinReviewQueueNote,
+  buildDouyinSearchResults,
+  confirmDownloadAuthorization,
+  createInitialDownloadRequest,
+  markDownloadCompleted,
+  markDownloadStarted,
+} from './douyin/workspace';
 
 const DEFAULT_COLLECTION_URL = 'https://www.baidu.com';
 
@@ -560,6 +580,13 @@ export default function App() {
   const [draftModeLabel, setDraftModeLabel] = useState('固定模板');
   const [draftConversationId, setDraftConversationId] = useState<string | null>(null);
   const [draftPending, setDraftPending] = useState(false);
+  const [douyinKeyword, setDouyinKeyword] = useState('');
+  const [douyinResults, setDouyinResults] = useState<DouyinSearchItem[]>([]);
+  const [douyinTarget, setDouyinTarget] = useState<DouyinAnalysisTarget | null>(null);
+  const [douyinInsight, setDouyinInsight] = useState<DouyinCommentInsight | null>(null);
+  const [downloadRequest, setDownloadRequest] = useState<DouyinDownloadRequest | null>(null);
+  const [downloadAuthorizationChecked, setDownloadAuthorizationChecked] = useState(false);
+  const [downloadRecords, setDownloadRecords] = useState<DouyinDownloadRecord[]>([]);
 
   const reportActionError = (error: unknown, fallbackMessage: string) => {
     message.error(error instanceof Error ? error.message : fallbackMessage);
@@ -581,9 +608,13 @@ export default function App() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const workspaceConfig = selectedPlatform ? buildWorkspaceConfig(selectedPlatform) : null;
+  const isDouyinPlatform = selectedPlatform?.name === '抖音';
   const selectedPlatformQueue = selectedPlatform
     ? reviewQueue.filter((item) => item.platformName === selectedPlatform.name)
     : [];
+  const currentDownloadRecord = douyinTarget
+    ? downloadRecords.find((item) => item.targetId === douyinTarget.item.id) ?? null
+    : null;
   const browserKpis = [
     { title: '平台分类数', value: `${PLATFORM_CATEGORIES.length}` },
     { title: '平台入口数', value: `${PLATFORM_CATEGORIES.reduce((count, category) => count + category.items.length, 0)}` },
@@ -655,7 +686,132 @@ export default function App() {
     setWorkspaceNote(action.note);
   };
 
+  const runDouyinSearch = () => {
+    const results = buildDouyinSearchResults(douyinKeyword);
+    setDouyinResults(results);
+  };
+
+  const selectDouyinResult = (item: DouyinSearchItem) => {
+    const target: DouyinAnalysisTarget = {
+      item,
+      pageTitle: activeTab?.title ?? item.title,
+      topicTags: item.keywords ?? [],
+      commentSamples: [
+        '这条总结很实用，想看更具体的搭配建议。',
+        '价格看起来偏高，想知道有没有平替。',
+        '适合先看评论区的真实反馈再决定。',
+      ],
+      captureStatus: activeTab?.url.includes('douyin.com/video/') ? 'ready' : 'loading',
+    };
+
+    setDouyinTarget(target);
+    setDouyinInsight(
+      buildDouyinInsight({
+        title: item.title,
+        commentSamples: target.commentSamples,
+      }),
+    );
+    setDownloadRequest(createInitialDownloadRequest(item.id));
+    setDownloadAuthorizationChecked(false);
+    setGeneratedDrafts([]);
+    setDraftModeLabel('固定模板');
+    setDraftConversationId(null);
+    setWorkspaceNote('');
+  };
+
+  const requestDownloadAuthorization = () => {
+    if (!douyinTarget) {
+      return;
+    }
+    setDownloadRequest({
+      targetId: douyinTarget.item.id,
+      authorized: false,
+      status: 'confirming',
+    });
+  };
+
+  const handleDownloadAuthorizationToggle = (checked: boolean) => {
+    setDownloadAuthorizationChecked(checked);
+    setDownloadRequest((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return confirmDownloadAuthorization(
+        current,
+        checked,
+        new Date().toLocaleString('zh-CN', {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      );
+    });
+  };
+
+  const startAuthorizedDownload = () => {
+    if (!douyinTarget || !downloadRequest?.authorized) {
+      return;
+    }
+
+    setDownloadRequest((current) => (current ? markDownloadStarted(current) : current));
+    setDownloadRecords((current) => [
+      {
+        targetId: douyinTarget.item.id,
+        title: douyinTarget.item.title,
+        sourceUrl: douyinTarget.item.url,
+        status: 'downloading',
+        confirmedAt: downloadRequest.confirmedAt ?? '刚刚',
+      },
+      ...current.filter((item) => item.targetId !== douyinTarget.item.id),
+    ]);
+  };
+
+  const completeAuthorizedDownload = () => {
+    if (!douyinTarget) {
+      return;
+    }
+
+    const savedPath = `/downloads/${douyinTarget.item.id}.mp4`;
+    setDownloadRequest((current) => (current ? markDownloadCompleted(current, savedPath) : current));
+    setDownloadRecords((current) =>
+      current.map((item) =>
+        item.targetId === douyinTarget.item.id
+          ? {
+              ...item,
+              status: 'done',
+              savedPath,
+            }
+          : item,
+      ),
+    );
+  };
+
   const queueManualAction = (platformName: string, title: string) => {
+    if (platformName === '抖音' && douyinTarget) {
+      const note = buildDouyinReviewQueueNote({
+        actionTitle: title,
+        targetTitle: douyinTarget.item.title,
+        targetUrl: douyinTarget.item.url,
+        workspaceNote,
+      });
+
+      const queueItem: ReviewQueueItem = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        platformName,
+        title,
+        status: 'pending',
+        createdAtLabel: new Date().toLocaleTimeString('zh-CN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        note,
+      };
+      setReviewQueue((current) => [queueItem, ...current]);
+      return;
+    }
+
     const preservedNote = workspaceNote.trim();
     const platformIntro = `已进入 ${platformName} 功能页。`;
     const resolvedNote =
@@ -732,7 +888,7 @@ export default function App() {
 
     const drafts = buildCommentDrafts(
       selectedPlatform.name,
-      draftContext,
+      isDouyinPlatform ? douyinTarget?.item.title ?? draftContext : draftContext,
       draftTone,
       workspaceConfig.commentStarters,
     );
@@ -748,6 +904,10 @@ export default function App() {
       return;
     }
 
+    if (isDouyinPlatform && !douyinTarget) {
+      return;
+    }
+
     setDraftPending(true);
 
     try {
@@ -757,21 +917,29 @@ export default function App() {
         return;
       }
 
-      const prompt = [
-        `你是 ${selectedPlatform.name} 运营助理。`,
-        `请基于以下内容生成 3 条中文评论候选，语气要求：${draftTone}。`,
-        '要求：',
-        '1. 像真实用户表达，不要机械。',
-        '2. 不要承诺收益，不要诱导，不要刷量口吻。',
-        '3. 每条单独一行，不加序号前缀也可以。',
-        '4. 只输出评论候选，不要解释。',
-        '',
-        `页面上下文：${draftContext.trim() || `${selectedPlatform.name} 内容页面`}`,
-      ].join('\n');
+      const prompt =
+        isDouyinPlatform && douyinTarget
+          ? buildDouyinDraftPrompt({
+              targetTitle: douyinTarget.item.title,
+              commentSamples: douyinTarget.commentSamples,
+              workspaceNote,
+              tone: draftTone,
+            })
+          : [
+              `你是 ${selectedPlatform.name} 运营助理。`,
+              `请基于以下内容生成 3 条中文评论候选，语气要求：${draftTone}。`,
+              '要求：',
+              '1. 像真实用户表达，不要机械。',
+              '2. 不要承诺收益，不要诱导，不要刷量口吻。',
+              '3. 每条单独一行，不加序号前缀也可以。',
+              '4. 只输出评论候选，不要解释。',
+              '',
+              `页面上下文：${draftContext.trim() || `${selectedPlatform.name} 内容页面`}`,
+            ].join('\n');
 
       const response = await invoke<AIChatResponse>(IPC_CHANNELS.AI_CHAT, {
         message: prompt,
-        conversationId: draftConversationId ?? undefined,
+        conversationId: draftConversationId ?? null,
       });
       const aiDrafts = extractDraftsFromAiMessage(response.message.content).slice(0, 3);
 
@@ -869,6 +1037,13 @@ export default function App() {
                         setDraftTone('专业');
                         setGeneratedDrafts([]);
                         setDraftModeLabel('固定模板');
+                        setDraftConversationId(null);
+                        setDouyinKeyword('');
+                        setDouyinResults([]);
+                        setDouyinTarget(null);
+                        setDouyinInsight(null);
+                        setDownloadRequest(null);
+                        setDownloadAuthorizationChecked(false);
                         setWorkspaceNote(`已进入 ${item.name} 功能页。先选择一个入口动作，再决定是否开启评论草稿或人工确认流程。`);
                       }}
                     >
@@ -920,208 +1095,273 @@ export default function App() {
           title={workspaceConfig ? workspaceConfig.title : '平台功能页'}
         >
           {selectedPlatform && workspaceConfig ? (
-            <div className="browser-workspace-grid">
-              <section className="browser-workspace-section">
-                <div className="browser-workspace-summary">{workspaceConfig.summary}</div>
-                <div className="browser-platform-tile-tags">
-                  {selectedPlatform.modes.map((mode) => (
-                    <span key={`${selectedPlatform.name}-${mode}`} className="browser-platform-pill">
-                      {mode}
-                    </span>
-                  ))}
-                </div>
-                <div className="browser-workspace-actions">
-                  {workspaceConfig.actions.map((action) => (
-                    <div key={action.key} className="browser-workspace-action-card">
-                      <div className="browser-workspace-action-title">{action.title}</div>
-                      <div className="browser-workspace-action-description">{action.description}</div>
-                      <div className="browser-workspace-action-meta">{action.reviewMode}</div>
-                      <Button
-                        type="primary"
-                        onClick={() => {
-                          void openWorkspaceAction(action);
-                        }}
-                      >
-                        {action.title}
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="browser-workspace-section">
-                <div className="browser-workspace-section-title">评论草稿助手</div>
-                <div className="browser-workspace-summary">
-                  这里只生成评论草稿和运营建议，发送前仍需人工确认。
-                </div>
-                <div className="browser-workspace-action-meta">
-                  当前来源：{draftModeLabel} {draftPending ? '· 生成中' : ''}
-                </div>
-                <input
-                  className="browser-workspace-input"
-                  value={draftContext}
-                  onChange={(event) => {
-                    setDraftContext(event.target.value);
+            isDouyinPlatform ? (
+              <div className="browser-workspace-grid is-douyin-analysis">
+                <DouyinSearchPanel
+                  summary={workspaceConfig.summary}
+                  modes={selectedPlatform.modes}
+                  actions={workspaceConfig.actions}
+                  keyword={douyinKeyword}
+                  results={douyinResults}
+                  selectedId={douyinTarget?.item.id ?? null}
+                  onKeywordChange={setDouyinKeyword}
+                  onSearch={runDouyinSearch}
+                  onSelect={selectDouyinResult}
+                  onOpenAction={(actionKey) => {
+                    const action = workspaceConfig.actions.find((item) => item.key === actionKey);
+                    if (action) {
+                      void openWorkspaceAction(action);
+                    }
                   }}
-                  placeholder="输入当前作品、评论区或账号页的关键信息"
                 />
-                <select
-                  className="browser-workspace-select"
-                  value={draftTone}
-                  onChange={(event) => {
-                    setDraftTone(event.target.value as '专业' | '友好' | '转化');
-                  }}
-                  aria-label="评论草稿语气"
-                >
-                  <option value="专业">专业</option>
-                  <option value="友好">友好</option>
-                  <option value="转化">转化</option>
-                </select>
-                <Button
-                  type="primary"
-                  onClick={() => {
+                <DouyinTargetPanel
+                  target={douyinTarget}
+                  downloadRequest={downloadRequest}
+                  downloadRecord={currentDownloadRecord}
+                  downloadAuthorizationChecked={downloadAuthorizationChecked}
+                  onToggleAuthorization={handleDownloadAuthorizationToggle}
+                  onApplyDownload={requestDownloadAuthorization}
+                  onStartDownload={startAuthorizedDownload}
+                  onMarkDownloadDone={completeAuthorizedDownload}
+                />
+                <DouyinInsightPanel
+                  insight={douyinInsight}
+                  draftModeLabel={draftModeLabel}
+                  draftPending={draftPending}
+                  draftTone={draftTone}
+                  workspaceNote={workspaceNote}
+                  commentStarters={workspaceConfig.commentStarters}
+                  generatedDrafts={generatedDrafts}
+                  manualActions={workspaceConfig.manualActions}
+                  guardrails={workspaceConfig.guardrails}
+                  queueItems={selectedPlatformQueue}
+                  onToneChange={setDraftTone}
+                  onNoteChange={setWorkspaceNote}
+                  onGenerateDraft={() => {
                     void generateDraftSuggestions();
                   }}
-                >
-                  {draftPending ? '生成中...' : '生成评论草稿'}
-                </Button>
-                <div className="browser-workspace-draft-list">
-                  {workspaceConfig.commentStarters.map((starter) => (
-                    <button
-                      key={`${selectedPlatform.name}-${starter}`}
-                      type="button"
-                      className="browser-draft-button"
-                      onClick={() => {
-                        setWorkspaceNote(starter);
-                      }}
-                    >
-                      {starter}
-                    </button>
-                  ))}
-                </div>
-                {generatedDrafts.length > 0 ? (
-                  <div className="browser-workspace-list">
-                    {generatedDrafts.map((draft) => (
+                  onApplyStarter={setWorkspaceNote}
+                  onApplyDraft={setWorkspaceNote}
+                  onQueueAction={(title) => {
+                    queueManualAction(selectedPlatform.name, title);
+                  }}
+                  onWriteQueueNote={setWorkspaceNote}
+                  onUpdateQueueStatus={updateQueueStatus}
+                  onLinkQueueItemTask={(id) => {
+                    const item = selectedPlatformQueue.find((queueItem) => queueItem.id === id);
+                    if (item) {
+                      void linkQueueItemTask(item);
+                    }
+                  }}
+                  onOpenAutomationWorkspace={() => {
+                    void openAutomationWorkspace();
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="browser-workspace-grid">
+                <section className="browser-workspace-section">
+                  <div className="browser-workspace-summary">{workspaceConfig.summary}</div>
+                  <div className="browser-platform-tile-tags">
+                    {selectedPlatform.modes.map((mode) => (
+                      <span key={`${selectedPlatform.name}-${mode}`} className="browser-platform-pill">
+                        {mode}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="browser-workspace-actions">
+                    {workspaceConfig.actions.map((action) => (
+                      <div key={action.key} className="browser-workspace-action-card">
+                        <div className="browser-workspace-action-title">{action.title}</div>
+                        <div className="browser-workspace-action-description">{action.description}</div>
+                        <div className="browser-workspace-action-meta">{action.reviewMode}</div>
+                        <Button
+                          type="primary"
+                          onClick={() => {
+                            void openWorkspaceAction(action);
+                          }}
+                        >
+                          {action.title}
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="browser-workspace-section">
+                  <div className="browser-workspace-section-title">评论草稿助手</div>
+                  <div className="browser-workspace-summary">
+                    这里只生成评论草稿和运营建议，发送前仍需人工确认。
+                  </div>
+                  <div className="browser-workspace-action-meta">
+                    当前来源：{draftModeLabel} {draftPending ? '· 生成中' : ''}
+                  </div>
+                  <input
+                    className="browser-workspace-input"
+                    value={draftContext}
+                    onChange={(event) => {
+                      setDraftContext(event.target.value);
+                    }}
+                    placeholder="输入当前作品、评论区或账号页的关键信息"
+                  />
+                  <select
+                    className="browser-workspace-select"
+                    value={draftTone}
+                    onChange={(event) => {
+                      setDraftTone(event.target.value as '专业' | '友好' | '转化');
+                    }}
+                    aria-label="评论草稿语气"
+                  >
+                    <option value="专业">专业</option>
+                    <option value="友好">友好</option>
+                    <option value="转化">转化</option>
+                  </select>
+                  <Button
+                    type="primary"
+                    onClick={() => {
+                      void generateDraftSuggestions();
+                    }}
+                  >
+                    {draftPending ? '生成中...' : '生成评论草稿'}
+                  </Button>
+                  <div className="browser-workspace-draft-list">
+                    {workspaceConfig.commentStarters.map((starter) => (
                       <button
-                        key={`${selectedPlatform.name}-${draft}`}
+                        key={`${selectedPlatform.name}-${starter}`}
                         type="button"
-                        className="browser-workspace-list-item"
+                        className="browser-draft-button"
                         onClick={() => {
-                          setWorkspaceNote(draft);
+                          setWorkspaceNote(starter);
                         }}
                       >
-                        {draft}
+                        {starter}
                       </button>
                     ))}
                   </div>
-                ) : null}
-                <textarea
-                  className="browser-workspace-notes"
-                  value={workspaceNote}
-                  onChange={(event) => {
-                    setWorkspaceNote(event.target.value);
-                  }}
-                  placeholder="这里记录评论草稿、采集备注或待人工确认的动作说明。"
-                />
-              </section>
+                  {generatedDrafts.length > 0 ? (
+                    <div className="browser-workspace-list">
+                      {generatedDrafts.map((draft) => (
+                        <button
+                          key={`${selectedPlatform.name}-${draft}`}
+                          type="button"
+                          className="browser-workspace-list-item"
+                          onClick={() => {
+                            setWorkspaceNote(draft);
+                          }}
+                        >
+                          {draft}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <textarea
+                    className="browser-workspace-notes"
+                    value={workspaceNote}
+                    onChange={(event) => {
+                      setWorkspaceNote(event.target.value);
+                    }}
+                    placeholder="这里记录评论草稿、采集备注或待人工确认的动作说明。"
+                  />
+                </section>
 
-              <section className="browser-workspace-section">
-                <div className="browser-workspace-section-title">人工确认动作</div>
-                <div className="browser-workspace-list">
-                  {workspaceConfig.manualActions.map((item) => (
-                    <button
-                      key={`${selectedPlatform.name}-${item}`}
-                      type="button"
-                      className="browser-workspace-list-item"
-                      onClick={() => {
-                        queueManualAction(selectedPlatform.name, item);
-                      }}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-                <div className="browser-workspace-section-title">待复核队列</div>
-                <div className="browser-workspace-list">
-                  {selectedPlatformQueue.length > 0 ? (
-                    selectedPlatformQueue.map((item) => (
-                        <div key={item.id} className="browser-review-queue-card">
-                          <div className="browser-review-queue-title">
-                            <span>{item.title}</span>
-                            <span className={`browser-review-status is-${item.status}`}>
-                              {item.status === 'pending'
-                                ? '待复核'
-                                : item.status === 'ready'
-                                  ? '可执行'
-                                  : '已归档'}
-                            </span>
-                          </div>
-                          <div className="browser-workspace-action-meta">{item.createdAtLabel}</div>
-                          <div className="browser-workspace-action-description">{item.note}</div>
-                          {item.linkedTaskId ? (
-                            <div className="browser-workspace-action-meta">
-                              已建任务：{item.linkedTaskName ?? item.linkedTaskId}
+                <section className="browser-workspace-section">
+                  <div className="browser-workspace-section-title">人工确认动作</div>
+                  <div className="browser-workspace-list">
+                    {workspaceConfig.manualActions.map((item) => (
+                      <button
+                        key={`${selectedPlatform.name}-${item}`}
+                        type="button"
+                        className="browser-workspace-list-item"
+                        onClick={() => {
+                          queueManualAction(selectedPlatform.name, item);
+                        }}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="browser-workspace-section-title">待复核队列</div>
+                  <div className="browser-workspace-list">
+                    {selectedPlatformQueue.length > 0 ? (
+                      selectedPlatformQueue.map((item) => (
+                          <div key={item.id} className="browser-review-queue-card">
+                            <div className="browser-review-queue-title">
+                              <span>{item.title}</span>
+                              <span className={`browser-review-status is-${item.status}`}>
+                                {item.status === 'pending'
+                                  ? '待复核'
+                                  : item.status === 'ready'
+                                    ? '可执行'
+                                    : '已归档'}
+                              </span>
                             </div>
-                          ) : null}
-                          <div className="browser-review-queue-actions">
-                            <Button
-                              onClick={() => {
-                                setWorkspaceNote(item.note);
-                              }}
-                            >
-                              写入备注
-                            </Button>
-                            <Button
-                              onClick={() => {
-                                updateQueueStatus(item.id, 'ready');
-                              }}
-                            >
-                              标记可执行
-                            </Button>
-                            {item.status === 'ready' && !item.linkedTaskId ? (
-                              <Button
-                                onClick={() => {
-                                  void linkQueueItemTask(item);
-                                }}
-                              >
-                                生成执行任务
-                              </Button>
-                            ) : null}
+                            <div className="browser-workspace-action-meta">{item.createdAtLabel}</div>
+                            <div className="browser-workspace-action-description">{item.note}</div>
                             {item.linkedTaskId ? (
+                              <div className="browser-workspace-action-meta">
+                                已建任务：{item.linkedTaskName ?? item.linkedTaskId}
+                              </div>
+                            ) : null}
+                            <div className="browser-review-queue-actions">
                               <Button
                                 onClick={() => {
-                                  void openAutomationWorkspace();
+                                  setWorkspaceNote(item.note);
                                 }}
                               >
-                                打开自动化页
+                                写入备注
                               </Button>
-                            ) : null}
-                            <Button
-                              onClick={() => {
-                                updateQueueStatus(item.id, 'archived');
-                              }}
-                            >
-                              归档
-                            </Button>
+                              <Button
+                                onClick={() => {
+                                  updateQueueStatus(item.id, 'ready');
+                                }}
+                              >
+                                标记可执行
+                              </Button>
+                              {item.status === 'ready' && !item.linkedTaskId ? (
+                                <Button
+                                  onClick={() => {
+                                    void linkQueueItemTask(item);
+                                  }}
+                                >
+                                  生成执行任务
+                                </Button>
+                              ) : null}
+                              {item.linkedTaskId ? (
+                                <Button
+                                  onClick={() => {
+                                    void openAutomationWorkspace();
+                                  }}
+                                >
+                                  打开自动化页
+                                </Button>
+                              ) : null}
+                              <Button
+                                onClick={() => {
+                                  updateQueueStatus(item.id, 'archived');
+                                }}
+                              >
+                                归档
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      ))
-                  ) : (
-                    <div className="browser-workspace-empty">
-                      还没有待复核动作，点击上面的动作项即可加入队列。
-                    </div>
-                  )}
-                </div>
-                <div className="browser-workspace-section-title">边界说明</div>
-                <div className="browser-workspace-list">
-                  {workspaceConfig.guardrails.map((item) => (
-                    <div key={`${selectedPlatform.name}-guard-${item}`} className="browser-workspace-guardrail">
-                      {item}
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </div>
+                        ))
+                    ) : (
+                      <div className="browser-workspace-empty">
+                        还没有待复核动作，点击上面的动作项即可加入队列。
+                      </div>
+                    )}
+                  </div>
+                  <div className="browser-workspace-section-title">边界说明</div>
+                  <div className="browser-workspace-list">
+                    {workspaceConfig.guardrails.map((item) => (
+                      <div key={`${selectedPlatform.name}-guard-${item}`} className="browser-workspace-guardrail">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            )
           ) : (
             <div className="browser-workspace-empty">
               先从上方选择一个国内平台，再进入对应的平台功能页。
