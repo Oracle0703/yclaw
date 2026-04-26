@@ -16,6 +16,7 @@ jobs:
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
       SKIP_POSTINSTALL: 1
+      npm_config_progress: false
       npm_config_registry: https://registry.npmjs.org/
     steps:
       - uses: actions/checkout@v4
@@ -28,20 +29,8 @@ jobs:
           registry-url: https://registry.npmjs.org/
 
       - name: Install dependencies
-        shell: bash
-        run: |
-          for attempt in 1 2 3; do
-            if npm ci --no-audit --ignore-scripts --fetch-retries=5 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=120000; then
-              exit 0
-            fi
-
-            if [ "$attempt" -eq 3 ]; then
-              exit 1
-            fi
-
-            echo "npm ci failed on attempt $attempt, retrying after backoff..."
-            sleep $((attempt * 5))
-          done
+        timeout-minutes: 12
+        run: npm ci --no-audit --ignore-scripts --no-progress --fetch-retries=2 --fetch-retry-mintimeout=10000 --fetch-retry-maxtimeout=60000
 
       - name: Lint
         run: npm run lint

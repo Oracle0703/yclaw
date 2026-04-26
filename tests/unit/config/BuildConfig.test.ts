@@ -152,9 +152,10 @@ describe('SPEC-022: Build Configuration', () => {
     it('should skip Electron-native postinstall rebuilds in CI verification', () => {
       const content = readFileSync(resolve(rootDir, '.github/workflows/ci.yml'), 'utf-8');
       expect(content).toContain('SKIP_POSTINSTALL: 1');
-      expect(content).toContain('npm ci --no-audit --ignore-scripts');
-      expect(content).toContain('--fetch-retries=5');
-      expect(content).toContain('for attempt in 1 2 3; do');
+      expect(content).toContain('npm_config_progress: false');
+      expect(content).toContain('timeout-minutes: 12');
+      expect(content).toContain('npm ci --no-audit --ignore-scripts --no-progress');
+      expect(content).toContain('--fetch-retries=2');
       expect(content).not.toContain('rm -rf node_modules package-lock.json');
       expect(content).not.toContain('npm install --no-audit');
     });
