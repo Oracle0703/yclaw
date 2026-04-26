@@ -43,8 +43,6 @@ export interface LintRunResult {
   exitCode: 0 | 1 | 2;
 }
 
-const SUPPORTED_EXT_NOTE = '.yaml/.yml';
-
 /** 安全上限，避免恶意输入与环形符号链接。 */
 export const SAFETY = {
   /** 递归目录最大深度。 */

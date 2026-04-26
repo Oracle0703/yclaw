@@ -105,7 +105,7 @@ describe('shared · serialization · watcher · security/edge-case', () => {
     let attempts = 0;
     const w = createWatcher(tmp, {
       debounceMs: 5,
-      watch: (_root, onTick) => {
+      watch: (_root, _onTick) => {
         attempts++;
         if (attempts === 1) throw new Error('recursive not supported');
         return { close: () => undefined };

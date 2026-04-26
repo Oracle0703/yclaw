@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Input, Space, Table, Typography, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import type { DataApiToken } from '@shared/types';
@@ -12,14 +12,14 @@ export function ApiTokenPanel() {
   const [scopesText, setScopesText] = useState('results:read,datasets:read,exports:read');
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
 
-  const loadTokens = async () => {
+  const loadTokens = useCallback(async () => {
     const value = await dataCenter.listApiTokens();
     setTokens((value as DataApiToken[]) ?? []);
-  };
+  }, [dataCenter]);
 
   useEffect(() => {
     void loadTokens();
-  }, [dataCenter]);
+  }, [loadTokens]);
 
   const createToken = async () => {
     try {

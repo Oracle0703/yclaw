@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button, Input, Space, Switch, Table, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import type { DataDataset } from '@shared/types';
@@ -10,14 +10,14 @@ export function DatasetPanel() {
   const [name, setName] = useState('默认结果数据集');
   const [apiEnabled, setApiEnabled] = useState(false);
 
-  const loadDatasets = async () => {
+  const loadDatasets = useCallback(async () => {
     const value = await dataCenter.listDatasets();
     setDatasets((value as DataDataset[]) ?? []);
-  };
+  }, [dataCenter]);
 
   useEffect(() => {
     void loadDatasets();
-  }, [dataCenter]);
+  }, [loadDatasets]);
 
   const saveDataset = async () => {
     try {

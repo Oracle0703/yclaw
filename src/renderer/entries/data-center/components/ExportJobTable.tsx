@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button, Input, Modal, Select, Space, Table, Tag, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import type { DataExportJob, DataPage } from '@shared/types';
@@ -13,14 +13,14 @@ export function ExportJobTable() {
   const [format, setFormat] = useState<'csv' | 'json' | 'jsonl'>('jsonl');
   const [status, setStatus] = useState<DataExportJob['status'] | undefined>(undefined);
 
-  const loadJobs = async () => {
+  const loadJobs = useCallback(async () => {
     const value = await dataCenter.listExports({ page: 1, pageSize: 20, status });
     setJobs(((value as DataPage<DataExportJob>)?.items ?? []) as DataExportJob[]);
-  };
+  }, [dataCenter, status]);
 
   useEffect(() => {
     void loadJobs();
-  }, [dataCenter, status]);
+  }, [loadJobs]);
 
   const retryJob = async (jobId: string) => {
     try {

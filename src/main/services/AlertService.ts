@@ -8,14 +8,6 @@ export interface AlertQuery {
   taskId?: string;
 }
 
-interface AlertActionInput {
-  alertId: string;
-  action: string;
-  operator?: string;
-  note?: string;
-  createdAt: string;
-}
-
 export interface AlertServiceOptions {
   executionLogService?: Pick<ExecutionLogService, 'query'>;
   alertRepository?: Pick<

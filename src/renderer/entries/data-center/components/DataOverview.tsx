@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Space, Statistic } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import type { DataCenterOverview } from '@shared/types';
@@ -12,12 +12,19 @@ export function DataOverview() {
     failedExports: 0,
     recentExports: [],
   });
-
-  useEffect(() => {
-    void dataCenter.getOverview().then((value) => {
-      setOverview((value as DataCenterOverview) ?? overview);
+  const loadOverview = useCallback(async () => {
+    const value = await dataCenter.getOverview();
+    setOverview((value as DataCenterOverview) ?? {
+      totalResults: 0,
+      suspiciousResults: 0,
+      failedExports: 0,
+      recentExports: [],
     });
   }, [dataCenter]);
+
+  useEffect(() => {
+    void loadOverview();
+  }, [loadOverview]);
 
   return (
     <ProCard title="数据总览" className="yclaw-panel-card">

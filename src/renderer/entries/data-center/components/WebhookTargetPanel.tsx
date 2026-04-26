@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button, Input, Space, Table, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import type { DataWebhookTarget } from '@shared/types';
@@ -11,14 +11,14 @@ export function WebhookTargetPanel() {
   const [url, setUrl] = useState('http://127.0.0.1:3000/hook');
   const [secret, setSecret] = useState('');
 
-  const loadTargets = async () => {
+  const loadTargets = useCallback(async () => {
     const value = await dataCenter.listWebhookTargets();
     setTargets((value as DataWebhookTarget[]) ?? []);
-  };
+  }, [dataCenter]);
 
   useEffect(() => {
     void loadTargets();
-  }, [dataCenter]);
+  }, [loadTargets]);
 
   const saveTarget = async () => {
     try {
