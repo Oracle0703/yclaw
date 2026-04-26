@@ -173,13 +173,304 @@ describe('Browser App', () => {
     render(<BrowserApp />);
 
     await waitFor(() => {
-      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.BROWSER_LIST_TABS);
+      expect(screen.getByText('example.com')).toBeDefined();
     });
 
     fireEvent.click(screen.getByRole('button', { name: '刷新' }));
 
     await waitFor(() => {
       expect(messageErrorMock).toHaveBeenCalledWith('reload failed');
+    });
+  });
+
+  it('opens the selected platform workspace instead of navigating immediately', async () => {
+    invokeMock.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
+        return tabs;
+      }
+
+      if (channel === IPC_CHANNELS.BROWSER_CREATE_TAB) {
+        return {
+          id: 2,
+          title: '小红书',
+          url: (payload as { url: string }).url,
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+          sessionPartition: 'default',
+        };
+      }
+
+      return null;
+    });
+
+    render(<BrowserApp />);
+
+    await waitFor(() => {
+      expect(screen.getByText('example.com')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /抖音/ }));
+
+    expect(screen.getByText('抖音运营工作台')).toBeDefined();
+    expect(screen.getByText('评论草稿助手')).toBeDefined();
+    expect(screen.getByText(/不做无水印下载/)).toBeDefined();
+  });
+
+  it('opens the requested entry from the selected platform workspace', async () => {
+    invokeMock.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
+        return tabs;
+      }
+
+      if (channel === IPC_CHANNELS.BROWSER_CREATE_TAB) {
+        return {
+          id: 2,
+          title: '抖音',
+          url: (payload as { url: string }).url,
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+          sessionPartition: 'default',
+        };
+      }
+
+      return null;
+    });
+
+    render(<BrowserApp />);
+
+    await waitFor(() => {
+      expect(screen.getByText('example.com')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /抖音/ }));
+    fireEvent.click(screen.getByRole('button', { name: '打开平台主页' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.BROWSER_CREATE_TAB, {
+        url: 'https://www.douyin.com',
+      });
+    });
+  });
+
+  it('generates comment drafts for the selected platform workspace', async () => {
+    invokeMock.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
+        return tabs;
+      }
+
+      if (channel === IPC_CHANNELS.AI_CONFIG_GET) {
+        return {
+          provider: 'openai',
+          apiKey: 'test-key',
+        };
+      }
+
+      if (channel === IPC_CHANNELS.AI_CHAT) {
+        expect(payload).toMatchObject({
+          message: expect.stringContaining('一条在讲选品思路的短视频'),
+        });
+        return {
+          conversationId: 'draft-conv',
+          message: {
+            id: 'assistant-draft',
+            role: 'assistant',
+            content: '第一条模型回复\n第二条模型回复\n第三条模型回复',
+            timestamp: 1,
+          },
+        };
+      }
+
+      return null;
+    });
+
+    render(<BrowserApp />);
+
+    await waitFor(() => {
+      expect(screen.getByText('example.com')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /抖音/ }));
+    fireEvent.change(screen.getByPlaceholderText('输入当前作品、评论区或账号页的关键信息'), {
+      target: { value: '一条在讲选品思路的短视频' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: '评论草稿语气' }), {
+      target: { value: '友好' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '生成评论草稿' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/当前来源：模型回复/)).toBeDefined();
+      expect(
+        (
+          screen.getByPlaceholderText(
+            '这里记录评论草稿、采集备注或待人工确认的动作说明。',
+          ) as HTMLTextAreaElement
+        ).value,
+      ).toBe('第一条模型回复');
+    });
+  });
+
+  it('falls back to canned drafts when AI is unavailable', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
+        return tabs;
+      }
+
+      if (channel === IPC_CHANNELS.AI_CONFIG_GET) {
+        return {
+          provider: 'openai',
+        };
+      }
+
+      return null;
+    });
+
+    render(<BrowserApp />);
+
+    await waitFor(() => {
+      expect(screen.getByText('example.com')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /抖音/ }));
+    fireEvent.change(screen.getByPlaceholderText('输入当前作品、评论区或账号页的关键信息'), {
+      target: { value: '一条在讲选品思路的短视频' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '生成评论草稿' }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/固定模板/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/一条在讲选品思路的短视频/).length).toBeGreaterThan(0);
+    });
+  });
+
+  it('queues manual review actions for the selected platform', async () => {
+    render(<BrowserApp />);
+
+    await waitFor(() => {
+      expect(screen.getByText('example.com')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /抖音/ }));
+    fireEvent.click(screen.getByRole('button', { name: '关注对象加入复核清单，由人工逐个确认' }));
+
+    expect(screen.getByText('待复核')).toBeDefined();
+    expect(screen.getAllByText('关注对象加入复核清单，由人工逐个确认').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '标记可执行' }));
+
+    expect(screen.getByText('可执行')).toBeDefined();
+  });
+
+  it('creates an automation task draft for ready review actions', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
+        return tabs;
+      }
+
+      if (channel === IPC_CHANNELS.TASK_CREATE) {
+        return {
+          id: 'task-douyin-review',
+          name: '抖音 · 关注复核 · 04/27 02:30',
+        };
+      }
+
+      if (channel === IPC_CHANNELS.WINDOW_OPEN) {
+        return null;
+      }
+
+      return null;
+    });
+
+    render(<BrowserApp />);
+
+    await waitFor(() => {
+      expect(screen.getByText('example.com')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /抖音/ }));
+    fireEvent.click(screen.getByRole('button', { name: '关注对象加入复核清单，由人工逐个确认' }));
+    fireEvent.click(screen.getByRole('button', { name: '标记可执行' }));
+    fireEvent.click(screen.getByRole('button', { name: '生成执行任务' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        IPC_CHANNELS.TASK_CREATE,
+        expect.objectContaining({
+          name: expect.stringContaining('抖音'),
+          entryUrl: 'https://example.com',
+          schedule: { type: 'manual' },
+          steps: expect.arrayContaining([
+            expect.objectContaining({
+              action: expect.objectContaining({
+                type: 'click',
+                selector: '[data-yclaw-confirm="follow-button"]',
+              }),
+            }),
+          ]),
+        }),
+      );
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.WINDOW_OPEN, { module: 'automation' });
+      expect(screen.getByText(/已建任务：抖音 · 关注复核/)).toBeDefined();
+    });
+  });
+
+  it('creates a comment draft task with the current draft content as input value', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
+        return tabs;
+      }
+
+      if (channel === IPC_CHANNELS.TASK_CREATE) {
+        return {
+          id: 'task-douyin-comment',
+          name: '抖音 · 评论草案 · 04/27 02:31',
+        };
+      }
+
+      if (channel === IPC_CHANNELS.WINDOW_OPEN) {
+        return null;
+      }
+
+      return null;
+    });
+
+    render(<BrowserApp />);
+
+    await waitFor(() => {
+      expect(screen.getByText('example.com')).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /抖音/ }));
+    fireEvent.change(
+      screen.getByPlaceholderText('这里记录评论草稿、采集备注或待人工确认的动作说明。'),
+      {
+        target: { value: '这条内容的信息量很足，我补充一个观察点：关注供应链波动。' },
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: '评论草稿生成后人工确认再发送' }));
+    fireEvent.click(screen.getByRole('button', { name: '标记可执行' }));
+    fireEvent.click(screen.getByRole('button', { name: '生成执行任务' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        IPC_CHANNELS.TASK_CREATE,
+        expect.objectContaining({
+          steps: expect.arrayContaining([
+            expect.objectContaining({
+              action: expect.objectContaining({
+                type: 'input',
+                selector: '[data-yclaw-confirm="comment-input"]',
+                params: expect.objectContaining({
+                  value: '这条内容的信息量很足，我补充一个观察点：关注供应链波动。',
+                }),
+              }),
+            }),
+          ]),
+        }),
+      );
+      expect(screen.getByText(/已建任务：抖音 · 评论草案/)).toBeDefined();
     });
   });
 });

@@ -47,7 +47,7 @@ describe('Regression: WebViewContainer', () => {
 
   it('should render empty state when tabId is null', () => {
     render(<WebViewContainer tab={null} />);
-    expect(screen.getByText(/新建标签页/)).toBeDefined();
+    expect(screen.getByText(/平台分类|空白采集页/)).toBeDefined();
   });
 
   it('should render session console details for the active tab', () => {

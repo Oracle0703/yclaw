@@ -10,12 +10,46 @@ interface TaskSummary {
   id: string;
   name: string;
   status: TaskStatus;
+  description?: string;
+  entryUrl?: string;
   stepsCount?: number;
   updatedAt: string;
   latestBatch?: {
     id: string;
     status: string;
   } | null;
+}
+
+function getTaskOriginBadges(record: TaskSummary): string[] {
+  const badges: string[] = [];
+
+  if (record.name.includes('评论草案')) {
+    badges.push('评论草案');
+  } else if (record.name.includes('关注复核')) {
+    badges.push('关注复核');
+  }
+
+  if (record.description?.includes('任务草案')) {
+    badges.push('浏览器移交');
+  }
+
+  if (record.description?.includes('占位选择器')) {
+    badges.push('需补选择器');
+  }
+
+  return badges;
+}
+
+function getHostnameLabel(url?: string): string | null {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }
 
 export function TaskList({
@@ -64,6 +98,18 @@ export function TaskList({
       render: (value: string, record) => (
         <Space direction="vertical" size={0}>
           <Typography.Text strong>{value}</Typography.Text>
+          {getTaskOriginBadges(record).length > 0 ? (
+            <Space>
+              {getTaskOriginBadges(record).map((badge) => (
+                <Tag key={`${record.id}-${badge}`} color={badge === '需补选择器' ? 'warning' : 'processing'}>
+                  {badge}
+                </Tag>
+              ))}
+            </Space>
+          ) : null}
+          {getHostnameLabel(record.entryUrl) ? (
+            <Typography.Text type="secondary">{getHostnameLabel(record.entryUrl)}</Typography.Text>
+          ) : null}
           <Typography.Text type="secondary">{record.id}</Typography.Text>
         </Space>
       ),

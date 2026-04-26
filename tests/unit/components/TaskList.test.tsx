@@ -78,6 +78,8 @@ describe('TaskList', () => {
               id: 'task-1',
               name: '采集任务',
               status: 'idle',
+              description: '普通任务',
+              entryUrl: 'https://example.com/dashboard',
               updatedAt: '2026-04-15 10:00:00',
               latestBatch: {
                 id: 'batch-1',
@@ -96,6 +98,36 @@ describe('TaskList', () => {
     render(<TaskList onSelect={vi.fn()} />);
 
     expect(await screen.findByText('采集任务')).toBeDefined();
+    expect(screen.getByText('example.com')).toBeDefined();
+  });
+
+  it('renders browser draft badges for transferred review tasks', async () => {
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.TASK_LIST) {
+        return {
+          success: true,
+          data: [
+            {
+              id: 'task-draft-1',
+              name: '抖音 · 评论草案 · 04/27 02:40',
+              status: 'idle',
+              description: '这是任务草案，不是静默自动执行脚本。默认使用占位选择器，未人工修改前不要直接启动。',
+              entryUrl: 'https://www.douyin.com/video/123',
+              updatedAt: '2026-04-27 02:40:00',
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: { status: 'running' } };
+    });
+
+    render(<TaskList onSelect={vi.fn()} />);
+
+    expect(await screen.findByText('评论草案')).toBeDefined();
+    expect(screen.getByText('浏览器移交')).toBeDefined();
+    expect(screen.getByText('需补选择器')).toBeDefined();
+    expect(screen.getByText('douyin.com')).toBeDefined();
   });
 
   it('starts a task from the action column', async () => {

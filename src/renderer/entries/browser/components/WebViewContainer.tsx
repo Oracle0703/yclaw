@@ -7,14 +7,14 @@ interface WebViewContainerProps {
 }
 
 /**
- * 浏览器会话控制台
+ * 采集会话信息面板
  * 当前版本明确展示标签元信息与会话状态，而不是伪装成真实嵌入浏览视图
  */
 export function WebViewContainer({ tab, interventionState = null }: WebViewContainerProps) {
   if (tab == null) {
     return (
       <Empty
-        description="点击上方新建标签页，开始创建受控浏览会话"
+        description="从上方平台分类选择站点，或新建空白采集页开始处理任务"
         image={Empty.PRESENTED_IMAGE_SIMPLE}
       />
     );

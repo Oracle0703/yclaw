@@ -11,6 +11,8 @@ interface TaskListRow {
   id: string;
   name: string;
   status: string;
+  description?: string | null;
+  flowJson?: string | null;
   updatedAt: string;
   scheduleJson?: string | null;
   nextRunAt?: string | null;
@@ -24,6 +26,9 @@ interface TaskFlowRow {
   name: string;
   description?: string | null;
   flowJson: string;
+  scheduleJson?: string | null;
+  sessionId?: string | null;
+  templateId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +48,8 @@ export class TaskRepository {
     id: string;
     name: string;
     status: string;
+    description?: string;
+    entryUrl?: string;
     updatedAt: string;
     schedule?: {
       type: 'manual' | 'once' | 'cron';
@@ -68,6 +75,8 @@ export class TaskRepository {
           tasks.id,
           tasks.name,
           tasks.status,
+          tasks.description,
+          tasks.flow_json AS flowJson,
           tasks.schedule_json AS scheduleJson,
           tasks.next_run_at AS nextRunAt,
           tasks.last_run_at AS lastRunAt,
@@ -93,6 +102,8 @@ export class TaskRepository {
       id: task.id,
       name: task.name,
       status: task.status,
+      description: task.description ?? undefined,
+      entryUrl: parseJson<{ entryUrl?: string }>(task.flowJson, {}).entryUrl,
       schedule: parseJson(task.scheduleJson, null),
       nextRunAt: task.nextRunAt ?? null,
       lastRunAt: task.lastRunAt ?? null,
@@ -110,6 +121,9 @@ export class TaskRepository {
           name,
           description,
           flow_json AS flowJson,
+          schedule_json AS scheduleJson,
+          session_id AS sessionId,
+          template_id AS templateId,
           created_at AS createdAt,
           updated_at AS updatedAt
         FROM tasks
@@ -131,7 +145,11 @@ export class TaskRepository {
       id: task.id,
       name: task.name,
       description: task.description ?? undefined,
+      entryUrl: parsed.entryUrl,
       steps,
+      schedule: parseJson(task.scheduleJson, null),
+      sessionId: task.sessionId ?? null,
+      templateId: task.templateId ?? null,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
     };
@@ -241,13 +259,13 @@ export class TaskRepository {
 
   /**
    * 保存完整 TaskFlow（双写策略）：
-   * - `tasks.flow_json` 仅存 `{ steps }`，作为「快照 / 容灾恢复」的源；name/description/时间戳走列。
+   * - `tasks.flow_json` 存 `{ steps, entryUrl }`，作为「快照 / 容灾恢复」的源；name/description/时间戳走列。
    * - `task_steps` 表存归一化的逐步行，供 SQL 查询/索引/外键引用使用。
    * 两者由本方法在同一事务中刷新；不存在 = INSERT，存在 = UPDATE 后清空 + 重新插入。
    */
   saveTaskFlow(flow: TaskFlow): void {
     this.executor.transaction(() => {
-      const flowJson = JSON.stringify({ steps: flow.steps });
+      const flowJson = JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl });
       const updateResult = this.executor.run(
         `
           UPDATE tasks
@@ -260,10 +278,30 @@ export class TaskRepository {
       if ((updateResult.changes ?? 0) === 0) {
         this.executor.run(
           `
-            INSERT INTO tasks (id, name, description, flow_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (
+              id,
+              name,
+              description,
+              flow_json,
+              schedule_json,
+              session_id,
+              template_id,
+              created_at,
+              updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
-          [flow.id, flow.name, flow.description ?? null, flowJson, flow.createdAt, flow.updatedAt],
+          [
+            flow.id,
+            flow.name,
+            flow.description ?? null,
+            flowJson,
+            flow.schedule ? JSON.stringify(flow.schedule) : null,
+            flow.sessionId ?? null,
+            flow.templateId ?? null,
+            flow.createdAt,
+            flow.updatedAt,
+          ],
         );
       }
 

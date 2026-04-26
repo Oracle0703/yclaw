@@ -16,6 +16,10 @@ describe('TaskRepository', () => {
     id: 'task-1',
     name: '采集任务',
     description: '描述',
+    entryUrl: 'https://example.com/workspace',
+    schedule: { type: 'manual' },
+    sessionId: 'session-1',
+    templateId: 'template-1',
     steps: [
       {
         id: 'step-1',
@@ -43,6 +47,8 @@ describe('TaskRepository', () => {
         id: 'task-1',
         name: '采集任务',
         status: 'idle',
+        description: '描述',
+        flowJson: JSON.stringify({ entryUrl: 'https://example.com/workspace' }),
         scheduleJson: JSON.stringify({ type: 'cron', cron: '*/5 * * * *' }),
         nextRunAt: '2026-04-17 10:00:00',
         lastRunAt: null,
@@ -63,6 +69,8 @@ describe('TaskRepository', () => {
         id: 'task-1',
         name: '采集任务',
         status: 'idle',
+        description: '描述',
+        entryUrl: 'https://example.com/workspace',
         schedule: { type: 'cron', cron: '*/5 * * * *' },
         nextRunAt: '2026-04-17 10:00:00',
         lastRunAt: null,
@@ -90,7 +98,10 @@ describe('TaskRepository', () => {
       id: 'task-1',
       name: '采集任务',
       description: '描述',
-      flowJson: JSON.stringify({ steps: [] }),
+      flowJson: JSON.stringify({ steps: [], entryUrl: flow.entryUrl }),
+      scheduleJson: JSON.stringify({ type: 'manual' }),
+      sessionId: 'session-1',
+      templateId: 'template-1',
       createdAt: flow.createdAt,
       updatedAt: flow.updatedAt,
     });
@@ -165,12 +176,22 @@ describe('TaskRepository', () => {
     expect(executor.run).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining('UPDATE tasks'),
-      ['采集任务', '描述', JSON.stringify({ steps: flow.steps }), 'task-1'],
+      ['采集任务', '描述', JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl }), 'task-1'],
     );
     expect(executor.run).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('INSERT INTO tasks'),
-      ['task-1', '采集任务', '描述', JSON.stringify({ steps: flow.steps }), flow.createdAt, flow.updatedAt],
+      [
+        'task-1',
+        '采集任务',
+        '描述',
+        JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl }),
+        JSON.stringify({ type: 'manual' }),
+        'session-1',
+        'template-1',
+        flow.createdAt,
+        flow.updatedAt,
+      ],
     );
     expect(executor.run).toHaveBeenNthCalledWith(
       3,
