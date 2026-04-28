@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppstoreOutlined,
+  CheckCircleOutlined,
   DatabaseOutlined,
   FundOutlined,
   GlobalOutlined,
@@ -39,6 +40,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 const ICON_MAP: Record<string, React.ReactNode> = {
   stock: <FundOutlined />,
   automation: <RobotOutlined />,
+  signin: <CheckCircleOutlined />,
   'data-center': <DatabaseOutlined />,
   browser: <GlobalOutlined />,
   'plugin-center': <AppstoreOutlined />,
@@ -76,6 +78,14 @@ export default function CommandPalette() {
         shortcut: 'Ctrl+3',
         category: 'navigation',
         execute: () => navigate('/automation'),
+      },
+      {
+        id: 'nav:signin',
+        name: '跳转到自动签到',
+        icon: 'signin',
+        shortcut: 'Ctrl+7',
+        category: 'navigation',
+        execute: () => navigate('/signin'),
       },
       {
         id: 'nav:data-center',

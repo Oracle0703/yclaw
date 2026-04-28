@@ -641,4 +641,86 @@ describe('Settings', () => {
       expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.AI_MCP_AUDIT_LIST);
     });
   });
+
+  it('persists SMTP draft into general config before sending a sign-in test email', async () => {
+    invokeMock.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === IPC_CHANNELS.CONFIG_GET_ALL) {
+        return {
+          general: {
+            theme: 'system',
+            language: 'zh-CN',
+            startupBehavior: 'showWorkbench',
+            closeToTray: false,
+          },
+          modules: {},
+          plugins: {},
+        };
+      }
+
+      if (channel === IPC_CHANNELS.AI_MCP_STATUS) {
+        return { running: false, authRequired: true };
+      }
+
+      if (channel === IPC_CHANNELS.AI_MCP_CLIENT_STATUS) {
+        return [];
+      }
+
+      if (channel === IPC_CHANNELS.AI_MCP_AUDIT_LIST) {
+        return [];
+      }
+
+      if (channel === IPC_CHANNELS.CONFIG_SET) {
+        return payload;
+      }
+
+      if (channel === IPC_CHANNELS.SIGNIN_NOTIFICATION_TEST_EMAIL) {
+        return { delivered: true };
+      }
+
+      return null;
+    });
+
+    render(<Settings />);
+
+    fireEvent.change(await screen.findByLabelText('SMTP 主机'), {
+      target: { value: 'smtp.qq.com' },
+    });
+    fireEvent.change(screen.getByLabelText('SMTP 端口'), {
+      target: { value: '465' },
+    });
+    fireEvent.change(screen.getByLabelText('SMTP 用户名'), {
+      target: { value: 'bot@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('SMTP 密码'), {
+      target: { value: 'secret' },
+    });
+    fireEvent.change(screen.getByLabelText('发件人'), {
+      target: { value: 'bot@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('收件人'), {
+      target: { value: 'ops@example.com, owner@example.com' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '发送测试邮件' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.CONFIG_SET, {
+        key: 'general',
+        value: expect.objectContaining({
+          notificationEmail: {
+            enabled: false,
+            host: 'smtp.qq.com',
+            port: 465,
+            secure: true,
+            username: 'bot@example.com',
+            password: 'secret',
+            from: 'bot@example.com',
+            to: ['ops@example.com', 'owner@example.com'],
+          },
+        }),
+      });
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_NOTIFICATION_TEST_EMAIL);
+      expect(messageSuccessMock).toHaveBeenCalledWith('测试邮件已发送');
+    });
+  });
 });

@@ -21,6 +21,18 @@
 | SPEC-A07 告警、日志与复跑 | 基础版已落地 | 已有结构化执行日志、告警聚合、批次复跑、告警已读与批次跳转 |
 | SPEC-A08 稳定性与验收指标 | 部分完成 | 已有单测、组件测试、Playwright 场景覆盖与远程 Runner / 调度专项测试；完整 Electron 打包态与长稳压测仍待补齐 |
 
+### 阿里云盘签到专项回写（2026-04-28）
+
+| 项目 | 当前状态 | 已做 | 未做 |
+| --- | --- | --- | --- |
+| 任务模型 | 已接入自动化主线 | `TaskFlow` 已支持 `kind: 'aliyundrive-signin'` 与 `signin` 配置快照持久化；`signin_task_runs` 已持久化 latest run 与最近运行历史摘要 | 更完整的运行记录浏览、分页与筛选仍未完成 |
+| 执行链路 | 已形成基础闭环 | 已有 `AliyunDriveSigninProvider`、`AliyunDriveApiFallback`、`SigninTaskService`、`signin:*` IPC 与 `SchedulerService.scheduleRetry()` 分流；页面 locator 已具备“活动区 -> 日期卡片 -> 领取按钮”的基础点击脚本，页面失败时会抓取 URL/标题/DOM 摘要/截图调试快照 | 仍未完成真实活动页验收与长期稳态验证，异常页面结构仍需继续校准 |
+| Automation 页面 | 已可配置与触发 | 已新增 `SigninTaskPanel`、`SigninRunStatusCard`，支持保存、立即执行、人工处理后重试，并可在状态卡中直接查看失败时的调试摘要、截图预览和最近运行历史 | 批次视图、分页筛选与更完整的错误可视化仍未完成 |
+| 通知能力 | 已打通基础闭环 | 应用内通知已接入；Settings 已支持 SMTP 草稿配置与测试邮件按钮；`EmailNotifier` 已具备最小 SMTP `AUTH LOGIN + text/plain` 发送能力 | 尚未完成真实 SMTP 服务联调、STARTTLS/附件等扩展能力也不在当前范围 |
+| 调度 / 人工介入 | 已接入现有骨架 | 已支持固定任务类型分流、失败补跑调度、`needs_intervention -> retry` 主链路 | 自动 cron/once 真实触发仍受当前 `SchedulerService` 总体实现边界约束 |
+
+> 说明：该专项属于 `automation` 主线内的定制任务能力，不单开顶级菜单；总体验收仍需以本文主线 spec 与 `docs/superpowers/specs/2026-04-28-aliyundrive-signin-design.md` 联合判断。
+
 ### 当前限制 / 暂不支持
 
 | 项 | 说明 |

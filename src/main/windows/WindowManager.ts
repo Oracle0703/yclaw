@@ -25,6 +25,20 @@ interface WindowManagerOptions {
 }
 
 /**
+ * 内置在 workbench 主壳里的模块。openWindow 这些模块时会复用 workbench 窗口
+ * 并通过 EVENTS.APP_NAVIGATE 通知渲染端跳路由，而不是新开独立窗口。
+ */
+const WORKBENCH_HOSTED_MODULES = new Set<string>([
+  'workbench',
+  'stock',
+  'automation',
+  'data-center',
+  'plugin-center',
+  'browser',
+  'signin',
+]);
+
+/**
  * 窗口管理器 — 管理所有模块窗口的创建、销毁、状态记忆
  */
 export class WindowManager {
@@ -61,8 +75,19 @@ export class WindowManager {
 
   /**
    * 创建或聚焦模块窗口
+   *
+   * 对于已经内置到 workbench 主壳的模块（stock/automation/data-center/plugin-center/browser/signin），
+   * 不再单独开窗，而是聚焦 workbench 并通过 APP_NAVIGATE 事件跳路由。
    */
   openWindow(config: WindowConfig): BrowserWindow {
+    if (
+      WORKBENCH_HOSTED_MODULES.has(config.module) &&
+      config.module !== 'workbench' &&
+      !config.instanceId
+    ) {
+      return this.openInWorkbench(config);
+    }
+
     const windowKey = this.getWindowKey(config.module, config.instanceId);
     const existing = this.windows.get(windowKey);
     if (existing && !existing.isDestroyed()) {
@@ -84,6 +109,53 @@ export class WindowManager {
     }
 
     return this.ensureWindow(config, false);
+  }
+
+  /**
+   * 在 workbench 主窗口内打开/激活指定模块路由。
+   * 复用同一个 workbench BrowserWindow，避免重复进程开销并满足"同一窗口"体验。
+   */
+  private openInWorkbench(config: WindowConfig): BrowserWindow {
+    const workbenchKey = this.getWindowKey('workbench');
+    let workbench = this.windows.get(workbenchKey);
+
+    if (!workbench || workbench.isDestroyed()) {
+      workbench = this.ensureWindow({ module: 'workbench', options: config.options }, false);
+    } else {
+      if (workbench.isMinimized()) {
+        workbench.restore();
+      }
+      if (this.readyWindows.has(workbenchKey)) {
+        workbench.show();
+        workbench.focus();
+      } else {
+        const win = workbench;
+        workbench.once('ready-to-show', () => {
+          if (!win.isDestroyed()) {
+            win.show();
+            win.focus();
+          }
+        });
+      }
+    }
+
+    const dispatchNavigate = () => {
+      if (!workbench || workbench.isDestroyed()) return;
+      workbench.webContents.send(EVENTS.APP_NAVIGATE, { module: config.module });
+    };
+
+    if (this.readyWindows.has(workbenchKey)) {
+      dispatchNavigate();
+    } else {
+      workbench.webContents.once('did-finish-load', dispatchNavigate);
+    }
+
+    this.eventBus.emit(EVENTS.MODULE_OPENED, {
+      module: config.module,
+      instanceId: config.instanceId,
+    });
+
+    return workbench;
   }
 
   preloadWindow(config: WindowConfig): BrowserWindow {
@@ -132,7 +204,7 @@ export class WindowManager {
       backgroundColor: '#0b1220',
       minWidth: 600,
       minHeight: 400,
-      frame: false, 
+      frame: false,
       title: `YClaw - ${module}`,
       webPreferences: {
         preload: this.getPreloadPath(),

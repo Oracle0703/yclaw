@@ -88,6 +88,7 @@ import {
   ResultRepository,
   RunnerSchedulerRepository,
   SessionRepository,
+  SigninRunRepository,
   TaskRepository,
   TaskRevisionRepository,
   TemplateRepository,
@@ -98,6 +99,7 @@ import { registerRunnerSchedulerHandlers } from './ipc/runner-scheduler-handlers
 import { registerTaskOperationsHandlers } from './ipc/task-operations-handlers';
 import { registerDataCenterHandlers } from './ipc/data-center-handlers';
 import { registerHotHandlers } from './ipc/hot-handlers';
+import { registerSigninHandlers } from './ipc/signin-handlers';
 import type {
   AIChatRequest,
   AIConfig,
@@ -110,9 +112,15 @@ import type {
   InterventionState,
   RunnerNode,
   RunnerQueueItem,
+  SigninDebugSnapshot,
   TaskFlow,
 } from '@shared/types';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
+import { AliyunDriveApiFallback } from './services/signin/AliyunDriveApiFallback';
+import { AliyunDriveSigninProvider } from './services/signin/AliyunDriveSigninProvider';
+import { EmailNotifier } from './services/signin/EmailNotifier';
+import { NotificationService } from './services/signin/NotificationService';
+import { SigninTaskService } from './services/signin/SigninTaskService';
 
 interface RunnerSchedulerIpcService {
   listRunners(): unknown;
@@ -162,6 +170,8 @@ export class App {
   private hotSourceService: HotSourceService;
   private hotRunService: HotRunProjectionService;
   private hotReportService: HotReportService;
+  private notificationService: NotificationService;
+  private signinTaskService: SigninTaskService;
   private dataCenterService: DataCenterService;
   private dataQualityService: DataQualityService;
   private dataExportService: DataExportService;
@@ -198,6 +208,7 @@ export class App {
     const alertRepository = new AlertRepository(this.databaseService);
     const batchRepository = new BatchRepository(this.databaseService);
     const executionLogRepository = new ExecutionLogRepository(this.databaseService);
+    const signinRunRepository = new SigninRunRepository(this.databaseService);
     const hotSourceRepository = new HotSourceRepository(this.databaseService);
     const hotReportRepository = new HotReportRepository(this.databaseService);
     const workspaceRepository = new WorkspaceRepository(this.databaseService);
@@ -294,7 +305,12 @@ export class App {
         this.releaseRunnerLease(runnerSchedulerRepository, payload),
       reconcile: () => leaseReconciler.reconcile(),
     };
-    this.schedulerService = new SchedulerService({ taskService: this.taskService });
+    this.schedulerService = new SchedulerService({
+      taskService: this.taskService,
+      executeTask: async (taskId: string) => {
+        await this.executeTask(taskId);
+      },
+    });
     this.sessionRegistry = new SessionRegistry({ sessionRepository });
     this.templateService = new TemplateService({ templateRepository });
     this.workspaceService = new WorkspaceService({ workspaceRepository });
@@ -307,6 +323,34 @@ export class App {
       alertRepository,
       executionLogService: this.executionLogService,
       dutyPolicyProvider: this.workspaceService,
+    });
+    const emailNotifier = new EmailNotifier();
+    this.notificationService = new NotificationService({
+      alertService: this.alertService,
+      emailNotifier,
+      configService: this.configService,
+    });
+    this.signinTaskService = new SigninTaskService({
+      taskService: this.taskService,
+      runRepository: signinRunRepository,
+      sessionRegistry: this.sessionRegistry,
+      provider: new AliyunDriveSigninProvider({
+        browser: {
+          openSessionPage: async ({ sessionPartition, url }) => {
+            const view = this.tabManager.getOrCreateTabBySession(sessionPartition, url);
+            await view.webContents.loadURL(url);
+            return {
+              tabId: view.webContents.id,
+              webContentsId: view.webContents.id,
+            };
+          },
+          executeJavaScript: async (script, tabId) => this.tabManager.executeJavaScript(script, tabId),
+          captureDebugContext: async (tabId) => this.captureSigninDebugContext(tabId),
+        },
+        fallback: new AliyunDriveApiFallback(),
+      }),
+      scheduler: this.schedulerService,
+      notificationService: this.notificationService,
     });
     this.reviewService = new ReviewService({ reviewRepository });
     this.resultService = new ResultService({ resultRepository });
@@ -503,6 +547,12 @@ export class App {
       hotSourceService: this.hotSourceService as never,
       hotRunService: this.hotRunService as never,
       hotReportService: this.hotReportService as never,
+    });
+    registerSigninHandlers({
+      ipcController: this.ipcController,
+      taskService: this.taskService as never,
+      signinTaskService: this.signinTaskService as never,
+      notificationService: this.notificationService as never,
     });
     registerDataCenterHandlers({
       ipcController: this.ipcController,
@@ -781,8 +831,7 @@ export class App {
 
     this.ipcController.handle(IPC_CHANNELS.TASK_START, (params: unknown) => {
       const { taskId, tabId } = params as { taskId: string; tabId?: number };
-      const webContents = this.getTaskWebContents(tabId);
-      return this.taskService.startTask(taskId, webContents);
+      return this.executeTask(taskId, tabId);
     });
 
     this.ipcController.handle(IPC_CHANNELS.TASK_PAUSE, (params: unknown) => {
@@ -1096,6 +1145,71 @@ export class App {
       const image = await view.webContents.capturePage();
       return image.toDataURL();
     });
+  }
+
+  private async executeTask(taskId: string, tabId?: number): Promise<unknown> {
+    const task = this.taskService.getTaskDetail(taskId);
+    if (task?.kind === 'aliyundrive-signin') {
+      return this.signinTaskService.runTask(taskId);
+    }
+
+    const webContents = this.getTaskWebContents(tabId);
+    return this.taskService.startTask(taskId, webContents);
+  }
+
+  private async captureSigninDebugContext(tabId: number): Promise<SigninDebugSnapshot | undefined> {
+    const view = this.tabManager.getView(tabId);
+    if (!view) {
+      return undefined;
+    }
+
+    const snapshot = await this.tabManager.executeJavaScript(
+      `
+      (() => {
+        const normalizeText = (value) => value.replace(/\\s+/g, ' ').trim();
+        const domSummary = normalizeText(document.body?.innerText ?? '').slice(0, 1000);
+        const pageUrl = typeof window.location?.href === 'string' ? window.location.href : '';
+        const pageTitle = typeof document.title === 'string' ? document.title : '';
+        const readyState = typeof document.readyState === 'string' ? document.readyState : '';
+        const visibilityState = typeof document.visibilityState === 'string' ? document.visibilityState : '';
+        const viewport =
+          typeof window.innerWidth === 'number' && typeof window.innerHeight === 'number'
+            ? window.innerWidth + 'x' + window.innerHeight
+            : '';
+        const activityAnchorFound = /精选活动/.test(document.body?.innerText ?? '');
+        const signBarCount = document.querySelectorAll('[class*="sign-bar"]').length;
+        const dateCardCandidateCount = Array.from(
+          document.querySelectorAll('[class*="sign-bar"], [class*="date"], button, a, [role="button"]')
+        ).filter((element) => /\\d{1,2}月\\d{1,2}日|\\d{1,2}[/-]\\d{1,2}|\\d{1,2}\\s*\\/\\s*[一二三四五六七八九十]{1,3}月/.test(
+          normalizeText(element?.innerText ?? element?.textContent ?? '')
+        )).length;
+
+        return {
+          pageUrl: pageUrl || undefined,
+          pageTitle: pageTitle || undefined,
+          domSummary: domSummary || undefined,
+          readyState: readyState || undefined,
+          visibilityState: visibilityState || undefined,
+          viewport: viewport || undefined,
+          activityAnchorFound,
+          signBarCount,
+          dateCardCandidateCount,
+        };
+      })();
+      `,
+      tabId,
+    );
+
+    const baseSnapshot = (snapshot as SigninDebugSnapshot | undefined) ?? {};
+    try {
+      const image = await view.webContents.capturePage();
+      return {
+        ...baseSnapshot,
+        screenshotDataUrl: image.toDataURL(),
+      };
+    } catch {
+      return baseSnapshot;
+    }
   }
 
   private collectOperationsAcceptanceSnapshot(taskId?: string) {

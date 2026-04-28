@@ -6,6 +6,7 @@ let nextTabId = 1;
 // Mock Electron modules
 vi.mock('electron', () => ({
   WebContentsView: vi.fn().mockImplementation(() => ({
+    setBounds: vi.fn(),
     webContents: {
       id: nextTabId++,
       on: vi.fn(),
@@ -81,6 +82,16 @@ describe('TabManager', () => {
       expect(view.webContents.on).toHaveBeenCalledWith('did-stop-loading', expect.any(Function));
       expect(view.webContents.on).toHaveBeenCalledWith('page-title-updated', expect.any(Function));
       expect(view.webContents.on).toHaveBeenCalledWith('did-navigate', expect.any(Function));
+    });
+
+    it('should assign a default viewport to background tabs', () => {
+      const view = tabManager.createTab('https://example.com');
+      expect(view.setBounds).toHaveBeenCalledWith({
+        x: 0,
+        y: 0,
+        width: 1440,
+        height: 900,
+      });
     });
   });
 

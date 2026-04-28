@@ -10,6 +10,9 @@ export interface SchedulerServiceOptions {
   taskService?: Pick<TaskService, 'listTasks'>;
   executeTask?: (taskId: string) => Promise<void>;
   maxConcurrency?: number;
+  setTimer?: typeof setTimeout;
+  clearTimer?: typeof clearTimeout;
+  now?: () => Date;
 }
 
 type SchedulableTask = {
@@ -30,8 +33,12 @@ export class SchedulerService {
   private readonly taskService: Pick<TaskService, 'listTasks'>;
   private readonly executeTask: (taskId: string) => Promise<void>;
   private readonly maxConcurrency: number;
+  private readonly setTimer: typeof setTimeout;
+  private readonly clearTimer: typeof clearTimeout;
+  private readonly now: () => Date;
   private readonly scheduledTaskIds = new Set<string>();
   private readonly queue: string[] = [];
+  private readonly retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private runningCount = 0;
   private started = false;
 
@@ -43,6 +50,9 @@ export class SchedulerService {
     this.taskService = options.taskService;
     this.executeTask = options.executeTask ?? (async (_taskId: string) => undefined);
     this.maxConcurrency = options.maxConcurrency ?? 3;
+    this.setTimer = options.setTimer ?? setTimeout;
+    this.clearTimer = options.clearTimer ?? clearTimeout;
+    this.now = options.now ?? (() => new Date());
   }
 
   start(): void {
@@ -66,6 +76,10 @@ export class SchedulerService {
     this.scheduledTaskIds.clear();
     this.queue.length = 0;
     this.runningCount = 0;
+    for (const timer of this.retryTimers.values()) {
+      this.clearTimer(timer);
+    }
+    this.retryTimers.clear();
   }
 
   getStatus(): SchedulerStatus {
@@ -98,5 +112,20 @@ export class SchedulerService {
         void this.triggerTask(nextTaskId);
       }
     });
+  }
+
+  scheduleRetry(taskId: string, delayMs: number): void {
+    const existing = this.retryTimers.get(taskId);
+    if (existing) {
+      this.clearTimer(existing);
+    }
+
+    const timer = this.setTimer(() => {
+      this.retryTimers.delete(taskId);
+      void this.triggerTask(taskId);
+    }, delayMs);
+
+    this.retryTimers.set(taskId, timer);
+    void this.now();
   }
 }

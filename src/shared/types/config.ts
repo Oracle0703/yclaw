@@ -4,6 +4,7 @@
 
 import type { AIConfig } from './ai';
 import type { FeaturePackageInstallState } from './features';
+import type { EmailNotificationConfig } from './signin';
 
 export interface AppConfig {
   general: GeneralConfig;
@@ -18,6 +19,7 @@ export interface GeneralConfig {
   language: string;
   startupBehavior: 'showWorkbench' | 'restoreLastSession' | 'minimizeToTray';
   closeToTray: boolean;
+  notificationEmail?: EmailNotificationConfig;
 }
 
 export interface ModuleConfig {

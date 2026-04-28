@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { EVENTS } from '@shared/constants';
-import type { TaskStatus } from '@shared/types';
+import type { TaskFlow, TaskStatus } from '@shared/types';
 import { ProCard } from '@ant-design/pro-components';
 import { useIpc, useIpcEvent } from '../../../shared/hooks';
 
@@ -10,6 +10,7 @@ interface TaskSummary {
   id: string;
   name: string;
   status: TaskStatus;
+  kind?: TaskFlow['kind'];
   description?: string;
   entryUrl?: string;
   stepsCount?: number;
@@ -52,10 +53,22 @@ function getHostnameLabel(url?: string): string | null {
   }
 }
 
+function isSigninTask(record: TaskSummary): boolean {
+  return typeof record.kind === 'string' && record.kind.endsWith('-signin');
+}
+
 export function TaskList({
   onSelect,
+  title = '任务资产库',
+  createLabel = '添加步骤',
+  scope = 'all',
+  enableExecutionActions = true,
 }: {
   onSelect: (task: TaskSummary | 'new') => void;
+  title?: string;
+  createLabel?: string;
+  scope?: 'all' | 'signin';
+  enableExecutionActions?: boolean;
 }) {
   const { automation } = useIpc();
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
@@ -89,6 +102,8 @@ export function TaskList({
   useIpcEvent(EVENTS.TASK_STATUS_CHANGED, () => {
     void fetchTasks();
   });
+
+  const visibleTasks = scope === 'signin' ? tasks.filter(isSigninTask) : tasks;
 
   const columns: ColumnsType<TaskSummary> = [
     {
@@ -144,23 +159,25 @@ export function TaskList({
     {
       title: '操作',
       key: 'action',
-      width: 220,
+      width: enableExecutionActions ? 220 : 120,
       render: (_, record) => (
         <Space>
           <Button type="link" onClick={() => onSelect(record)}>
             打开
           </Button>
-          <Button
-            type="link"
-            onClick={() => {
-              void automation.startTask(record.id).catch((error) => {
-                message.error(error instanceof Error ? error.message : '启动任务失败');
-              });
-            }}
-          >
-            启动
-          </Button>
-          {record.latestBatch?.status === 'failed' && (
+          {enableExecutionActions ? (
+            <Button
+              type="link"
+              onClick={() => {
+                void automation.startTask(record.id).catch((error) => {
+                  message.error(error instanceof Error ? error.message : '启动任务失败');
+                });
+              }}
+            >
+              启动
+            </Button>
+          ) : null}
+          {enableExecutionActions && record.latestBatch?.status === 'failed' && (
             <Button
               type="link"
               onClick={() => {
@@ -180,10 +197,10 @@ export function TaskList({
   return (
     <ProCard
       className="yclaw-panel-card"
-      title="任务资产库"
+      title={title}
       extra={
         <Button type="primary" onClick={() => onSelect('new')}>
-          添加步骤
+          {createLabel}
         </Button>
       }
     >
@@ -191,8 +208,11 @@ export function TaskList({
         rowKey="id"
         loading={loading}
         columns={columns}
-        dataSource={tasks}
-        locale={{ emptyText: '暂无任务，点击右上角按钮创建' }}
+        dataSource={visibleTasks}
+        locale={{
+          emptyText:
+            scope === 'signin' ? '暂无签到任务，点击右上角按钮创建' : '暂无任务，点击右上角按钮创建',
+        }}
         pagination={false}
         onRow={(record) => ({
           onClick: () => onSelect(record),

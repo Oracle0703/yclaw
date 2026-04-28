@@ -48,6 +48,13 @@ export const IPC_CHANNELS = {
   TASK_BATCH_DETAIL: 'batch:detail',
   BATCH_RETRY: 'batch:retry',
   SCHEDULER_STATUS: 'scheduler:status',
+  SIGNIN_TASK_SAVE: 'signin:task:save',
+  SIGNIN_TASK_GET: 'signin:task:get',
+  SIGNIN_TASK_RUN_NOW: 'signin:task:runNow',
+  SIGNIN_TASK_INTERVENTION_RETRY: 'signin:task:interventionRetry',
+  SIGNIN_TASK_STATUS: 'signin:task:status',
+  SIGNIN_TASK_HISTORY: 'signin:task:history',
+  SIGNIN_NOTIFICATION_TEST_EMAIL: 'signin:notification:testEmail',
 
   // 任务运营中台：工作区 / 协作
   WORKSPACE_LIST: 'workspace:list',

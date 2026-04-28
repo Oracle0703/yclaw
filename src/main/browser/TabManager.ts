@@ -13,6 +13,13 @@ export interface TabManagerOptions {
   maxTabs?: number;
 }
 
+const DEFAULT_BACKGROUND_VIEWPORT = {
+  x: 0,
+  y: 0,
+  width: 1440,
+  height: 900,
+} as const;
+
 /**
  * 多标签页浏览器管理器
  * 基于 WebContentsView 实现标签页生命周期管理
@@ -59,8 +66,10 @@ export class TabManager {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
+        backgroundThrottling: false,
       },
     });
+    view.setBounds(DEFAULT_BACKGROUND_VIEWPORT);
 
     const id = view.webContents.id;
     this.tabs.set(id, view);

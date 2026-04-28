@@ -415,4 +415,89 @@ describe('TaskService', () => {
       stepResults: [],
     });
   });
+
+  it('creates a sign-in task with kind and signin config', () => {
+    service.createTask({
+      name: '阿里云盘签到',
+      entryUrl: 'https://www.aliyundrive.com/',
+      sessionId: 'session-1',
+      enabled: true,
+      signin: {
+        site: 'aliyundrive',
+        mode: 'browser-first-api-fallback',
+        fallbackApiEnabled: true,
+        refreshToken: 'rt-demo',
+        maxRetryPerDay: 2,
+        manualInterventionEnabled: true,
+      },
+    } as Parameters<TaskService['createTask']>[0] & {
+      signin: {
+        site: 'aliyundrive';
+        mode: 'browser-first-api-fallback';
+        fallbackApiEnabled: boolean;
+        refreshToken: string;
+        maxRetryPerDay: number;
+        manualInterventionEnabled: true;
+      };
+    });
+
+    expect(mockTaskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        flowJson: JSON.stringify({
+          steps: [],
+          entryUrl: 'https://www.aliyundrive.com/',
+          kind: 'aliyundrive-signin',
+          signin: {
+            site: 'aliyundrive',
+            mode: 'browser-first-api-fallback',
+            fallbackApiEnabled: true,
+            refreshToken: 'rt-demo',
+            maxRetryPerDay: 2,
+            manualInterventionEnabled: true,
+          },
+        }),
+      }),
+    );
+  });
+
+  it('preserves sign-in metadata when saving task flow updates', () => {
+    const signinFlow = {
+      ...sampleFlow,
+      kind: 'aliyundrive-signin',
+      signin: {
+        site: 'aliyundrive',
+        mode: 'browser-first-api-fallback',
+        fallbackApiEnabled: true,
+        refreshToken: 'rt-demo',
+        maxRetryPerDay: 2,
+        manualInterventionEnabled: true,
+      },
+    } as TaskFlow & {
+      kind: 'aliyundrive-signin';
+      signin: {
+        site: 'aliyundrive';
+        mode: 'browser-first-api-fallback';
+        fallbackApiEnabled: boolean;
+        refreshToken: string;
+        maxRetryPerDay: number;
+        manualInterventionEnabled: true;
+      };
+    };
+    mockTaskRepository.getTaskFlow.mockReturnValueOnce(signinFlow);
+
+    service.saveTaskFlow('task-1', {
+      name: '阿里云盘签到',
+      steps: signinFlow.steps,
+    });
+
+    expect(mockTaskRepository.saveTaskFlow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'aliyundrive-signin',
+        signin: expect.objectContaining({
+          site: 'aliyundrive',
+          refreshToken: 'rt-demo',
+        }),
+      }),
+    );
+  });
 });

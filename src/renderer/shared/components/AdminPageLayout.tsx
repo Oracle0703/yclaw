@@ -3,6 +3,7 @@ import type { PropsWithChildren } from 'react';
 import {
   AppstoreOutlined,
   BarsOutlined,
+  CheckCircleOutlined,
   DatabaseOutlined,
   DeploymentUnitOutlined,
   FundOutlined,
@@ -34,6 +35,11 @@ const MODULE_MENU: NonNullable<MenuProps['items']> = [
     key: '/automation',
     label: '自动化',
     icon: <RobotOutlined />,
+  },
+  {
+    key: '/signin',
+    label: '自动签到',
+    icon: <CheckCircleOutlined />,
   },
   {
     key: '/data-center',
@@ -130,7 +136,7 @@ export function AdminPageLayout({ children }: PropsWithChildren) {
                 <div className="yclaw-menu-footer-title">统一调度台</div>
                 <div className="yclaw-menu-footer-text">流程、数据、插件统一编排</div>
                 <div className="yclaw-menu-footer-meta">
-                  <span>5 Modules</span>
+                  <span>6 Modules</span>
                   <span>12 Runbooks</span>
                 </div>
               </div>

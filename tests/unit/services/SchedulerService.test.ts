@@ -15,9 +15,16 @@ describe('SchedulerService', () => {
   const mockTaskService = {
     listTasks: vi.fn(),
   };
+  const timerHandles: Array<() => void> = [];
+  const fakeSetTimeout = vi.fn((fn: () => void) => {
+    timerHandles.push(fn);
+    return timerHandles.length as unknown as ReturnType<typeof setTimeout>;
+  });
+  const fakeClearTimeout = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    timerHandles.length = 0;
   });
 
   it('requires task service injection', () => {
@@ -90,5 +97,25 @@ describe('SchedulerService', () => {
 
     expect(mockTaskService.listTasks).toHaveBeenCalledTimes(2);
     expect(second.getScheduledTaskIds()).toEqual(['task-1', 'task-2']);
+  });
+
+  it('can queue a delayed retry for a sign-in task without losing existing queue behavior', async () => {
+    const executeTask = vi.fn().mockResolvedValue(undefined);
+    const service = new SchedulerService({
+      taskService: mockTaskService as never,
+      executeTask,
+      maxConcurrency: 1,
+      setTimer: fakeSetTimeout as typeof setTimeout,
+      clearTimer: fakeClearTimeout as typeof clearTimeout,
+    });
+
+    service.scheduleRetry('task-signin-1', 15_000);
+
+    expect(fakeSetTimeout).toHaveBeenCalledWith(expect.any(Function), 15_000);
+
+    timerHandles[0]?.();
+    await Promise.resolve();
+
+    expect(executeTask).toHaveBeenCalledWith('task-signin-1');
   });
 });

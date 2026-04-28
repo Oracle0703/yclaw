@@ -101,6 +101,42 @@ describe('TaskList', () => {
     expect(screen.getByText('example.com')).toBeDefined();
   });
 
+  it('filters to sign-in tasks and hides generic execution actions in signin scope', async () => {
+    vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.TASK_LIST) {
+        return {
+          success: true,
+          data: [
+            {
+              id: 'task-generic-1',
+              name: '普通采集任务',
+              kind: 'generic',
+              status: 'idle',
+              updatedAt: '2026-04-15 09:59:00',
+            },
+            {
+              id: 'task-signin-1',
+              name: '阿里云盘签到',
+              kind: 'aliyundrive-signin',
+              status: 'idle',
+              entryUrl: 'https://www.aliyundrive.com/',
+              updatedAt: '2026-04-15 10:00:00',
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: { status: 'running' } };
+    });
+
+    render(<TaskList onSelect={vi.fn()} scope="signin" enableExecutionActions={false} />);
+
+    expect(await screen.findByText('阿里云盘签到')).toBeDefined();
+    expect(screen.queryByText('普通采集任务')).toBeNull();
+    expect(screen.queryByRole('button', { name: /启动/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /复跑/ })).toBeNull();
+  });
+
   it('renders browser draft badges for transferred review tasks', async () => {
     vi.mocked(window.electronAPI.invoke).mockImplementation(async (channel: string) => {
       if (channel === IPC_CHANNELS.TASK_LIST) {

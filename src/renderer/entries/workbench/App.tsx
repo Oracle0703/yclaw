@@ -1,15 +1,21 @@
-import { Suspense, lazy } from 'react';
-import { HashRouter, Routes, Route } from 'react-router-dom';
+import { Suspense, lazy, useEffect } from 'react';
+import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { Skeleton } from 'antd';
+import { EVENTS } from '@shared/constants';
 import { AdminPageLayout } from '../../shared/components/AdminPageLayout';
 import { ErrorBoundary } from '../../shared/components/ErrorBoundary';
 import { CommandPalette } from '../../shared/components/CommandPalette';
 import { AIChatPanel } from '../../shared/components/AIChatPanel';
-import { FeatureModulePage } from '../../shared/components/FeatureModulePage';
+import { useIpcEvent } from '../../shared/hooks';
 import Home from './pages/Home';
 import Settings from './pages/Settings';
 
+const StockPage = lazy(() => import('../stock/App'));
+const AutomationPage = lazy(() => import('../automation/App'));
+const DataCenterPage = lazy(() => import('../data-center/App'));
+const PluginCenterPage = lazy(() => import('../plugin-center/App'));
 const BrowserPage = lazy(() => import('../browser/App'));
+const SigninPage = lazy(() => import('../signin/App'));
 
 const PageFallback = (
   <div style={{ padding: 24 }}>
@@ -17,56 +23,69 @@ const PageFallback = (
   </div>
 );
 
+/** 内置模块 → 路由映射，供主进程 APP_NAVIGATE 事件路由使用 */
+const MODULE_ROUTE_MAP: Record<string, string> = {
+  workbench: '/',
+  stock: '/stock',
+  automation: '/automation',
+  'data-center': '/data-center',
+  'plugin-center': '/plugin-center',
+  browser: '/browser',
+  signin: '/signin',
+};
+
+interface PendingNavigateBridge {
+  consumePendingNavigate(): string | null;
+}
+
+function NavigationBridge() {
+  const navigate = useNavigate();
+
+  useIpcEvent(EVENTS.APP_NAVIGATE, (...args: unknown[]) => {
+    const payload = args[0] as { module?: string; route?: string } | undefined;
+    if (!payload) return;
+    if (typeof payload.route === 'string' && payload.route.length > 0) {
+      navigate(payload.route);
+      return;
+    }
+    if (typeof payload.module === 'string') {
+      const target = MODULE_ROUTE_MAP[payload.module];
+      if (target) {
+        navigate(target);
+      }
+    }
+  });
+
+  // 处理冷启动竞态：preload 的 ipcRenderer.on 已经在 React 挂载前就 buffer 了
+  // 主进程的 APP_NAVIGATE。挂载后消费一次。
+  useEffect(() => {
+    const bridge = (window as unknown as { __yclawNavigateBridge?: PendingNavigateBridge })
+      .__yclawNavigateBridge;
+    const pending = bridge?.consumePendingNavigate?.() ?? null;
+    if (pending && MODULE_ROUTE_MAP[pending]) {
+      navigate(MODULE_ROUTE_MAP[pending]);
+    }
+  }, [navigate]);
+
+  return null;
+}
+
 export default function App() {
   return (
     <HashRouter>
       <AdminPageLayout>
         <ErrorBoundary>
+          <NavigationBridge />
           <Suspense fallback={PageFallback}>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/settings" element={<Settings />} />
-              <Route
-                path="/stock"
-                element={
-                  <FeatureModulePage
-                    moduleId="stock"
-                    title="股票分析"
-                    description="K 线、指标和行情分析已拆成可安装功能包，用更小的核心包承接首次安装。"
-                  />
-                }
-              />
-              <Route
-                path="/automation"
-                element={
-                  <FeatureModulePage
-                    moduleId="automation"
-                    title="自动化采集"
-                    description="任务编排、执行监控和结果导出改为按需安装，减少核心包体积。"
-                  />
-                }
-              />
-              <Route
-                path="/data-center"
-                element={
-                  <FeatureModulePage
-                    moduleId="data-center"
-                    title="数据中心"
-                    description="结果资产、导出任务、数据集与开放接口统一收口。"
-                  />
-                }
-              />
+              <Route path="/stock" element={<StockPage />} />
+              <Route path="/automation" element={<AutomationPage />} />
+              <Route path="/signin" element={<SigninPage />} />
+              <Route path="/data-center" element={<DataCenterPage />} />
               <Route path="/browser" element={<BrowserPage />} />
-              <Route
-                path="/plugin-center"
-                element={
-                  <FeatureModulePage
-                    moduleId="plugin-center"
-                    title="插件中心"
-                    description="插件中心以功能包方式分发，核心包只保留插件宿主和权限基础设施。"
-                  />
-                }
-              />
+              <Route path="/plugin-center" element={<PluginCenterPage />} />
             </Routes>
           </Suspense>
           <CommandPalette />

@@ -29,6 +29,10 @@ vi.mock('electron', () => {
   const webContentsMock = {
     send: vi.fn(),
     on: vi.fn(),
+    once: vi.fn((_event: string, listener: Listener) => {
+      // 立即同步触发，模拟首次 did-finish-load 已经完成
+      queueMicrotask(() => listener());
+    }),
     getURL: vi.fn(() => 'http://localhost:5173/mock/'),
     openDevTools: vi.fn(),
   };
@@ -121,29 +125,40 @@ describe('WindowManager', () => {
     expect(() => new WindowManager()).toThrowError('eventBus is required');
   });
 
-  it('should create a new window for a module', async () => {
-    const win = manager.openWindow({ module: 'stock' });
+  it('should create a new window for a non-builtin module', async () => {
+    const win = manager.openWindow({ module: 'custom-mod' });
     expect(win).toBeDefined();
-    expect(win.loadURL).toHaveBeenCalledWith('http://localhost:5173/stock/');
+    expect(win.loadURL).toHaveBeenCalledWith('http://localhost:5173/custom-mod/');
     // Wait for ready-to-show microtask
     await Promise.resolve();
     expect(win.show).toHaveBeenCalled();
   });
 
   it('should focus existing window instead of creating duplicate', async () => {
-    const win1 = manager.openWindow({ module: 'stock' });
+    const win1 = manager.openWindow({ module: 'custom-mod' });
     await Promise.resolve(); // ready-to-show fires
-    const win2 = manager.openWindow({ module: 'stock' });
+    const win2 = manager.openWindow({ module: 'custom-mod' });
     expect(win1).toBe(win2);
     expect(win1.focus).toHaveBeenCalled();
   });
 
+  it('routes builtin module openWindow into the workbench window', async () => {
+    const win1 = manager.openWindow({ module: 'workbench' });
+    await Promise.resolve();
+    const win2 = manager.openWindow({ module: 'stock' });
+    expect(win2).toBe(win1);
+    // 不应再为 stock 创建独立 BrowserWindow
+    expect(manager.getOpenModules()).not.toContain('stock');
+    // 会向 workbench webContents 发送 APP_NAVIGATE，把 module 信息带过去
+    expect(win1.webContents.send).toHaveBeenCalledWith('app:navigate', { module: 'stock' });
+  });
+
   it('should create distinct windows for the same module when instanceId differs', () => {
-    const win1 = manager.openWindow({ module: 'stock', instanceId: 'left' });
-    const win2 = manager.openWindow({ module: 'stock', instanceId: 'right' });
+    const win1 = manager.openWindow({ module: 'custom-mod', instanceId: 'left' });
+    const win2 = manager.openWindow({ module: 'custom-mod', instanceId: 'right' });
     expect(win1).not.toBe(win2);
-    expect(manager.getWindow('stock', 'left')).toBe(win1);
-    expect(manager.getWindow('stock', 'right')).toBe(win2);
+    expect(manager.getWindow('custom-mod', 'left')).toBe(win1);
+    expect(manager.getWindow('custom-mod', 'right')).toBe(win2);
   });
 
   it('should hide the workbench instead of closing when closeToTray is enabled', () => {
@@ -155,11 +170,11 @@ describe('WindowManager', () => {
   });
 
   it('should track open modules', () => {
-    manager.openWindow({ module: 'stock' });
-    manager.openWindow({ module: 'automation' });
+    manager.openWindow({ module: 'custom-a' });
+    manager.openWindow({ module: 'custom-b' });
     const modules = manager.getOpenModules();
-    expect(modules).toContain('stock');
-    expect(modules).toContain('automation');
+    expect(modules).toContain('custom-a');
+    expect(modules).toContain('custom-b');
   });
 
   it('should enforce max window limit', () => {
@@ -170,8 +185,8 @@ describe('WindowManager', () => {
   });
 
   it('should get a specific window', () => {
-    manager.openWindow({ module: 'stock' });
-    const win = manager.getWindow('stock');
+    manager.openWindow({ module: 'custom-mod' });
+    const win = manager.getWindow('custom-mod');
     expect(win).toBeDefined();
   });
 
@@ -180,14 +195,14 @@ describe('WindowManager', () => {
   });
 
   it('should close a specific window', () => {
-    const win = manager.openWindow({ module: 'stock' });
-    manager.closeWindow('stock');
+    const win = manager.openWindow({ module: 'custom-mod' });
+    manager.closeWindow('custom-mod');
     expect(win.close).toHaveBeenCalled();
   });
 
   it('should apply custom options', () => {
     const win = manager.openWindow({
-      module: 'stock',
+      module: 'custom-mod',
       options: { width: 1600, height: 900 },
     });
     expect(win._options.width).toBe(1600);
@@ -195,29 +210,29 @@ describe('WindowManager', () => {
   });
 
   it('should send messages to specific window', () => {
-    const win = manager.openWindow({ module: 'stock' });
-    manager.sendToWindow('stock', 'test:channel', { data: 1 });
+    const win = manager.openWindow({ module: 'custom-mod' });
+    manager.sendToWindow('custom-mod', 'test:channel', { data: 1 });
     expect(win.webContents.send).toHaveBeenCalledWith('test:channel', { data: 1 });
   });
 
   it('should broadcast to all windows', () => {
-    const win1 = manager.openWindow({ module: 'stock' });
-    const win2 = manager.openWindow({ module: 'automation' });
+    const win1 = manager.openWindow({ module: 'custom-a' });
+    const win2 = manager.openWindow({ module: 'custom-b' });
     manager.broadcast('update:config', 'payload');
     expect(win1.webContents.send).toHaveBeenCalledWith('update:config', 'payload');
     expect(win2.webContents.send).toHaveBeenCalledWith('update:config', 'payload');
   });
 
   it('should close all windows', () => {
-    const win1 = manager.openWindow({ module: 'stock' });
-    const win2 = manager.openWindow({ module: 'automation' });
+    const win1 = manager.openWindow({ module: 'custom-a' });
+    const win2 = manager.openWindow({ module: 'custom-b' });
     manager.closeAll();
     expect(win1.close).toHaveBeenCalled();
     expect(win2.close).toHaveBeenCalled();
   });
 
   it('should log only window failures in development debug listeners', () => {
-    const win = manager.openWindow({ module: 'stock' });
+    const win = manager.openWindow({ module: 'custom-mod' });
 
     expect(win.webContents.on).toHaveBeenCalledWith('did-fail-load', expect.any(Function));
     expect(win.webContents.on).toHaveBeenCalledWith('render-process-gone', expect.any(Function));
@@ -239,7 +254,7 @@ describe('WindowManager', () => {
     didFailLoadHandler?.(undefined, -2, 'ERR_FAILED', 'https://example.com', true);
 
     expect(consoleErrorSpy).toHaveBeenCalledWith('[window] did-fail-load', {
-      module: 'stock',
+      module: 'custom-mod',
       errorCode: -2,
       errorDescription: 'ERR_FAILED',
       validatedURL: 'https://example.com',

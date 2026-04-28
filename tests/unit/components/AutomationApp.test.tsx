@@ -166,6 +166,47 @@ vi.mock('@renderer/entries/automation/components/TaskRevisionDrawer', () => ({
     open ? <div>TaskRevisionDrawer</div> : null,
 }));
 
+vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
+  SigninTaskPanel: ({
+    onSubmit,
+  }: {
+    onSubmit: (payload: { name: string; entryUrl: string }) => void;
+  }) => (
+    <div>
+      <span>SigninTaskPanel</span>
+      <button
+        type="button"
+        onClick={() =>
+          onSubmit({
+            name: '阿里云盘签到',
+            entryUrl: 'https://www.aliyundrive.com/',
+          })
+        }
+      >
+        保存签到任务
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock('@renderer/entries/automation/components/SigninRunStatusCard', () => ({
+  SigninRunStatusCard: ({
+    onRunNow,
+    history,
+  }: {
+    onRunNow: (taskId: string) => void;
+    history?: Array<unknown>;
+  }) => (
+    <div>
+      <span>SigninRunStatusCard</span>
+      <span>SigninHistoryCount:{history?.length ?? 0}</span>
+      <button type="button" onClick={() => onRunNow('task-signin-1')}>
+        立即执行签到
+      </button>
+    </div>
+  ),
+}));
+
 vi.mock('@renderer/shared/components/PageShell', () => ({
   PageShell: ({ children, extra }: { children: React.ReactNode; extra: React.ReactNode }) => (
     <div>
@@ -200,6 +241,7 @@ describe('Automation App', () => {
         return Promise.resolve({
           id: 'task-1',
           name: '采集任务',
+          kind: 'generic',
           steps: [
             {
               id: 'step-1',
@@ -238,6 +280,18 @@ describe('Automation App', () => {
             passed: true,
           },
         ]);
+      }
+
+      if (channel === IPC_CHANNELS.SESSION_LIST) {
+        return Promise.resolve([]);
+      }
+
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_STATUS) {
+        return Promise.resolve(null);
+      }
+
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_HISTORY) {
+        return Promise.resolve([]);
       }
 
       return Promise.resolve(null);
@@ -416,6 +470,7 @@ describe('Automation App', () => {
         return Promise.resolve({
           id: 'task-1',
           name: '采集任务',
+          kind: 'generic',
           steps: [
             {
               id: 'step-1',
@@ -448,6 +503,107 @@ describe('Automation App', () => {
 
     await waitFor(() => {
       expect(messageErrorMock).toHaveBeenCalledWith('save task failed');
+    });
+  });
+
+  it('renders sign-in panels for aliyundrive tasks and routes actions through sign-in IPC channels', async () => {
+    invokeMock.mockImplementation((channel: string, payload?: { taskId?: string; name?: string; entryUrl?: string }) => {
+      if (channel === IPC_CHANNELS.TASK_GET) {
+        return Promise.resolve({
+          id: 'task-signin-1',
+          name: '阿里云盘签到',
+          kind: 'aliyundrive-signin',
+          steps: [],
+          entryUrl: 'https://www.aliyundrive.com/',
+          signin: {
+            site: 'aliyundrive',
+            mode: 'browser-first-api-fallback',
+            fallbackApiEnabled: true,
+            maxRetryPerDay: 2,
+            manualInterventionEnabled: true,
+          },
+          createdAt: '2026-04-28T00:00:00.000Z',
+          updatedAt: '2026-04-28T00:00:00.000Z',
+        });
+      }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_STATUS) {
+        return Promise.resolve({
+          taskId: 'task-signin-1',
+          status: 'success',
+          runAt: '2026-04-28T08:30:00.000Z',
+          retryCount: 0,
+        });
+      }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_HISTORY) {
+        return Promise.resolve([
+          {
+            taskId: 'task-signin-1',
+            status: 'success',
+            strategyUsed: 'browser',
+            runAt: '2026-04-28T08:00:00.000Z',
+            retryCount: 0,
+          },
+        ]);
+      }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_SAVE) {
+        return Promise.resolve({
+          id: 'task-signin-1',
+          name: payload?.name ?? '阿里云盘签到',
+          kind: 'aliyundrive-signin',
+          steps: [],
+          entryUrl: payload?.entryUrl ?? 'https://www.aliyundrive.com/',
+          signin: {
+            site: 'aliyundrive',
+            mode: 'browser-first-api-fallback',
+            fallbackApiEnabled: true,
+            maxRetryPerDay: 2,
+            manualInterventionEnabled: true,
+          },
+          createdAt: '2026-04-28T00:00:00.000Z',
+          updatedAt: '2026-04-28T00:00:00.000Z',
+        });
+      }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_RUN_NOW) {
+        return Promise.resolve({
+          taskId: 'task-signin-1',
+          status: 'success',
+          runAt: '2026-04-28T08:35:00.000Z',
+          retryCount: 0,
+        });
+      }
+      if (channel === IPC_CHANNELS.SESSION_LIST) {
+        return Promise.resolve([]);
+      }
+      if (channel === IPC_CHANNELS.OPS_ACCEPTANCE_METRICS) {
+        return Promise.resolve([]);
+      }
+      return Promise.resolve(null);
+    });
+
+    render(<AutomationApp />);
+
+    fireEvent.click(screen.getByRole('button', { name: '选择任务' }));
+
+    expect(await screen.findByText('SigninTaskPanel')).toBeDefined();
+    expect(await screen.findByText('SigninRunStatusCard')).toBeDefined();
+    expect(
+      await screen.findByText((_, node) => node?.textContent === 'SigninHistoryCount:1'),
+    ).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: '保存签到任务' }));
+    fireEvent.click(screen.getByRole('button', { name: '立即执行签到' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_SAVE, {
+        name: '阿里云盘签到',
+        entryUrl: 'https://www.aliyundrive.com/',
+      });
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_RUN_NOW, {
+        taskId: 'task-signin-1',
+      });
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_HISTORY, {
+        taskId: 'task-signin-1',
+      });
     });
   });
 });

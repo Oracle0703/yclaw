@@ -27,6 +27,9 @@ export const EVENTS = {
   STOCK_DATA_UPDATE: 'stock:data:update',
   STOCK_REALTIME_TICK: 'stock:realtime:tick',
 
+  // 应用内导航（主进程通知 workbench 渲染端跳转到指定模块路由）
+  APP_NAVIGATE: 'app:navigate',
+
   // 自动更新
   UPDATE_AVAILABLE: 'update:available',
   UPDATE_NOT_AVAILABLE: 'update:notAvailable',

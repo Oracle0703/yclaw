@@ -30,6 +30,15 @@ export type { OHLCVData, DataSourceConfig, IndicatorParams, IndicatorResult } fr
 export type { IndicatorType } from './stock';
 export type { AppConfig, GeneralConfig, ModuleConfig, PluginConfig } from './config';
 export type {
+  SigninTaskKind,
+  SigninFailureReason,
+  SigninRunStatus,
+  SigninTaskConfig,
+  SigninDebugSnapshot,
+  SigninRunSummary,
+  EmailNotificationConfig,
+} from './signin';
+export type {
   RunnerKind,
   RunnerStatus,
   QueueType,

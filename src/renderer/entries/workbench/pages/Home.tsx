@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import {
   ArrowUpOutlined,
+  CheckCircleOutlined,
   DatabaseOutlined,
   DeploymentUnitOutlined,
   FundOutlined,
@@ -80,6 +81,14 @@ const modules: ModuleSummary[] = [
     tag: 'RPA',
     status: '队列高峰',
     icon: <RobotOutlined style={{ fontSize: 22 }} />,
+  },
+  {
+    id: 'signin',
+    name: '自动签到',
+    description: '统一承接阿里云盘、京东、淘宝等站点的签到编排与运行巡检。',
+    tag: 'Signin',
+    status: '可扩展',
+    icon: <CheckCircleOutlined style={{ fontSize: 22 }} />,
   },
   {
     id: 'data-center',
@@ -238,6 +247,7 @@ function getModuleId(moduleName: string) {
   const map: Record<string, string> = {
     股票分析: 'stock',
     自动化采集: 'automation',
+    自动签到: 'signin',
     数据中心: 'data-center',
     内嵌浏览器: 'browser',
     插件中心: 'plugin-center',
@@ -254,6 +264,7 @@ export default function Home() {
     const routeMap: Record<string, string> = {
       stock: '/stock',
       automation: '/automation',
+      signin: '/signin',
       'data-center': '/data-center',
       browser: '/browser',
       'plugin-center': '/plugin-center',
@@ -493,7 +504,7 @@ export default function Home() {
             <Card
               className="yclaw-panel-card"
               title="业务模块矩阵"
-              extra={<Tag color="processing">4 个模块</Tag>}
+              extra={<Tag color="processing">6 个模块</Tag>}
             >
               <Row gutter={[16, 16]}>
                 {modules.map((item) => (

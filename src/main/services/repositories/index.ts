@@ -17,6 +17,7 @@ export { ReviewRepository } from './ReviewRepository';
 export { RunnerSchedulerRepository } from './RunnerSchedulerRepository';
 export { ResultRepository } from './ResultRepository';
 export { SessionRepository } from './SessionRepository';
+export { SigninRunRepository } from './SigninRunRepository';
 export { TaskRepository } from './TaskRepository';
 export { TaskRevisionRepository } from './TaskRevisionRepository';
 export { TemplateRepository } from './TemplateRepository';

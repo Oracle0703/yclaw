@@ -19,6 +19,7 @@ import type { FormInstance } from 'antd';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type {
   AppConfig,
+  EmailNotificationConfig,
   GeneralConfig,
   McpClientServerConfig,
   McpClientServerStatus,
@@ -47,6 +48,27 @@ const DEFAULT_GENERAL_CONFIG: GeneralConfig = {
   language: 'zh-CN',
   startupBehavior: 'showWorkbench',
   closeToTray: false,
+  notificationEmail: {
+    enabled: false,
+    host: '',
+    port: 465,
+    secure: true,
+    username: '',
+    password: '',
+    from: '',
+    to: [],
+  },
+};
+
+const DEFAULT_NOTIFICATION_EMAIL: EmailNotificationConfig = {
+  enabled: false,
+  host: '',
+  port: 465,
+  secure: true,
+  username: '',
+  password: '',
+  from: '',
+  to: [],
 };
 
 const themeLabelMap: Record<GeneralConfig['theme'], string> = {
@@ -83,6 +105,10 @@ export default function Settings() {
   const hasLoadedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [currentValues, setCurrentValues] = useState<GeneralConfig>(DEFAULT_GENERAL_CONFIG);
+  const [notificationEmail, setNotificationEmail] = useState<EmailNotificationConfig>(
+    DEFAULT_NOTIFICATION_EMAIL,
+  );
+  const [notificationRecipientsText, setNotificationRecipientsText] = useState('');
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpStatus, setMcpStatus] = useState<EmbeddedMcpHttpStatus>(DEFAULT_MCP_STATUS);
   const [mcpConfig, setMcpConfig] = useState<EmbeddedMcpHttpConfig>(DEFAULT_MCP_CONFIG);
@@ -96,9 +122,15 @@ export default function Settings() {
 
   const loadConfig = useCallback(async () => {
     const config = await invoke<AppConfig>(IPC_CHANNELS.CONFIG_GET_ALL);
-    const general = config.general;
+    const general = {
+      ...DEFAULT_GENERAL_CONFIG,
+      ...config.general,
+      notificationEmail: normalizeNotificationEmail(config.general.notificationEmail),
+    };
     formRef.current?.setFieldsValue(general);
     setCurrentValues(general);
+    setNotificationEmail(general.notificationEmail ?? DEFAULT_NOTIFICATION_EMAIL);
+    setNotificationRecipientsText((general.notificationEmail?.to ?? []).join(', '));
     setMcpConfig(normalizeMcpConfig(config.ai?.mcp?.embeddedHttp));
     setMcpServersText(formatMcpServers(config.ai?.mcp?.servers ?? []));
     void setThemePreference(general.theme);
@@ -239,6 +271,32 @@ export default function Settings() {
     }
   };
 
+  const handleSendNotificationTestEmail = async () => {
+    const nextNotificationEmail = normalizeNotificationEmail({
+      ...notificationEmail,
+      to: parseNotificationRecipients(notificationRecipientsText),
+    });
+
+    try {
+      await invoke(IPC_CHANNELS.CONFIG_SET, {
+        key: 'general',
+        value: {
+          ...currentValues,
+          notificationEmail: nextNotificationEmail,
+        },
+      });
+      setNotificationEmail(nextNotificationEmail);
+      setCurrentValues((previous) => ({
+        ...previous,
+        notificationEmail: nextNotificationEmail,
+      }));
+      await invoke(IPC_CHANNELS.SIGNIN_NOTIFICATION_TEST_EMAIL);
+      message.success('测试邮件已发送');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '发送测试邮件失败');
+    }
+  };
+
   return (
     <PageShell
       title="设置中心"
@@ -254,14 +312,28 @@ export default function Settings() {
               disabled={loading}
               initialValues={DEFAULT_GENERAL_CONFIG}
               onValuesChange={(_, values) => {
-                setCurrentValues({ ...DEFAULT_GENERAL_CONFIG, ...values });
+                setCurrentValues((previous) => ({
+                  ...previous,
+                  ...DEFAULT_GENERAL_CONFIG,
+                  ...values,
+                  notificationEmail,
+                }));
               }}
               onFinish={async (values) => {
-                const nextValues = { ...DEFAULT_GENERAL_CONFIG, ...values };
+                const nextValues = {
+                  ...DEFAULT_GENERAL_CONFIG,
+                  ...values,
+                  notificationEmail: normalizeNotificationEmail({
+                    ...notificationEmail,
+                    to: parseNotificationRecipients(notificationRecipientsText),
+                  }),
+                };
 
                 try {
                   await invoke(IPC_CHANNELS.CONFIG_SET, { key: 'general', value: nextValues });
                   setCurrentValues(nextValues);
+                  setNotificationEmail(nextValues.notificationEmail ?? DEFAULT_NOTIFICATION_EMAIL);
+                  setNotificationRecipientsText((nextValues.notificationEmail?.to ?? []).join(', '));
                   await setThemePreference(nextValues.theme, { broadcast: true });
                   message.success('设置已保存');
                   return true;
@@ -326,6 +398,138 @@ export default function Settings() {
                 </Form.Item>
               </Card>
 
+              <Card
+                type="inner"
+                title="签到通知"
+                className="yclaw-settings-section"
+                extra={<Tag color="gold">通知</Tag>}
+              >
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <label>
+                    <span>SMTP 主机</span>
+                    <input
+                      aria-label="SMTP 主机"
+                      value={notificationEmail.host}
+                      onChange={(event) =>
+                        setNotificationEmail((current) => ({
+                          ...current,
+                          host: event.target.value,
+                        }))
+                      }
+                      style={{ display: 'block', width: '100%', marginTop: 6 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span>SMTP 端口</span>
+                    <input
+                      aria-label="SMTP 端口"
+                      type="number"
+                      value={notificationEmail.port}
+                      onChange={(event) =>
+                        setNotificationEmail((current) => ({
+                          ...current,
+                          port: Number(event.target.value || DEFAULT_NOTIFICATION_EMAIL.port),
+                        }))
+                      }
+                      style={{ display: 'block', width: 160, marginTop: 6 }}
+                    />
+                  </label>
+
+                  <label>
+                    <input
+                      aria-label="启用安全连接"
+                      type="checkbox"
+                      checked={notificationEmail.secure}
+                      onChange={(event) =>
+                        setNotificationEmail((current) => ({
+                          ...current,
+                          secure: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span style={{ marginLeft: 8 }}>启用安全连接</span>
+                  </label>
+
+                  <label>
+                    <input
+                      aria-label="启用邮件通知"
+                      type="checkbox"
+                      checked={notificationEmail.enabled}
+                      onChange={(event) =>
+                        setNotificationEmail((current) => ({
+                          ...current,
+                          enabled: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span style={{ marginLeft: 8 }}>启用邮件通知</span>
+                  </label>
+
+                  <label>
+                    <span>SMTP 用户名</span>
+                    <input
+                      aria-label="SMTP 用户名"
+                      value={notificationEmail.username}
+                      onChange={(event) =>
+                        setNotificationEmail((current) => ({
+                          ...current,
+                          username: event.target.value,
+                        }))
+                      }
+                      style={{ display: 'block', width: '100%', marginTop: 6 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span>SMTP 密码</span>
+                    <input
+                      aria-label="SMTP 密码"
+                      type="password"
+                      value={notificationEmail.password}
+                      onChange={(event) =>
+                        setNotificationEmail((current) => ({
+                          ...current,
+                          password: event.target.value,
+                        }))
+                      }
+                      style={{ display: 'block', width: '100%', marginTop: 6 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span>发件人</span>
+                    <input
+                      aria-label="发件人"
+                      value={notificationEmail.from}
+                      onChange={(event) =>
+                        setNotificationEmail((current) => ({
+                          ...current,
+                          from: event.target.value,
+                        }))
+                      }
+                      style={{ display: 'block', width: '100%', marginTop: 6 }}
+                    />
+                  </label>
+
+                  <label>
+                    <span>收件人</span>
+                    <textarea
+                      aria-label="收件人"
+                      value={notificationRecipientsText}
+                      onChange={(event) => setNotificationRecipientsText(event.target.value)}
+                      placeholder="多个收件人用逗号分隔"
+                      rows={3}
+                      style={{ display: 'block', width: '100%', marginTop: 6 }}
+                    />
+                  </label>
+
+                  <Button onClick={() => void handleSendNotificationTestEmail()}>
+                    发送测试邮件
+                  </Button>
+                </Space>
+              </Card>
+
               <Space className="yclaw-settings-submit">
                 <Button
                   type="primary"
@@ -368,6 +572,23 @@ export default function Settings() {
                 <Typography.Paragraph type="secondary">
                   工作台配置保存在主进程侧，适合承载主题、语言、启动策略等全局偏好。
                 </Typography.Paragraph>
+              </div>
+
+              <div className="yclaw-panel-section">
+                <Typography.Title level={5} style={{ marginTop: 0 }}>
+                  通知画像
+                </Typography.Title>
+                <Descriptions column={1} size="small">
+                  <Descriptions.Item label="邮件通知">
+                    {currentValues.notificationEmail?.enabled ? '启用' : '关闭'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="SMTP 主机">
+                    {currentValues.notificationEmail?.host || '未配置'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="收件人数">
+                    {currentValues.notificationEmail?.to.length ?? 0}
+                  </Descriptions.Item>
+                </Descriptions>
               </div>
 
               <div className="yclaw-panel-section">
@@ -543,6 +764,32 @@ function normalizeMcpConfig(config?: Partial<EmbeddedMcpHttpConfig>): EmbeddedMc
     port: Number.isFinite(port) && port > 0 ? port : DEFAULT_MCP_CONFIG.port,
     ...(token ? { token } : {}),
   };
+}
+
+function normalizeNotificationEmail(
+  config?: Partial<EmailNotificationConfig>,
+): EmailNotificationConfig {
+  const port = Number(config?.port ?? DEFAULT_NOTIFICATION_EMAIL.port);
+
+  return {
+    enabled: config?.enabled ?? DEFAULT_NOTIFICATION_EMAIL.enabled,
+    host: config?.host?.trim() ?? DEFAULT_NOTIFICATION_EMAIL.host,
+    port: Number.isFinite(port) && port > 0 ? port : DEFAULT_NOTIFICATION_EMAIL.port,
+    secure: config?.secure ?? DEFAULT_NOTIFICATION_EMAIL.secure,
+    username: config?.username?.trim() ?? DEFAULT_NOTIFICATION_EMAIL.username,
+    password: config?.password ?? DEFAULT_NOTIFICATION_EMAIL.password,
+    from: config?.from?.trim() ?? DEFAULT_NOTIFICATION_EMAIL.from,
+    to: Array.isArray(config?.to)
+      ? config.to.map((item) => String(item).trim()).filter(Boolean)
+      : DEFAULT_NOTIFICATION_EMAIL.to,
+  };
+}
+
+function parseNotificationRecipients(value: string): string[] {
+  return value
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function formatMcpServers(servers: McpClientServerConfig[]): string {

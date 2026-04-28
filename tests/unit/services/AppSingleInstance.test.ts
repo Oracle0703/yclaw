@@ -305,6 +305,7 @@ vi.mock('@main/services/repositories', () => {
       saveExecutionLease: vi.fn(),
     })),
     SessionRepository: makeClass(),
+    SigninRunRepository: makeClass(),
     TaskRepository: vi.fn().mockImplementation(() => ({
       getTasks: vi.fn(() => []),
     })),

@@ -22,6 +22,7 @@
 | `docs/specs/v1.1-enhancements.md` | 增强项规格 | 想了解“V1.1 之后补什么” |
 | `docs/specs/browser-hot-workspace-v1.md` | 浏览器 `HOT` 工作台与抖音分析台稳定规格 | 想了解浏览器采集台内部双工作模式 |
 | `docs/specs/stock-analysis-v1.md` | 股票分析模块稳定规格 | 想了解 `stock` 模块当前真实边界 |
+| `docs/superpowers/specs/2026-04-28-aliyundrive-signin-design.md` | 阿里云盘签到专项设计 | 想了解签到任务的专项方案、边界和状态机 |
 
 ---
 
@@ -64,6 +65,7 @@
 | `docs/specs/v1.0-baseline.md` | 已落地基础版 | Electron 壳、Vite 多入口、IPC、数据库、浏览器、自动化、插件、AI 基础能力均已存在 | 仍有少量交互与打包态验收需继续核验 |
 | `docs/specs/v1.1-enhancements.md` | 部分完成 | 命令面板、AI 面板、设置页增强、多数运营/浏览器增强已进入代码 | 文档中的部分 UI 勾选项仍需与真实实现继续对齐 |
 | `docs/specs/automation-browser-ops-v1.md` | 部分完成到基础闭环 | 任务、批次、结果、会话、告警、执行日志、介入面板、模板等主链路已具备基础版 | 完整 Electron 成品态验收和部分深水区交互仍待补齐 |
+| 阿里云盘签到专项（`docs/superpowers/specs/2026-04-28-aliyundrive-signin-design.md`） | 部分完成到可验证闭环 | 已完成共享类型、任务持久化、最新运行记录持久化、运行历史列表 UI、API fallback、主进程 IPC/调度分流、Automation 签到面板/状态卡、页面基础 locator 点击脚本、失败时的 URL/标题/DOM 摘要/截图调试快照、Settings SMTP 配置与 SMTP 客户端接入 | 页面真实站点联调、真实 SMTP 服务联调、历史记录分页/筛选等增强仍未完成 |
 | `docs/specs/browser-hot-workspace-v1.md` | 基础版已落地 | 浏览器 `HOT` 工作台、抖音分析台、双工作模式、IPC 与数据模型边界已有稳定文档承接 | 当前仍未独立成单独菜单或 renderer entry |
 | `docs/specs/stock-analysis-v1.md` | 基础版已落地 | 股票分析模块的 K 线工作台、指标、数据源边界与未完成项已有稳定文档承接 | 当前仍不是完整投研终端 |
 | `docs/specs/task-as-code-v1.md` | 基础版已落地 / UI 待补 | 核心序列化、CLI、IPC、preload 桥接、目录监听、Persistence 适配、README quick-start 与示例已落地 | 任务中心 / 模板中心 UI 导入导出入口、shutdown 等少量防御性尾项仍待补齐 |
@@ -118,7 +120,7 @@
 | --- | --- |
 | `workbench` | 工作台首页、设置页、命令面板、AI 面板入口 |
 | `stock` | K 线图、技术指标展示基础能力 |
-| `automation` | 任务列表、步骤编辑、执行面板、批次/结果/模板管理，以及 `RemoteRunnerPanel`、`RunnerSchedulerPanel` |
+| `automation` | 任务列表、步骤编辑、执行面板、批次/结果/模板管理，以及 `RemoteRunnerPanel`、`RunnerSchedulerPanel`；并已新增阿里云盘签到任务面板、签到状态卡与专项 IPC 链路 |
 | `data-center` | 数据总览、结果资产、导出任务、状态筛选与取消、导出创建弹窗、数据集、Webhook 目标、API Token、本地只读 API、Webhook 出口底层能力、数据质量一键扫描、质量规则启停、结果评分、批次洞察 |
 | `browser` | 地址栏、标签栏、干预面板、录制面板、抖音分析台、`HOT` 采集工作台、容器视图 |
 | `plugin-center` | 插件列表、权限展示、安装/启停/卸载操作 |
@@ -191,6 +193,7 @@
 | 类别 | 当前限制 |
 | --- | --- |
 | 自动化执行 | 更偏“基础生产化骨架”，复杂真实页面适配仍需继续增强 |
+| 阿里云盘签到 | 页面签到基础 locator 脚本已实现并具备日期卡片/领取按钮点击逻辑，失败时会保留 URL/标题/DOM 摘要与失败截图预览，SMTP 客户端也已接入，状态卡也能显示最近运行历史；但尚未完成真实站点与真实 SMTP 服务验收，历史记录分页/筛选等增强仍未完成 |
 | 调度策略 | 当前队列权重、lease 参数、`unknown` 幂等性处理仍偏保守，配置化程度有限 |
 | 远程 Runner | 控制面和 daemon 已可联调，但会话治理、结果汇总、长连稳定性仍属下一阶段 |
 | 插件隔离 | 目前仍是 V1 基础模式，尚未达到按插件独立进程隔离 |

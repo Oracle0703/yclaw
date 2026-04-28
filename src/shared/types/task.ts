@@ -1,4 +1,5 @@
 import type { QueueType, TaskIdempotency } from './runner-scheduler';
+import type { SigninTaskConfig, SigninTaskKind } from './signin';
 
 /**
  * 自动化任务类型定义
@@ -24,11 +25,13 @@ export interface TaskStep {
 export interface TaskFlow {
   id: string;
   name: string;
+  kind?: 'generic' | SigninTaskKind;
   description?: string;
   steps: TaskStep[];
   entryUrl?: string;
   schedule?: ScheduleConfig | null;
   scheduling?: TaskSchedulingMetadata;
+  signin?: SigninTaskConfig | null;
   sessionId?: string | null;
   templateId?: string | null;
   currentRevisionId?: string | null;

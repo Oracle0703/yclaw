@@ -260,20 +260,24 @@ export class TaskService {
     steps?: unknown[];
     entryUrl?: string;
     schedule?: unknown;
-      sessionId?: string | null;
-      templateId?: string | null;
-      enabled?: boolean;
-      tags?: string[];
-    }): TaskFlow {
+    kind?: TaskFlow['kind'];
+    signin?: TaskFlow['signin'];
+    sessionId?: string | null;
+    templateId?: string | null;
+    enabled?: boolean;
+    tags?: string[];
+  }): TaskFlow {
     const id = randomUUID();
     const now = new Date().toISOString();
     const flow: TaskFlow = {
       id,
       name: payload.name,
+      kind: payload.signin ? 'aliyundrive-signin' : (payload.kind ?? 'generic'),
       description: payload.description,
       steps: (payload.steps ?? []) as TaskFlow['steps'],
       entryUrl: payload.entryUrl,
       schedule: payload.schedule as TaskFlow['schedule'],
+      signin: payload.signin ?? null,
       sessionId: payload.sessionId ?? null,
       templateId: payload.templateId ?? null,
       enabled: payload.enabled ?? true,
@@ -285,7 +289,12 @@ export class TaskService {
       id,
       name: payload.name,
       description: payload.description,
-      flowJson: JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl }),
+      flowJson: JSON.stringify({
+        steps: flow.steps,
+        entryUrl: flow.entryUrl,
+        kind: flow.kind ?? 'generic',
+        signin: flow.signin ?? null,
+      }),
       scheduleJson: payload.schedule ? JSON.stringify(payload.schedule) : null,
       sessionId: payload.sessionId ?? null,
       templateId: payload.templateId ?? null,
@@ -303,6 +312,8 @@ export class TaskService {
       steps?: unknown[];
       entryUrl?: string;
       schedule?: unknown;
+      kind?: TaskFlow['kind'];
+      signin?: TaskFlow['signin'];
       sessionId?: string | null;
       templateId?: string | null;
       enabled?: boolean;
@@ -316,6 +327,8 @@ export class TaskService {
         ? JSON.stringify({
             steps: payload.steps ?? existing.steps,
             entryUrl: payload.entryUrl ?? existing.entryUrl,
+            kind: payload.signin ? 'aliyundrive-signin' : (payload.kind ?? existing.kind ?? 'generic'),
+            signin: payload.signin ?? existing.signin ?? null,
           })
         : undefined;
     this.taskRepository.updateTask(taskId, {
@@ -345,10 +358,12 @@ export class TaskService {
     if (!source) throw new Error(`Task "${taskId}" not found`);
     return this.createTask({
       name: `${source.name} (副本)`,
+      kind: source.kind ?? 'generic',
       description: source.description,
       steps: source.steps,
       entryUrl: source.entryUrl,
       schedule: source.schedule,
+      signin: source.signin ?? null,
       sessionId: source.sessionId ?? null,
       templateId: source.templateId ?? null,
     });

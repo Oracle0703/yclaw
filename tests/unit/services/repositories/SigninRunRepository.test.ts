@@ -1,0 +1,141 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { SigninRunRepository } from '@main/services/repositories/SigninRunRepository';
+
+function createExecutor() {
+  return {
+    run: vi.fn(),
+    get: vi.fn(),
+    all: vi.fn(),
+  };
+}
+
+describe('SigninRunRepository', () => {
+  let executor: ReturnType<typeof createExecutor>;
+  let repository: SigninRunRepository;
+
+  beforeEach(() => {
+    executor = createExecutor();
+    repository = new SigninRunRepository(executor);
+  });
+
+  it('saves latest run summary with debug payload serialized', () => {
+    repository.saveRun({
+      taskId: 'task-signin-1',
+      status: 'needs_intervention',
+      strategyUsed: 'api-fallback',
+      failureReason: 'reward_button_not_found',
+      detail: '页面未找到领取按钮',
+      debug: {
+        pageUrl: 'https://www.aliyundrive.com/drive',
+        pageTitle: '阿里云盘',
+        domSummary: '精选活动 4月28日',
+        screenshotDataUrl: 'data:image/png;base64,repo-debug',
+      },
+      runAt: '2026-04-28T09:00:00.000Z',
+      retryCount: 1,
+    });
+
+    expect(executor.run).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO signin_task_runs'),
+      [
+        'task-signin-1',
+        'needs_intervention',
+        'api-fallback',
+        'reward_button_not_found',
+        '页面未找到领取按钮',
+        JSON.stringify({
+          pageUrl: 'https://www.aliyundrive.com/drive',
+          pageTitle: '阿里云盘',
+          domSummary: '精选活动 4月28日',
+          screenshotDataUrl: 'data:image/png;base64,repo-debug',
+        }),
+        '2026-04-28T09:00:00.000Z',
+        1,
+      ],
+    );
+  });
+
+  it('reads latest run and run history with parsed debug snapshot', () => {
+    executor.get.mockReturnValueOnce({
+      task_id: 'task-signin-1',
+      status: 'success',
+      strategy_used: 'manual-retry',
+      failure_reason: null,
+      detail: '人工处理后签到成功',
+      debug_json: null,
+      run_at: '2026-04-28T09:05:00.000Z',
+      retry_count: 2,
+    });
+    executor.all.mockReturnValueOnce([
+      {
+        task_id: 'task-signin-1',
+        status: 'success',
+        strategy_used: 'manual-retry',
+        failure_reason: null,
+        detail: '人工处理后签到成功',
+        debug_json: null,
+        run_at: '2026-04-28T09:05:00.000Z',
+        retry_count: 2,
+      },
+      {
+        task_id: 'task-signin-1',
+        status: 'needs_intervention',
+        strategy_used: 'api-fallback',
+        failure_reason: 'reward_button_not_found',
+        detail: '页面未找到领取按钮',
+        debug_json: JSON.stringify({
+          pageUrl: 'https://www.aliyundrive.com/drive',
+          pageTitle: '阿里云盘',
+          domSummary: '精选活动 4月28日',
+          screenshotDataUrl: 'data:image/png;base64,repo-debug',
+        }),
+        run_at: '2026-04-28T09:00:00.000Z',
+        retry_count: 1,
+      },
+    ]);
+
+    expect(repository.getLatestRun('task-signin-1')).toEqual({
+      taskId: 'task-signin-1',
+      status: 'success',
+      strategyUsed: 'manual-retry',
+      failureReason: undefined,
+      detail: '人工处理后签到成功',
+      debug: undefined,
+      runAt: '2026-04-28T09:05:00.000Z',
+      retryCount: 2,
+    });
+
+    expect(repository.listRuns('task-signin-1', 10)).toEqual([
+      {
+        taskId: 'task-signin-1',
+        status: 'success',
+        strategyUsed: 'manual-retry',
+        failureReason: undefined,
+        detail: '人工处理后签到成功',
+        debug: undefined,
+        runAt: '2026-04-28T09:05:00.000Z',
+        retryCount: 2,
+      },
+      {
+        taskId: 'task-signin-1',
+        status: 'needs_intervention',
+        strategyUsed: 'api-fallback',
+        failureReason: 'reward_button_not_found',
+        detail: '页面未找到领取按钮',
+        debug: {
+          pageUrl: 'https://www.aliyundrive.com/drive',
+          pageTitle: '阿里云盘',
+          domSummary: '精选活动 4月28日',
+          screenshotDataUrl: 'data:image/png;base64,repo-debug',
+        },
+        runAt: '2026-04-28T09:00:00.000Z',
+        retryCount: 1,
+      },
+    ]);
+    expect(executor.all).toHaveBeenCalledWith(
+      expect.stringContaining('FROM signin_task_runs'),
+      ['task-signin-1', 10],
+    );
+  });
+});

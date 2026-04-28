@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { createRequire } from 'module';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -66,6 +66,57 @@ const mainProcess = spawnProcess(
   },
 );
 
+function killElectronTree(pid: number): void {
+  if (!pid) return;
+  if (isWindows) {
+    // Windows 上 child.kill('SIGTERM') 只杀直接子进程，electron 派生的 GPU/utility
+    // 子进程会成为孤儿并占住 single-instance 锁。必须 /T /F 杀整棵进程树。
+    spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
+  } else {
+    try {
+      process.kill(-pid, 'SIGKILL');
+    } catch {
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        /* noop */
+      }
+    }
+  }
+}
+
+function reapStrayElectronProcesses(): void {
+  // 在启动新 electron 之前清理本仓库路径下可能残留的 electron.exe（上次 hot-reload
+  // 或上次 dev 父进程被强制终止后留下的），避免 single-instance lock 占用。
+  if (!isWindows) return;
+  try {
+    // wmic 查询 ExecutablePath 包含本仓库子串的 electron.exe，限定范围避免误杀。
+    const repoTag = rootDir.replace(/\\/g, '\\\\').toLowerCase();
+    const result = spawnSync(
+      'powershell',
+      [
+        '-NoProfile',
+        '-Command',
+        `Get-CimInstance Win32_Process -Filter "Name='electron.exe'" | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.ToLower().Contains('${repoTag}') } | ForEach-Object { $_.ProcessId }`,
+      ],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    if (result.status !== 0 || !result.stdout) return;
+    const pids = result.stdout
+      .split(/\r?\n/)
+      .map((line) => Number(line.trim()))
+      .filter((pid) => Number.isFinite(pid) && pid > 0);
+    for (const pid of pids) {
+      killElectronTree(pid);
+    }
+    if (pids.length > 0) {
+      console.log(`[dev] reaped ${pids.length} stray electron.exe before respawn`);
+    }
+  } catch {
+    /* noop — 清理是 best-effort */
+  }
+}
+
 function stopElectron(): Promise<void> {
   const current = electronProcess;
   const alreadyExited = !current || current.killed || typeof current.exitCode === 'number';
@@ -82,15 +133,26 @@ function stopElectron(): Promise<void> {
     });
   electronExitPromise = waiter;
 
-  current.kill('SIGTERM');
+  if (current.pid) {
+    killElectronTree(current.pid);
+  } else {
+    current.kill('SIGTERM');
+  }
   electronProcess = null;
-  return waiter;
+
+  // 超时兼底：1.5s 后若还没收到 exit 事件，强制认为已处理，避免锁死后续重启。
+  const timeout = new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 1500));
+  return Promise.race([waiter, timeout]);
 }
 
 function spawnElectron(): void {
   if (isShuttingDown) {
     return;
   }
+
+  // 启动前清理可能存在的本仓库 electron 孤儿进程，避免 single-instance lock 被占用
+  // 导致新进程启动后立刻 app.quit() 而看不到窗口。
+  reapStrayElectronProcesses();
 
   const child = spawn(electronExecutable, ['src/main/index.ts'], {
     cwd: rootDir,
@@ -203,34 +265,68 @@ mainProcess.stderr?.on('data', (chunk) => {
   process.stderr.write(chunk);
 });
 
+function awaitChildExit(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolvePromise) => {
+    child.once('exit', () => resolvePromise());
+  });
+}
+
+function killWatcher(child: ChildProcess): Promise<void> {
+  if (!child.killed && child.exitCode === null) {
+    child.kill('SIGTERM');
+  }
+  return awaitChildExit(child);
+}
+
 function shutdown(exitCode = 0): void {
   if (isShuttingDown) {
     return;
   }
 
   isShuttingDown = true;
-  void stopElectron();
 
-  if (!viteProcess.killed) {
-    viteProcess.kill('SIGTERM');
-  }
+  const pending = Promise.all([
+    stopElectron(),
+    killWatcher(viteProcess),
+    killWatcher(preloadProcess),
+    killWatcher(mainProcess),
+  ]);
 
-  if (!preloadProcess.killed) {
-    preloadProcess.kill('SIGTERM');
-  }
-
-  if (!mainProcess.killed) {
-    mainProcess.kill('SIGTERM');
-  }
-
-  setTimeout(() => {
+  // 等子进程真正退出再让父进程 process.exit，避免在 Windows 上把 electron.exe
+  // 留成无主窗口的孤儿（会一直占着 single-instance lock，导致下次启动看不到任何窗口）。
+  const timeout = new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 2500));
+  void Promise.race([pending.then(() => undefined), timeout]).then(() => {
     process.exit(exitCode);
-  }, 100);
+  });
 }
 
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(signal, () => shutdown(0));
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'] as const) {
+  // 某些信号在 Windows 上不存在，注册时忽略错误即可。
+  try {
+    process.on(signal, () => shutdown(0));
+  } catch {
+    /* ignore unsupported signal */
+  }
 }
+
+// 父进程异常退出兜底：同步发一次 kill，尽量不留孤儿。
+process.on('exit', () => {
+  if (electronProcess?.pid) {
+    killElectronTree(electronProcess.pid);
+  }
+  for (const child of [viteProcess, preloadProcess, mainProcess]) {
+    if (child && !child.killed && child.exitCode === null) {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        /* noop */
+      }
+    }
+  }
+});
 
 viteProcess.on('exit', (code) => {
   if (!isShuttingDown && code !== 0) {

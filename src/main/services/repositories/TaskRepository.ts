@@ -110,6 +110,8 @@ export class TaskRepository {
       status: task.status,
       description: task.description ?? undefined,
       entryUrl: parseJson<{ entryUrl?: string }>(task.flowJson, {}).entryUrl,
+      kind: parseJson<Partial<TaskFlow>>(task.flowJson, {}).kind ?? 'generic',
+      signin: parseJson<Partial<TaskFlow>>(task.flowJson, {}).signin ?? null,
       schedule: parseJson(task.scheduleJson, null),
       enabled: task.enabled == null ? true : task.enabled === 1,
       tags: parseJson(task.tagsJson, [] as string[]),
@@ -154,10 +156,12 @@ export class TaskRepository {
     return {
       id: task.id,
       name: task.name,
+      kind: parsed.kind ?? 'generic',
       description: task.description ?? undefined,
       entryUrl: parsed.entryUrl,
       steps,
       schedule: parseJson(task.scheduleJson, null),
+      signin: parsed.signin ?? null,
       sessionId: task.sessionId ?? null,
       templateId: task.templateId ?? null,
       enabled: task.enabled == null ? true : task.enabled === 1,
@@ -293,7 +297,12 @@ export class TaskRepository {
    */
   saveTaskFlow(flow: TaskFlow): void {
     this.executor.transaction(() => {
-      const flowJson = JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl });
+      const flowJson = JSON.stringify({
+        steps: flow.steps,
+        entryUrl: flow.entryUrl,
+        kind: flow.kind ?? 'generic',
+        signin: flow.signin ?? null,
+      });
       const updateResult = this.executor.run(
         `
           UPDATE tasks

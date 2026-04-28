@@ -73,6 +73,8 @@ describe('TaskRepository', () => {
         status: 'idle',
         description: '描述',
         entryUrl: 'https://example.com/workspace',
+        kind: 'generic',
+        signin: null,
         schedule: { type: 'cron', cron: '*/5 * * * *' },
         nextRunAt: '2026-04-17 10:00:00',
         lastRunAt: null,
@@ -119,7 +121,11 @@ describe('TaskRepository', () => {
       },
     ]);
 
-    expect(repository.getTaskFlow('task-1')).toEqual(flow);
+    expect(repository.getTaskFlow('task-1')).toEqual({
+      ...flow,
+      kind: 'generic',
+      signin: null,
+    });
     expect(executor.all).toHaveBeenCalledWith(expect.stringContaining('FROM task_steps'), [
       'task-1',
     ]);
@@ -192,14 +198,24 @@ describe('TaskRepository', () => {
     expect(executor.run).toHaveBeenNthCalledWith(1, expect.stringContaining('UPDATE tasks'), [
       '采集任务',
       '描述',
-      JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl }),
+      JSON.stringify({
+        steps: flow.steps,
+        entryUrl: flow.entryUrl,
+        kind: 'generic',
+        signin: null,
+      }),
       'task-1',
     ]);
     expect(executor.run).toHaveBeenNthCalledWith(2, expect.stringContaining('INSERT INTO tasks'), [
       'task-1',
       '采集任务',
       '描述',
-      JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl }),
+      JSON.stringify({
+        steps: flow.steps,
+        entryUrl: flow.entryUrl,
+        kind: 'generic',
+        signin: null,
+      }),
       JSON.stringify({ type: 'manual' }),
       'session-1',
       'template-1',
@@ -226,5 +242,83 @@ describe('TaskRepository', () => {
         1000,
       ],
     );
+  });
+
+  it('persists signin metadata inside flow json and restores it from getTaskFlow', () => {
+    const signinFlow = {
+      ...flow,
+      id: 'task-signin-1',
+      name: '阿里云盘签到',
+      kind: 'aliyundrive-signin',
+      signin: {
+        site: 'aliyundrive',
+        mode: 'browser-first-api-fallback',
+        fallbackApiEnabled: true,
+        refreshToken: 'rt-demo',
+        maxRetryPerDay: 2,
+        manualInterventionEnabled: true,
+      },
+    } as TaskFlow & {
+      kind: 'aliyundrive-signin';
+      signin: {
+        site: 'aliyundrive';
+        mode: 'browser-first-api-fallback';
+        fallbackApiEnabled: boolean;
+        refreshToken: string;
+        maxRetryPerDay: number;
+        manualInterventionEnabled: true;
+      };
+    };
+
+    executor.run
+      .mockReturnValueOnce({ changes: 0 })
+      .mockReturnValueOnce({ changes: 1 })
+      .mockReturnValueOnce({ changes: 1 })
+      .mockReturnValueOnce({ changes: 1 });
+
+    repository.saveTaskFlow(signinFlow);
+
+    expect(executor.run).toHaveBeenNthCalledWith(1, expect.stringContaining('UPDATE tasks'), [
+      '阿里云盘签到',
+      '描述',
+      JSON.stringify({
+        steps: signinFlow.steps,
+        entryUrl: signinFlow.entryUrl,
+        kind: 'aliyundrive-signin',
+        signin: signinFlow.signin,
+      }),
+      'task-signin-1',
+    ]);
+
+    executor.get.mockReturnValueOnce({
+      id: 'task-signin-1',
+      name: '阿里云盘签到',
+      description: '描述',
+      flowJson: JSON.stringify({
+        steps: signinFlow.steps,
+        entryUrl: signinFlow.entryUrl,
+        kind: 'aliyundrive-signin',
+        signin: signinFlow.signin,
+      }),
+      scheduleJson: JSON.stringify({ type: 'manual' }),
+      sessionId: 'session-1',
+      templateId: 'template-1',
+      enabled: 1,
+      tagsJson: '[]',
+      createdAt: signinFlow.createdAt,
+      updatedAt: signinFlow.updatedAt,
+    });
+
+    expect(repository.getTaskFlow('task-signin-1')).toMatchObject({
+      id: 'task-signin-1',
+      name: '阿里云盘签到',
+      kind: 'aliyundrive-signin',
+      signin: {
+        site: 'aliyundrive',
+        fallbackApiEnabled: true,
+        refreshToken: 'rt-demo',
+        maxRetryPerDay: 2,
+      },
+    });
   });
 });
