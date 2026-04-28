@@ -868,6 +868,47 @@ export class DatabaseService {
         INSERT INTO migrations (version) VALUES (19);
       `);
     }
+
+    if (currentDbVersion < 20) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS hot_sources (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL UNIQUE,
+          name TEXT NOT NULL,
+          source_kind TEXT NOT NULL,
+          site_key TEXT NOT NULL,
+          entry_url TEXT NOT NULL,
+          parser_key TEXT NOT NULL,
+          session_id TEXT,
+          schedule_json TEXT,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          tags_json TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS hot_reports (
+          id TEXT PRIMARY KEY,
+          source_id TEXT NOT NULL,
+          batch_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          format TEXT NOT NULL,
+          file_path TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (source_id) REFERENCES hot_sources(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_hot_sources_task
+          ON hot_sources(task_id, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_hot_reports_source_created
+          ON hot_reports(source_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_hot_reports_batch
+          ON hot_reports(batch_id, created_at DESC);
+
+        INSERT INTO migrations (version) VALUES (20);
+      `);
+    }
   }
 
   private hasTable(tableName: string): boolean {

@@ -10,13 +10,16 @@
 | 文档 | 作用 | 适用场景 |
 | --- | --- | --- |
 | `docs/overview/current-status.md` | 当前代码实现与工程状态 | 想知道“现在做到哪了” |
+| `docs/overview/implementation-audit.md` | 实现反查与文档齐全度审计 | 想知道“哪些实现已有文档、哪些还缺文档” |
 | `docs/README.md` | `docs/` 文档总索引 | 想知道“还有哪些资料” |
 | `docs/architecture/architecture.md` | 技术分层、调用链路、进程模型 | 想了解“系统怎么工作” |
 | `docs/architecture/structure.md` | 实际目录结构与模块职责 | 想快速定位代码 |
+| `docs/architecture/dev-runtime.md` | `npm run dev` 启动链路与运行时问题说明 | 想排查 dev 环境、端口和 Electron 启动问题 |
 | `docs/product/prd.md` | 产品愿景、角色、场景 | 想了解“为什么做这个项目” |
 | `docs/product/plan.md` | 可行性分析与阶段路线 | 想了解“整体怎么推进” |
 | `docs/specs/v1.0-baseline.md` | 基线规格与验收目标 | 想了解“V1.0 要交付什么” |
 | `docs/specs/v1.1-enhancements.md` | 增强项规格 | 想了解“V1.1 之后补什么” |
+| `docs/specs/browser-hot-workspace-v1.md` | 浏览器 `HOT` 工作台与抖音分析台稳定规格 | 想了解浏览器采集台内部双工作模式 |
 
 ---
 
@@ -31,18 +34,33 @@
 | 核心引擎 | 已实现基础能力 | 自动化引擎、分析引擎已具备基础执行与测试覆盖 |
 | AI 助手 | 已实现基础版本 | 包含服务层、工具注册、聊天面板 |
 | 插件体系 | 已实现基础版本 | 已有插件加载、权限校验、插件中心、插件宿主 |
+| 浏览器采集台 | 已实现基础版本 | 浏览器入口已具备会话控制台、抖音分析台与 `HOT` 采集工作台双模式 |
+| 启动治理 | 已实现基础版本 | `bootstrapMainProcess`、单实例抢锁、`predev` 运行时检查均已落地 |
 | 测试体系 | 已建立 | 包含 Vitest 单测、回归测试、Playwright e2e |
 | 打包能力 | 已建立 | 支持 `build`、`pack`、`dist` 与多平台打包脚本 |
 
 ---
 
-## 2.1 规格 / 方案落地状态（截至 2026-04-22）
+## 2.1 文档反查结论（截至 2026-04-28）
+
+| 结论 | 当前状态 | 说明 |
+| --- | --- | --- |
+| 主线文档覆盖 | 基本齐全 | 自动化、Task Ops、Data Center、Task-as-Code、MCP、Headless Runner、Remote Runner、Scheduler 均已有 stable docs |
+| 浏览器新业务文档 | 已补齐基础专项文档 | 已新增 `docs/specs/browser-hot-workspace-v1.md` 承接 `HOT` 工作台与抖音分析台 |
+| 工程运行时文档 | 已补齐基础说明 | 已新增 `docs/architecture/dev-runtime.md` 说明 `predev`、端口与 Electron 启动链路 |
+| 结构说明 | 已补强 | `docs/architecture/structure.md` 已回写 `src/cli/`、`src/mcp/`、`tests/integration/` 等真实结构 |
+| 详细审计 | 已新增 | 详见 `docs/overview/implementation-audit.md` |
+
+---
+
+## 2.2 规格 / 方案落地状态（截至 2026-04-28）
 
 | 文档 | 当前状态 | 实现情况 | 说明 |
 | --- | --- | --- | --- |
 | `docs/specs/v1.0-baseline.md` | 已落地基础版 | Electron 壳、Vite 多入口、IPC、数据库、浏览器、自动化、插件、AI 基础能力均已存在 | 仍有少量交互与打包态验收需继续核验 |
 | `docs/specs/v1.1-enhancements.md` | 部分完成 | 命令面板、AI 面板、设置页增强、多数运营/浏览器增强已进入代码 | 文档中的部分 UI 勾选项仍需与真实实现继续对齐 |
 | `docs/specs/automation-browser-ops-v1.md` | 部分完成到基础闭环 | 任务、批次、结果、会话、告警、执行日志、介入面板、模板等主链路已具备基础版 | 完整 Electron 成品态验收和部分深水区交互仍待补齐 |
+| `docs/specs/browser-hot-workspace-v1.md` | 基础版已落地 | 浏览器 `HOT` 工作台、抖音分析台、双工作模式、IPC 与数据模型边界已有稳定文档承接 | 当前仍未独立成单独菜单或 renderer entry |
 | `docs/specs/task-as-code-v1.md` | 基础版已落地 / UI 待补 | 核心序列化、CLI、IPC、preload 桥接、目录监听、Persistence 适配、README quick-start 与示例已落地 | 任务中心 / 模板中心 UI 导入导出入口、shutdown 等少量防御性尾项仍待补齐 |
 | `docs/specs/mcp-integration-v1.md` | 基础版已落地 / 验收收尾 | MCP Server `stdio/http`、token 鉴权、dangerous 标记、外部 MCP Client、设置页、AI 工具可见性、审计面板、Claude/Cursor 示例已落地 | 最终逐条验收、资源/审计筛选和远程访问边界仍待收口 |
 | `docs/specs/data-center-v1.md` | P0 已可用 / P1.5 持续完善中 | 已具备独立 `data-center` 模块、结果资产总览、结果详情、持久化导出任务、状态筛选、取消任务、失败重试、导出创建弹窗、数据集保存、本地只读 API、Webhook 目标保存/编辑/删除/连通性测试、API Token 生成/列表/模板/吊销、Webhook 导出底层链路、token 校验底层预留、数据质量一键扫描、质量规则启停配置、质量评分、批次洞察、findings / insight 持久化、自动化页跳转入口 | Token 更细权限治理、Webhook 更完整配置治理、复杂规则编辑器与长期趋势洞察仍属后续阶段 |
@@ -54,8 +72,10 @@
 | `docs/design/dashboard-ideas.md` | 未开始 | 当前没有按该文档独立推进总控仪表盘重构 | 属于中后期体验增强方向 |
 | `docs/design/page-container-optimization.md` | 未系统推进 | 局部页面样式已有演进，但未按文档做专项改造 | 仍属于设计建议 |
 | `docs/design/package-size-optimization.md` | 部分处理 | 仓库中已有相关 review / remediation 记录 | 尚未形成持续化、指标化的专项实施线 |
+| `docs/architecture/dev-runtime.md` | 已新增 | 解释 `npm run dev`、端口变化、Electron 启动条件与运行时检查 | 用于回答“浏览器打不开但 Electron 正常”这类问题 |
+| `docs/overview/implementation-audit.md` | 已新增 | 对照真实代码、测试与脚本标注文档齐全度与已做 / 未做 | 用于回答“实现有没有文档承接” |
 
-### 2.2 docs 中尚未启动或仅停留在设计层的方向
+### 2.3 docs 中尚未启动或仅停留在设计层的方向
 
 | 文档 / 方向 | 当前状态 | 备注 |
 | --- | --- | --- |
@@ -94,7 +114,7 @@
 | `stock` | K 线图、技术指标展示基础能力 |
 | `automation` | 任务列表、步骤编辑、执行面板、批次/结果/模板管理，以及 `RemoteRunnerPanel`、`RunnerSchedulerPanel` |
 | `data-center` | 数据总览、结果资产、导出任务、状态筛选与取消、导出创建弹窗、数据集、Webhook 目标、API Token、本地只读 API、Webhook 出口底层能力、数据质量一键扫描、质量规则启停、结果评分、批次洞察 |
-| `browser` | 地址栏、标签栏、干预面板、录制面板、容器视图 |
+| `browser` | 地址栏、标签栏、干预面板、录制面板、抖音分析台、`HOT` 采集工作台、容器视图 |
 | `plugin-center` | 插件列表、权限展示、安装/启停/卸载操作 |
 | `plugin-host` | 受限宿主环境与桥接层 |
 
@@ -118,10 +138,12 @@
 | 能力 | 当前实现 |
 | --- | --- |
 | 开发启动 | `npm run dev` |
+| 开发运行时校验 | `predev` + `scripts/ensure-dev-runtime.cjs` |
 | 构建 | `npm run build`、`npm run build:core`、`npm run build:features`、`npm run build:main` |
 | 质量检查 | `npm run lint`、`npm run typecheck` |
 | 测试 | `npm test`、`npm run test:coverage`、`npm run test:e2e` |
 | 打包 | `npm run pack`、`npm run dist`、`npm run dist:mac`、`npm run dist:win`、`npm run dist:linux` |
+| 单实例治理 | `src/main/bootstrap.ts` + `src/main/single-instance.ts` |
 
 ---
 
@@ -130,12 +152,15 @@
 | 路径 | 说明 |
 | --- | --- |
 | `src/main/` | Electron 主进程、系统服务、AI、插件、浏览器管理 |
+| `src/cli/` | `yclaw` CLI 与 Task-as-Code / runner / MCP 命令入口 |
+| `src/mcp/` | MCP Server / Client 与共享协议适配层 |
 | `src/renderer/entries/` | 业务模块入口页 |
 | `src/renderer/plugin-host/` | 插件宿主页与桥接层 |
 | `src/renderer/shared/` | 跨模块共享组件、Hook、样式、工具 |
 | `src/shared/` | 主/渲染进程共享类型、常量、工具 |
 | `src/runner/` | Headless Runner CLI、daemon、Playwright 运行时适配 |
 | `src/engines/` | 自动化与分析引擎 |
+| `tests/integration/` | MCP / IPC 集成测试 |
 | `tests/unit/` | 单元与回归测试 |
 | `tests/e2e/` | Playwright 端到端测试 |
 | `scripts/` | 开发、构建、特性包同步、打包辅助脚本 |

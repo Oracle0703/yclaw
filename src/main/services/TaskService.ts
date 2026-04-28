@@ -260,9 +260,11 @@ export class TaskService {
     steps?: unknown[];
     entryUrl?: string;
     schedule?: unknown;
-    sessionId?: string | null;
-    templateId?: string | null;
-  }): TaskFlow {
+      sessionId?: string | null;
+      templateId?: string | null;
+      enabled?: boolean;
+      tags?: string[];
+    }): TaskFlow {
     const id = randomUUID();
     const now = new Date().toISOString();
     const flow: TaskFlow = {
@@ -274,6 +276,8 @@ export class TaskService {
       schedule: payload.schedule as TaskFlow['schedule'],
       sessionId: payload.sessionId ?? null,
       templateId: payload.templateId ?? null,
+      enabled: payload.enabled ?? true,
+      tags: payload.tags ?? [],
       createdAt: now,
       updatedAt: now,
     };
@@ -285,6 +289,8 @@ export class TaskService {
       scheduleJson: payload.schedule ? JSON.stringify(payload.schedule) : null,
       sessionId: payload.sessionId ?? null,
       templateId: payload.templateId ?? null,
+      enabled: payload.enabled ?? true,
+      tagsJson: JSON.stringify(payload.tags ?? []),
     });
     return flow;
   }
@@ -299,6 +305,8 @@ export class TaskService {
       schedule?: unknown;
       sessionId?: string | null;
       templateId?: string | null;
+      enabled?: boolean;
+      tags?: string[];
     },
   ): TaskFlow | null {
     const existing = this.taskRepository.getTaskFlow(taskId);
@@ -317,6 +325,8 @@ export class TaskService {
       scheduleJson: payload.schedule !== undefined ? JSON.stringify(payload.schedule) : undefined,
       sessionId: payload.sessionId,
       templateId: payload.templateId,
+      enabled: payload.enabled,
+      tagsJson: payload.tags !== undefined ? JSON.stringify(payload.tags) : undefined,
     });
     return this.taskRepository.getTaskFlow(taskId);
   }

@@ -13,7 +13,7 @@
  */
 
 import { promises as fs } from 'node:fs';
-import { extname, join, relative, resolve as pathResolve } from 'node:path';
+import { extname, join, relative, resolve as pathResolve, sep as pathSep } from 'node:path';
 import { parseFile } from './yaml';
 import type { AnyFile, TaskFile, TemplateFile } from './types';
 import type { ValidationIssue, ValidationResult } from './validate';
@@ -74,7 +74,9 @@ export async function loadFile(absPath: string, options: LoadOptions = {}): Prom
   if (stat.size > safety.maxFileSize) {
     throw new Error(`file size ${stat.size} exceeds limit ${safety.maxFileSize}: ${absPath}`);
   }
-  const text = options.readFile ? await options.readFile(absPath) : await fs.readFile(absPath, 'utf8');
+  const text = options.readFile
+    ? await options.readFile(absPath)
+    : await fs.readFile(absPath, 'utf8');
   try {
     return parseFile(text, { filePath: absPath });
   } catch (error) {
@@ -168,7 +170,13 @@ export async function loadDirectory(rootDir: string, options: LoadOptions = {}):
     if (file.kind === 'Task') {
       insertEntry(tasks, id, { file, absolutePath: absPath, displayPath: display }, 'Task', issues);
     } else {
-      insertEntry(templates, id, { file, absolutePath: absPath, displayPath: display }, 'Template', issues);
+      insertEntry(
+        templates,
+        id,
+        { file, absolutePath: absPath, displayPath: display },
+        'Template',
+        issues,
+      );
     }
   }
 
@@ -219,10 +227,7 @@ export function resolveReferences(registry: Registry): ValidationResult {
 
 // ──────────────────────────── 私有 ────────────────────────────
 
-async function defaultListFiles(
-  absRoot: string,
-  safety: typeof LOADER_SAFETY,
-): Promise<string[]> {
+async function defaultListFiles(absRoot: string, safety: typeof LOADER_SAFETY): Promise<string[]> {
   const out: string[] = [];
   await walk(absRoot, out, 0, safety);
   out.sort();
@@ -235,7 +240,7 @@ function normalizeInjectedPaths(
   issues: ValidationIssue[],
 ): string[] {
   const out: string[] = [];
-  const rootWithSep = absRoot.endsWith('/') ? absRoot : `${absRoot}/`;
+  const rootWithSep = absRoot.endsWith(pathSep) ? absRoot : `${absRoot}${pathSep}`;
   for (const p of raw) {
     const abs = pathResolve(absRoot, p);
     if (abs !== absRoot && !abs.startsWith(rootWithSep)) {

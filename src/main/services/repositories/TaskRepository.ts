@@ -15,6 +15,8 @@ interface TaskListRow {
   flowJson?: string | null;
   updatedAt: string;
   scheduleJson?: string | null;
+  enabled?: number | null;
+  tagsJson?: string | null;
   nextRunAt?: string | null;
   lastRunAt?: string | null;
   currentRevisionId?: string | null;
@@ -29,6 +31,8 @@ interface TaskFlowRow {
   scheduleJson?: string | null;
   sessionId?: string | null;
   templateId?: string | null;
+  enabled?: number | null;
+  tagsJson?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -78,6 +82,8 @@ export class TaskRepository {
           tasks.description,
           tasks.flow_json AS flowJson,
           tasks.schedule_json AS scheduleJson,
+          tasks.enabled AS enabled,
+          tasks.tags_json AS tagsJson,
           tasks.next_run_at AS nextRunAt,
           tasks.last_run_at AS lastRunAt,
           tasks.current_revision_id AS currentRevisionId,
@@ -105,6 +111,8 @@ export class TaskRepository {
       description: task.description ?? undefined,
       entryUrl: parseJson<{ entryUrl?: string }>(task.flowJson, {}).entryUrl,
       schedule: parseJson(task.scheduleJson, null),
+      enabled: task.enabled == null ? true : task.enabled === 1,
+      tags: parseJson(task.tagsJson, [] as string[]),
       nextRunAt: task.nextRunAt ?? null,
       lastRunAt: task.lastRunAt ?? null,
       currentRevisionId: task.currentRevisionId ?? null,
@@ -124,6 +132,8 @@ export class TaskRepository {
           schedule_json AS scheduleJson,
           session_id AS sessionId,
           template_id AS templateId,
+          enabled AS enabled,
+          tags_json AS tagsJson,
           created_at AS createdAt,
           updated_at AS updatedAt
         FROM tasks
@@ -150,6 +160,8 @@ export class TaskRepository {
       schedule: parseJson(task.scheduleJson, null),
       sessionId: task.sessionId ?? null,
       templateId: task.templateId ?? null,
+      enabled: task.enabled == null ? true : task.enabled === 1,
+      tags: parseJson(task.tagsJson, [] as string[]),
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
     };
@@ -183,6 +195,8 @@ export class TaskRepository {
     scheduleJson?: string | null;
     sessionId?: string | null;
     templateId?: string | null;
+    enabled?: boolean;
+    tagsJson?: string | null;
   }): void {
     this.executor.run(
       `
@@ -193,9 +207,11 @@ export class TaskRepository {
           flow_json,
           schedule_json,
           session_id,
-          template_id
+          template_id,
+          enabled,
+          tags_json
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         task.id,
@@ -205,6 +221,8 @@ export class TaskRepository {
         task.scheduleJson ?? null,
         task.sessionId ?? null,
         task.templateId ?? null,
+        task.enabled === false ? 0 : 1,
+        task.tagsJson ?? '[]',
       ],
     );
   }
@@ -218,6 +236,8 @@ export class TaskRepository {
       scheduleJson?: string | null;
       sessionId?: string | null;
       templateId?: string | null;
+      enabled?: boolean;
+      tagsJson?: string | null;
     },
   ): void {
     const fields: string[] = [];
@@ -229,12 +249,20 @@ export class TaskRepository {
       ['scheduleJson', 'schedule_json'],
       ['sessionId', 'session_id'],
       ['templateId', 'template_id'],
+      ['enabled', 'enabled'],
+      ['tagsJson', 'tags_json'],
     ];
 
     fieldMap.forEach(([key, column]) => {
       if (Object.prototype.hasOwnProperty.call(updates, key)) {
         fields.push(`${column} = ?`);
-        params.push(updates[key]);
+        params.push(
+          key === 'enabled'
+            ? updates[key] === false
+              ? 0
+              : 1
+            : updates[key],
+        );
       }
     });
 
@@ -286,10 +314,12 @@ export class TaskRepository {
               schedule_json,
               session_id,
               template_id,
+              enabled,
+              tags_json,
               created_at,
               updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
           [
             flow.id,
@@ -299,6 +329,8 @@ export class TaskRepository {
             flow.schedule ? JSON.stringify(flow.schedule) : null,
             flow.sessionId ?? null,
             flow.templateId ?? null,
+            flow.enabled === false ? 0 : 1,
+            JSON.stringify(flow.tags ?? []),
             flow.createdAt,
             flow.updatedAt,
           ],

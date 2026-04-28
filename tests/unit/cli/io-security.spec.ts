@@ -6,8 +6,13 @@ import { runExport, runImport } from '@cli/io';
 
 class S {
   chunks: string[] = [];
-  write(c: string) { this.chunks.push(c); return true; }
-  text() { return this.chunks.join(''); }
+  write(c: string) {
+    this.chunks.push(c);
+    return true;
+  }
+  text() {
+    return this.chunks.join('');
+  }
 }
 
 describe('cli · io · security/edge-case', () => {
@@ -23,7 +28,11 @@ describe('cli · io · security/edge-case', () => {
     const real = join(tmp, 'real.json');
     writeFileSync(real, '{"tasks":[]}', 'utf8');
     const link = join(tmp, 'link.json');
-    symlinkSync(real, link);
+    try {
+      symlinkSync(real, link);
+    } catch {
+      return; /* skip when symlink not permitted */
+    }
     const stderr = new S();
     const r = await runExport({ inputs: [link], stdout: new S(), stderr });
     expect(r.exitCode).toBe(1);
@@ -38,7 +47,11 @@ describe('cli · io · security/edge-case', () => {
       'utf8',
     );
     const link = join(tmp, 'link.yaml');
-    symlinkSync(real, link);
+    try {
+      symlinkSync(real, link);
+    } catch {
+      return; /* skip when symlink not permitted */
+    }
     const stderr = new S();
     const r = await runImport({ inputs: [link], stdout: new S(), stderr });
     expect(r.exitCode).toBe(2);

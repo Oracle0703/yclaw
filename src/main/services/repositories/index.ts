@@ -9,6 +9,8 @@ export { DataExportJobRepository } from './DataExportJobRepository';
 export { DataQualityRuleRepository } from './DataQualityRuleRepository';
 export { DataWebhookTargetRepository } from './DataWebhookTargetRepository';
 export { ExecutionLogRepository } from './ExecutionLogRepository';
+export { HotReportRepository } from './HotReportRepository';
+export { HotSourceRepository } from './HotSourceRepository';
 export { PluginRepository } from './PluginRepository';
 export { RemoteRunnerRepository } from './RemoteRunnerRepository';
 export { ReviewRepository } from './ReviewRepository';

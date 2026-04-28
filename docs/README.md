@@ -30,6 +30,7 @@
 | 我是谁 | 阅读路径 |
 | --- | --- |
 | 第一次进入仓库 | [根目录 README](../README.md) → [overview/current-status.md](overview/current-status.md) |
+| 想看“实现 vs 文档”对照 | [overview/implementation-audit.md](overview/implementation-audit.md) |
 | 准备开发 | [overview/current-status.md](overview/current-status.md) → [architecture/structure.md](architecture/structure.md) → [architecture/architecture.md](architecture/architecture.md) |
 | 想了解产品定位 | [product/prd.md](product/prd.md) → [product/plan.md](product/plan.md) → [overview/roadmap.md](overview/roadmap.md) |
 | 想了解 V1 要交付什么 | [specs/v1.0-baseline.md](specs/v1.0-baseline.md) → [specs/v1.1-enhancements.md](specs/v1.1-enhancements.md) |
@@ -39,6 +40,7 @@
 ### 2.2 现状与规划（overview / product）
 
 - [overview/current-status.md](overview/current-status.md)：当前实现现状与已知限制
+- [overview/implementation-audit.md](overview/implementation-audit.md)：实现反查、文档齐全度与已做/未做审计
 - [overview/roadmap.md](overview/roadmap.md)：后续拓展方向与近期主路线
 - [product/prd.md](product/prd.md)：产品愿景、角色与场景
 - [product/plan.md](product/plan.md)：可行性分析与阶段计划
@@ -48,12 +50,14 @@
 
 - [architecture/architecture.md](architecture/architecture.md)：进程模型、分层、调用链
 - [architecture/structure.md](architecture/structure.md)：实际目录结构与模块职责
+- [architecture/dev-runtime.md](architecture/dev-runtime.md)：`npm run dev` 启动链路与常见运行时问题
 
 ### 2.4 规格与实施（specs / plans）
 
 - [specs/v1.0-baseline.md](specs/v1.0-baseline.md)：V1.0 基线规格
 - [specs/v1.1-enhancements.md](specs/v1.1-enhancements.md)：V1.1 增强规格
 - [specs/automation-browser-ops-v1.md](specs/automation-browser-ops-v1.md)：自动化采集 V1 规格
+- [specs/browser-hot-workspace-v1.md](specs/browser-hot-workspace-v1.md)：浏览器 `HOT` 工作台与抖音分析台 V1 规格
 - [specs/data-center-v1.md](specs/data-center-v1.md)：数据中心 / 数据出口中心 V1 规格
 - [specs/headless-runner-v1.md](specs/headless-runner-v1.md)：Headless Runner / CLI V1 规格
 - [specs/remote-runner-control-plane-v1.md](specs/remote-runner-control-plane-v1.md)：Remote Runner 控制面 V1 规格

@@ -20,6 +20,8 @@ describe('TaskRepository', () => {
     schedule: { type: 'manual' },
     sessionId: 'session-1',
     templateId: 'template-1',
+    enabled: true,
+    tags: [],
     steps: [
       {
         id: 'step-1',
@@ -76,6 +78,8 @@ describe('TaskRepository', () => {
         lastRunAt: null,
         currentRevisionId: 'revision-1',
         updatedAt: '2026-04-17 09:00:00',
+        enabled: true,
+        tags: [],
         latestBatch: {
           id: 'batch-1',
           taskId: 'task-1',
@@ -116,13 +120,18 @@ describe('TaskRepository', () => {
     ]);
 
     expect(repository.getTaskFlow('task-1')).toEqual(flow);
-    expect(executor.all).toHaveBeenCalledWith(expect.stringContaining('FROM task_steps'), ['task-1']);
+    expect(executor.all).toHaveBeenCalledWith(expect.stringContaining('FROM task_steps'), [
+      'task-1',
+    ]);
   });
 
   it('updates task status', () => {
     repository.updateTaskStatus('task-1', 'running');
 
-    expect(executor.run).toHaveBeenCalledWith(expect.stringContaining('UPDATE tasks'), ['running', 'task-1']);
+    expect(executor.run).toHaveBeenCalledWith(expect.stringContaining('UPDATE tasks'), [
+      'running',
+      'task-1',
+    ]);
   });
 
   it('creates task with nullable fields normalized', () => {
@@ -132,10 +141,17 @@ describe('TaskRepository', () => {
       flowJson: '{"steps":[]}',
     });
 
-    expect(executor.run).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO tasks'),
-      ['task-1', '采集任务', null, '{"steps":[]}', null, null, null],
-    );
+    expect(executor.run).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO tasks'), [
+      'task-1',
+      '采集任务',
+      null,
+      '{"steps":[]}',
+      null,
+      null,
+      null,
+      1,
+      '[]',
+    ]);
   });
 
   it('updates task with provided fields only', () => {
@@ -173,26 +189,25 @@ describe('TaskRepository', () => {
     repository.saveTaskFlow(flow);
 
     expect(executor.transaction).toHaveBeenCalledTimes(1);
-    expect(executor.run).toHaveBeenNthCalledWith(
+    expect(executor.run).toHaveBeenNthCalledWith(1, expect.stringContaining('UPDATE tasks'), [
+      '采集任务',
+      '描述',
+      JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl }),
+      'task-1',
+    ]);
+    expect(executor.run).toHaveBeenNthCalledWith(2, expect.stringContaining('INSERT INTO tasks'), [
+      'task-1',
+      '采集任务',
+      '描述',
+      JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl }),
+      JSON.stringify({ type: 'manual' }),
+      'session-1',
+      'template-1',
       1,
-      expect.stringContaining('UPDATE tasks'),
-      ['采集任务', '描述', JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl }), 'task-1'],
-    );
-    expect(executor.run).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining('INSERT INTO tasks'),
-      [
-        'task-1',
-        '采集任务',
-        '描述',
-        JSON.stringify({ steps: flow.steps, entryUrl: flow.entryUrl }),
-        JSON.stringify({ type: 'manual' }),
-        'session-1',
-        'template-1',
-        flow.createdAt,
-        flow.updatedAt,
-      ],
-    );
+      '[]',
+      flow.createdAt,
+      flow.updatedAt,
+    ]);
     expect(executor.run).toHaveBeenNthCalledWith(
       3,
       expect.stringContaining('DELETE FROM task_steps'),
@@ -201,7 +216,15 @@ describe('TaskRepository', () => {
     expect(executor.run).toHaveBeenNthCalledWith(
       4,
       expect.stringContaining('INSERT INTO task_steps'),
-      ['step-1', 'task-1', 0, '点击按钮', JSON.stringify({ type: 'click', selector: '#submit' }), 3, 1000],
+      [
+        'step-1',
+        'task-1',
+        0,
+        '点击按钮',
+        JSON.stringify({ type: 'click', selector: '#submit' }),
+        3,
+        1000,
+      ],
     );
   });
 });

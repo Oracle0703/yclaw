@@ -558,4 +558,427 @@ describe('Browser App', () => {
     expect(screen.getByText(/下载状态：已完成/)).toBeDefined();
     expect(screen.getByText(/来源链接：https:\/\/www\.douyin\.com\/video\/1001/)).toBeDefined();
   });
+
+  it('switches to HOT采集 mode and loads source, run and report panels', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
+        return tabs;
+      }
+      if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) {
+        return [
+          {
+            id: 'source-1',
+            taskId: 'task-1',
+            name: '抖音热榜',
+            sourceKind: 'browser',
+            siteKey: 'douyin',
+            entryUrl: 'https://www.douyin.com/hot',
+            parserKey: 'douyin.hot',
+            sessionId: null,
+            schedule: { type: 'cron', cron: '0 * * * *' },
+            enabled: true,
+            tags: ['热点'],
+            createdAt: '2026-04-27T00:00:00.000Z',
+            updatedAt: '2026-04-27T00:00:00.000Z',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST) {
+        return [
+          {
+            batchId: 'batch-1',
+            sourceId: 'source-1',
+            sourceName: '抖音热榜',
+            status: 'success',
+            startedAt: '2026-04-27T00:00:00.000Z',
+            finishedAt: '2026-04-27T00:02:00.000Z',
+            resultCount: 12,
+            reportStatus: 'generated',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_REPORT_LIST) {
+        return [
+          {
+            id: 'report-1',
+            sourceId: 'source-1',
+            batchId: 'batch-1',
+            title: '抖音热榜 报告',
+            format: 'md',
+            filePath: '/tmp/report-1.md',
+            createdAt: '2026-04-27T00:03:00.000Z',
+          },
+        ];
+      }
+      return null;
+    });
+
+    render(<BrowserApp />);
+
+    await waitFor(() => expect(screen.getByText('example.com')).toBeDefined());
+
+    fireEvent.click(screen.getByRole('button', { name: 'HOT采集' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('HOT采集源')).toBeDefined();
+      expect(screen.getAllByText('抖音热榜').length).toBeGreaterThan(0);
+      expect(screen.getByText('最近运行')).toBeDefined();
+      expect(screen.getByText('HOT报告')).toBeDefined();
+      expect(screen.getByText('抖音热榜 报告')).toBeDefined();
+    });
+  });
+
+  it('creates a hot source and triggers report generation from the browser hot workspace', async () => {
+    invokeMock.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
+        return tabs;
+      }
+      if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) {
+        return [
+          {
+            id: 'source-1',
+            taskId: 'task-1',
+            name: '抖音热榜',
+            sourceKind: 'browser',
+            siteKey: 'douyin',
+            entryUrl: 'https://www.douyin.com/hot',
+            parserKey: 'douyin.hot',
+            sessionId: null,
+            schedule: { type: 'manual' },
+            enabled: true,
+            tags: ['热点'],
+            createdAt: '2026-04-27T00:00:00.000Z',
+            updatedAt: '2026-04-27T00:00:00.000Z',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST) {
+        return [
+          {
+            batchId: 'batch-1',
+            sourceId: 'source-1',
+            sourceName: '抖音热榜',
+            status: 'success',
+            startedAt: '2026-04-27T00:00:00.000Z',
+            finishedAt: '2026-04-27T00:02:00.000Z',
+            resultCount: 12,
+            reportStatus: 'pending',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_REPORT_LIST) {
+        return [];
+      }
+      if (channel === IPC_CHANNELS.HOT_SOURCE_CREATE) {
+        expect(payload).toMatchObject({
+          name: '微博热搜',
+          sourceKind: 'api',
+          siteKey: 'weibo',
+        });
+        return {
+          id: 'source-2',
+          taskId: 'task-2',
+          name: '微博热搜',
+          sourceKind: 'api',
+          siteKey: 'weibo',
+          entryUrl: 'https://weibo.com/hot',
+          parserKey: 'weibo.hot',
+          sessionId: null,
+          schedule: { type: 'manual' },
+          enabled: true,
+          tags: ['微博'],
+          createdAt: '2026-04-27T00:05:00.000Z',
+          updatedAt: '2026-04-27T00:05:00.000Z',
+        };
+      }
+      if (channel === IPC_CHANNELS.HOT_REPORT_GENERATE) {
+        expect(payload).toEqual({
+          sourceId: 'source-1',
+          batchId: 'batch-1',
+          format: 'md',
+        });
+        return {
+          id: 'report-1',
+          sourceId: 'source-1',
+          batchId: 'batch-1',
+          title: '抖音热榜 报告',
+          format: 'md',
+          filePath: '/tmp/report-1.md',
+          createdAt: '2026-04-27T00:03:00.000Z',
+        };
+      }
+      return null;
+    });
+
+    render(<BrowserApp />);
+
+    await waitFor(() => expect(screen.getByText('example.com')).toBeDefined());
+
+    fireEvent.click(screen.getByRole('button', { name: 'HOT采集' }));
+
+    await waitFor(() => expect(screen.getByText('HOT采集源')).toBeDefined());
+
+    fireEvent.change(screen.getByPlaceholderText('采集源名称'), {
+      target: { value: '微博热搜' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('站点标识，如 douyin / weibo'), {
+      target: { value: 'weibo' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('入口 URL'), {
+      target: { value: 'https://weibo.com/hot' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('解析器标识，如 douyin.hot'), {
+      target: { value: 'weibo.hot' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '创建HOT采集源' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(
+        IPC_CHANNELS.HOT_SOURCE_CREATE,
+        expect.objectContaining({
+          name: '微博热搜',
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '生成报告' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_REPORT_GENERATE, {
+        sourceId: 'source-1',
+        batchId: 'batch-1',
+        format: 'md',
+      });
+    });
+  });
+
+  it('loads hot source detail, updates it and deletes it from the browser hot workspace', async () => {
+    let currentSources = [
+      {
+        id: 'source-1',
+        taskId: 'task-1',
+        name: '抖音热榜',
+        sourceKind: 'browser' as const,
+        siteKey: 'douyin',
+        entryUrl: 'https://www.douyin.com/hot',
+        parserKey: 'douyin.hot',
+        sessionId: null,
+        schedule: { type: 'manual' as const },
+        enabled: true,
+        tags: ['热点'],
+        createdAt: '2026-04-27T00:00:00.000Z',
+        updatedAt: '2026-04-27T00:00:00.000Z',
+      },
+    ];
+
+    invokeMock.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
+        return tabs;
+      }
+      if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) {
+        return currentSources;
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST) {
+        return [];
+      }
+      if (channel === IPC_CHANNELS.HOT_REPORT_LIST) {
+        return [];
+      }
+      if (channel === IPC_CHANNELS.HOT_SOURCE_DETAIL) {
+        expect(payload).toEqual({ sourceId: 'source-1' });
+        return currentSources[0];
+      }
+      if (channel === IPC_CHANNELS.HOT_SOURCE_UPDATE) {
+        expect(payload).toMatchObject({
+          sourceId: 'source-1',
+          updates: {
+            name: '抖音热榜更新版',
+            sourceKind: 'browser',
+            siteKey: 'douyin',
+          },
+        });
+        currentSources = [
+          {
+            ...currentSources[0],
+            name: '抖音热榜更新版',
+            updatedAt: '2026-04-27T01:00:00.000Z',
+          },
+        ];
+        return currentSources[0];
+      }
+      if (channel === IPC_CHANNELS.HOT_SOURCE_DELETE) {
+        expect(payload).toEqual({ sourceId: 'source-1' });
+        currentSources = [];
+        return null;
+      }
+      return null;
+    });
+
+    render(<BrowserApp />);
+
+    await waitFor(() => expect(screen.getByText('example.com')).toBeDefined());
+
+    fireEvent.click(screen.getByRole('button', { name: 'HOT采集' }));
+
+    await waitFor(() => expect(screen.getByText('HOT采集源')).toBeDefined());
+
+    fireEvent.click(screen.getByRole('button', { name: '加载详情' }));
+
+    await waitFor(() => {
+      const nameInput = screen.getByPlaceholderText('采集源名称') as HTMLInputElement;
+      expect(nameInput.value).toBe('抖音热榜');
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('采集源名称'), {
+      target: { value: '抖音热榜更新版' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_SOURCE_UPDATE, {
+        sourceId: 'source-1',
+        updates: expect.objectContaining({
+          name: '抖音热榜更新版',
+        }),
+      });
+      expect(screen.getAllByText('抖音热榜更新版').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '删除采集源' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_SOURCE_DELETE, {
+        sourceId: 'source-1',
+      });
+      expect(screen.queryByText('抖音热榜更新版')).toBeNull();
+    });
+  });
+
+  it('loads hot run detail and allows rerunning the source from the browser hot workspace', async () => {
+    invokeMock.mockImplementation(async (channel: string, payload?: unknown) => {
+      if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
+        return tabs;
+      }
+      if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) {
+        return [
+          {
+            id: 'source-1',
+            taskId: 'task-1',
+            name: '抖音热榜',
+            sourceKind: 'browser',
+            siteKey: 'douyin',
+            entryUrl: 'https://www.douyin.com/hot',
+            parserKey: 'douyin.hot',
+            sessionId: null,
+            schedule: { type: 'manual' },
+            enabled: true,
+            tags: ['热点'],
+            createdAt: '2026-04-27T00:00:00.000Z',
+            updatedAt: '2026-04-27T00:00:00.000Z',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST) {
+        return [
+          {
+            batchId: 'batch-1',
+            sourceId: 'source-1',
+            sourceName: '抖音热榜',
+            status: 'failed',
+            startedAt: '2026-04-27T00:00:00.000Z',
+            finishedAt: '2026-04-27T00:02:00.000Z',
+            resultCount: 2,
+            reportStatus: 'pending',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_REPORT_LIST) {
+        return [];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_DETAIL) {
+        expect(payload).toEqual({
+          sourceId: 'source-1',
+          batchId: 'batch-1',
+        });
+        return {
+          batchId: 'batch-1',
+          sourceId: 'source-1',
+          sourceName: '抖音热榜',
+          taskId: 'task-1',
+          status: 'failed',
+          startedAt: '2026-04-27T00:00:00.000Z',
+          finishedAt: '2026-04-27T00:02:00.000Z',
+          resultCount: 2,
+          reportStatus: 'pending',
+          error: 'selector missing',
+          breakpoint: {
+            stepIndex: 0,
+            error: 'selector missing',
+          },
+          stepResults: [
+            {
+              stepId: 'step-1',
+              success: false,
+              duration: 120,
+              error: 'selector missing',
+              startedAt: '2026-04-27T00:00:30.000Z',
+              finishedAt: '2026-04-27T00:00:30.120Z',
+              screenshot: 'shots/step-1.png',
+              domSnapshot: 'snapshots/step-1.html',
+            },
+            {
+              stepId: 'step-2',
+              success: true,
+              duration: 80,
+              startedAt: '2026-04-27T00:00:31.000Z',
+              finishedAt: '2026-04-27T00:00:31.080Z',
+            },
+          ],
+          linkedResultIds: ['result-1', 'result-2'],
+        };
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_START) {
+        expect(payload).toEqual({ sourceId: 'source-1' });
+        return {
+          sourceId: 'source-1',
+          taskId: 'task-1',
+          started: true,
+        };
+      }
+      return null;
+    });
+
+    render(<BrowserApp />);
+
+    await waitFor(() => expect(screen.getByText('example.com')).toBeDefined());
+
+    fireEvent.click(screen.getByRole('button', { name: 'HOT采集' }));
+
+    await waitFor(() => expect(screen.getByText('最近运行')).toBeDefined());
+
+    fireEvent.click(screen.getByRole('button', { name: '查看详情' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('运行详情')).toBeDefined();
+      expect(screen.getByText(/^错误：selector missing$/)).toBeDefined();
+      expect(screen.getByText(/步骤结果 2 条/)).toBeDefined();
+      expect(screen.getByText(/关联结果 2 条/)).toBeDefined();
+      expect(screen.getByText(/失败定位：第 1 步/)).toBeDefined();
+      expect(screen.getByText(/开始：2026-04-27T00:00:00.000Z/)).toBeDefined();
+      expect(screen.getByText(/结束：2026-04-27T00:02:00.000Z/)).toBeDefined();
+      expect(screen.getByText(/断点错误：selector missing/)).toBeDefined();
+      expect(screen.getByText(/step-1 · 失败 · 120ms/)).toBeDefined();
+      expect(screen.getByText(/step-2 · 成功 · 80ms/)).toBeDefined();
+      expect(screen.getByText(/截图：shots\/step-1\.png/)).toBeDefined();
+      expect(screen.getByText(/DOM快照：snapshots\/step-1\.html/)).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '重新运行' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_RUN_START, {
+        sourceId: 'source-1',
+      });
+    });
+  });
 });

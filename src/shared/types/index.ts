@@ -162,3 +162,13 @@ export type {
   DataQualitySeverity,
   DataQualityScoreTrendHint,
 } from './data-center';
+export type {
+  HotReportFormat,
+  HotReportSummary,
+  HotRunDetail,
+  HotRunSummary,
+  HotSource,
+  HotSourceDraft,
+  HotSourceKind,
+  HotWorkspaceMode,
+} from './hot';

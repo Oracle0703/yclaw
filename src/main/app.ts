@@ -31,6 +31,10 @@ import { CsvExporter } from './services/data-center/exporters/CsvExporter';
 import { JsonExporter } from './services/data-center/exporters/JsonExporter';
 import { JsonlExporter } from './services/data-center/exporters/JsonlExporter';
 import { WebhookExporter } from './services/data-center/exporters/WebhookExporter';
+import { HotReportService } from './services/hot/HotReportService';
+import { HotRunProjectionService } from './services/hot/HotRunProjectionService';
+import { HotSourceService } from './services/hot/HotSourceService';
+import { HotTaskCompiler } from './services/hot/HotTaskCompiler';
 import { TabManager } from './browser/TabManager';
 import { EVENTS, IPC_CHANNELS, RUNNER_SCHEDULER_DEFAULTS } from '@shared/constants';
 import { AIService } from './ai/AIService';
@@ -62,12 +66,15 @@ import {
   RunnerDispatchService,
   RunnerRegistryService,
 } from './services/runner-scheduler';
-import { getRendererUrl } from './utils/paths';
+import path from 'path';
+import { getRendererUrl, getUserDataPath } from './utils/paths';
 import {
   AIRepository,
   AlertRepository,
   BatchRepository,
   ExecutionLogRepository,
+  HotReportRepository,
+  HotSourceRepository,
   DataApiTokenRepository,
   DataQualityBatchInsightRepository,
   DataQualityFindingRepository,
@@ -90,6 +97,7 @@ import { registerRemoteRunnerHandlers } from './ipc/remote-runner-handlers';
 import { registerRunnerSchedulerHandlers } from './ipc/runner-scheduler-handlers';
 import { registerTaskOperationsHandlers } from './ipc/task-operations-handlers';
 import { registerDataCenterHandlers } from './ipc/data-center-handlers';
+import { registerHotHandlers } from './ipc/hot-handlers';
 import type {
   AIChatRequest,
   AIConfig,
@@ -151,6 +159,9 @@ export class App {
   private workspaceService: WorkspaceService;
   private taskRevisionService: TaskRevisionService;
   private operationsMetricsService: OperationsMetricsService;
+  private hotSourceService: HotSourceService;
+  private hotRunService: HotRunProjectionService;
+  private hotReportService: HotReportService;
   private dataCenterService: DataCenterService;
   private dataQualityService: DataQualityService;
   private dataExportService: DataExportService;
@@ -187,6 +198,8 @@ export class App {
     const alertRepository = new AlertRepository(this.databaseService);
     const batchRepository = new BatchRepository(this.databaseService);
     const executionLogRepository = new ExecutionLogRepository(this.databaseService);
+    const hotSourceRepository = new HotSourceRepository(this.databaseService);
+    const hotReportRepository = new HotReportRepository(this.databaseService);
     const workspaceRepository = new WorkspaceRepository(this.databaseService);
     const taskRevisionRepository = new TaskRevisionRepository(this.databaseService);
     const reviewRepository = new ReviewRepository(this.databaseService);
@@ -265,15 +278,20 @@ export class App {
         }
         return runnerRegistry.heartbeat(input.runnerId, input.metrics ?? {});
       },
-      drain: (payload: unknown) => runnerRegistry.drain(this.extractSchedulerId(payload, 'runnerId')),
-      resume: (payload: unknown) => runnerRegistry.resume(this.extractSchedulerId(payload, 'runnerId')),
+      drain: (payload: unknown) =>
+        runnerRegistry.drain(this.extractSchedulerId(payload, 'runnerId')),
+      resume: (payload: unknown) =>
+        runnerRegistry.resume(this.extractSchedulerId(payload, 'runnerId')),
       listQueue: () => runnerSchedulerRepository.listQueueItems(),
-      enqueue: (payload: unknown) => dispatchQueue.enqueue(payload as Parameters<DispatchQueueService['enqueue']>[0]),
-      cancelQueueItem: (payload: unknown) => this.cancelRunnerQueueItem(runnerSchedulerRepository, payload),
+      enqueue: (payload: unknown) =>
+        dispatchQueue.enqueue(payload as Parameters<DispatchQueueService['enqueue']>[0]),
+      cancelQueueItem: (payload: unknown) =>
+        this.cancelRunnerQueueItem(runnerSchedulerRepository, payload),
       dispatchTick: () => runnerDispatch.tick(),
       listLeases: () => this.listRunnerLeases(),
       renewLease: (payload: unknown) => this.renewRunnerLease(runnerSchedulerRepository, payload),
-      releaseLease: (payload: unknown) => this.releaseRunnerLease(runnerSchedulerRepository, payload),
+      releaseLease: (payload: unknown) =>
+        this.releaseRunnerLease(runnerSchedulerRepository, payload),
       reconcile: () => leaseReconciler.reconcile(),
     };
     this.schedulerService = new SchedulerService({ taskService: this.taskService });
@@ -292,6 +310,26 @@ export class App {
     });
     this.reviewService = new ReviewService({ reviewRepository });
     this.resultService = new ResultService({ resultRepository });
+    this.hotSourceService = new HotSourceService({
+      sourceRepository: hotSourceRepository,
+      taskService: this.taskService,
+      taskCompiler: new HotTaskCompiler(),
+    });
+    this.hotRunService = new HotRunProjectionService({
+      sourceRepository: hotSourceRepository,
+      batchService,
+      resultService: this.resultService,
+      reportRepository: hotReportRepository,
+      startTask: (taskId: string) => this.taskService.startTask(taskId, this.getTaskWebContents()),
+    });
+    this.hotReportService = new HotReportService({
+      sourceRepository: hotSourceRepository,
+      batchService,
+      resultService: this.resultService,
+      executionLogService: this.executionLogService,
+      reportRepository: hotReportRepository,
+      outputDir: path.join(getUserDataPath(), 'hot-reports'),
+    });
     this.datasetService = new DatasetService({
       repository: dataDatasetRepository,
     });
@@ -341,34 +379,45 @@ export class App {
       pluginRepository,
       taskOpsContextProvider: {
         collect: () => ({
-          workspaces: this.workspaceService.listWorkspaces().slice(0, 10).map((workspace) => ({
-            id: workspace.id,
-            name: workspace.name,
-          })),
-          tasks: taskRepository.getTasks().slice(0, 10).map((task) => ({
-            id: task.id,
-            name: task.name,
-            status: task.status,
-            updatedAt: task.updatedAt,
-            currentRevisionId: task.currentRevisionId ?? null,
-          })),
+          workspaces: this.workspaceService
+            .listWorkspaces()
+            .slice(0, 10)
+            .map((workspace) => ({
+              id: workspace.id,
+              name: workspace.name,
+            })),
+          tasks: taskRepository
+            .getTasks()
+            .slice(0, 10)
+            .map((task) => ({
+              id: task.id,
+              name: task.name,
+              status: task.status,
+              updatedAt: task.updatedAt,
+              currentRevisionId: task.currentRevisionId ?? null,
+            })),
           alerts: this.alertService.listAlerts({}).slice(0, 10),
           reviews: this.reviewService.listReviews({}).slice(0, 10),
-          runners: (this.runnerSchedulerService.listRunners() as RunnerNode[]).slice(0, 10).map((runner) => ({
-            id: runner.id,
-            name: runner.name,
-            kind: runner.kind,
-            status: runner.status,
-            runningCount: runner.runningCount,
-            maxConcurrency: runner.maxConcurrency,
-          })),
-          results: this.resultService.listResults({}).slice(0, 10).map((result) => ({
-            taskId: result.taskId,
-            batchId: result.batchId,
-            status: result.status,
-            qualityStatus: result.qualityStatus,
-            revisionId: result.revisionId,
-          })),
+          runners: (this.runnerSchedulerService.listRunners() as RunnerNode[])
+            .slice(0, 10)
+            .map((runner) => ({
+              id: runner.id,
+              name: runner.name,
+              kind: runner.kind,
+              status: runner.status,
+              runningCount: runner.runningCount,
+              maxConcurrency: runner.maxConcurrency,
+            })),
+          results: this.resultService
+            .listResults({})
+            .slice(0, 10)
+            .map((result) => ({
+              taskId: result.taskId,
+              batchId: result.batchId,
+              status: result.status,
+              qualityStatus: result.qualityStatus,
+              revisionId: result.revisionId,
+            })),
         }),
       },
     });
@@ -395,9 +444,7 @@ export class App {
 
   async start(): Promise<void> {
     if (this.started) {
-      if (!this.windowManager.getWindow('workbench')) {
-        this.windowManager.openWindow({ module: 'workbench' });
-      }
+      this.showWorkbench();
       return;
     }
 
@@ -416,10 +463,14 @@ export class App {
     this.trayService.create();
 
     // 创建主窗口
-    this.windowManager.openWindow({ module: 'workbench' });
+    this.showWorkbench();
 
     this.started = true;
     this.logService.info('main', 'Application started successfully');
+  }
+
+  showWorkbench(): void {
+    this.windowManager.openWindow({ module: 'workbench' });
   }
 
   private registerIpcHandlers(): void {
@@ -446,6 +497,12 @@ export class App {
             this.collectOperationsAcceptanceSnapshot(taskId),
           ),
       },
+    });
+    registerHotHandlers({
+      ipcController: this.ipcController,
+      hotSourceService: this.hotSourceService as never,
+      hotRunService: this.hotRunService as never,
+      hotReportService: this.hotReportService as never,
     });
     registerDataCenterHandlers({
       ipcController: this.ipcController,
@@ -789,15 +846,16 @@ export class App {
     });
 
     this.ipcController.handle(IPC_CHANNELS.TEMPLATE_SAVE, (params: unknown) => {
-      const { id, name, fields, version, description, deprecated, pluginDependencies } = (params as {
-        id?: string;
-        name: string;
-        fields: Array<{ name: string; selector: string; attribute: string }>;
-        version?: string;
-        description?: string | null;
-        deprecated?: boolean;
-        pluginDependencies?: string[];
-      }) ?? { name: '', fields: [] };
+      const { id, name, fields, version, description, deprecated, pluginDependencies } =
+        (params as {
+          id?: string;
+          name: string;
+          fields: Array<{ name: string; selector: string; attribute: string }>;
+          version?: string;
+          description?: string | null;
+          deprecated?: boolean;
+          pluginDependencies?: string[];
+        }) ?? { name: '', fields: [] };
 
       if (!name || !Array.isArray(fields)) {
         throw new Error('Invalid template payload');
@@ -1041,9 +1099,7 @@ export class App {
   }
 
   private collectOperationsAcceptanceSnapshot(taskId?: string) {
-    const scopedTaskIds = taskId
-      ? [taskId]
-      : this.taskService.listTasks().map((task) => task.id);
+    const scopedTaskIds = taskId ? [taskId] : this.taskService.listTasks().map((task) => task.id);
 
     const batches = scopedTaskIds.flatMap((id) => this.taskService.listBatches(id));
 

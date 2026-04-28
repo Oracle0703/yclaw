@@ -38,7 +38,11 @@ describe('cli · lint · security', () => {
     const real = join(dir, 'real.yaml');
     writeFileSync(real, VALID);
     const link = join(dir, 'link.yaml');
-    symlinkSync(real, link);
+    try {
+      symlinkSync(real, link);
+    } catch {
+      return; /* skip when symlink not permitted */
+    }
     const stderr = new StringSink();
     const r = await runLint({ inputs: [link], stdout: new StringSink(), stderr, cwd: dir });
     expect(r.exitCode).toBe(2);
@@ -48,8 +52,17 @@ describe('cli · lint · security', () => {
   it('skips symlinks when walking directory', async () => {
     writeFileSync(join(dir, 'a.yaml'), VALID);
     // 一个指向自己父目录的环形 symlink；如果 walk 跟随会爆栈
-    symlinkSync(dir, join(dir, 'loop'));
-    const r = await runLint({ inputs: [dir], stdout: new StringSink(), stderr: new StringSink(), cwd: dir });
+    try {
+      symlinkSync(dir, join(dir, 'loop'));
+    } catch {
+      return; /* skip when symlink not permitted */
+    }
+    const r = await runLint({
+      inputs: [dir],
+      stdout: new StringSink(),
+      stderr: new StringSink(),
+      cwd: dir,
+    });
     expect(r.exitCode).toBe(0);
     expect(r.files).toHaveLength(1);
   });
@@ -59,7 +72,12 @@ describe('cli · lint · security', () => {
     // 一个超过上限的「合法」头加大量内容
     const padding = '# pad\n'.repeat(Math.ceil(SAFETY.maxFileSize / 6) + 1);
     writeFileSync(file, padding);
-    const r = await runLint({ inputs: [file], stdout: new StringSink(), stderr: new StringSink(), cwd: dir });
+    const r = await runLint({
+      inputs: [file],
+      stdout: new StringSink(),
+      stderr: new StringSink(),
+      cwd: dir,
+    });
     expect(r.exitCode).toBe(1);
     expect(r.files[0]!.issues[0]!.message).toMatch(/file size .* exceeds limit/);
   });

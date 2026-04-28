@@ -8,15 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  FloatButton,
-  App as AntdApp,
-  ConfigProvider,
-  Tooltip,
-  notification,
-  theme as antdTheme,
-} from 'antd';
-import { BulbOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons';
+import { App as AntdApp, ConfigProvider, notification, theme as antdTheme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { AppConfig, GeneralConfig } from '@shared/types';
@@ -123,11 +115,7 @@ function getStoredThemePreference(): GeneralConfig['theme'] {
   return normalizeThemePreference(window.localStorage.getItem(THEME_STORAGE_KEY));
 }
 
-function reportThemePreferenceFailure(
-  title: string,
-  fallbackMessage: string,
-  error: unknown,
-) {
+function reportThemePreferenceFailure(title: string, fallbackMessage: string, error: unknown) {
   const description = error instanceof Error ? error.message : fallbackMessage;
 
   notification.warning({
@@ -286,7 +274,7 @@ export function AppProviders({ children }: AppProvidersProps) {
       <ConfigProvider locale={zhCN} theme={buildThemeConfig(resolvedTheme)}>
         <AntdApp>
           <LoadingProvider>{children}</LoadingProvider>
-          <Tooltip title={`切换为${resolvedTheme === 'dark' ? '亮色' : '暗色'}主题`}>
+          {/* <Tooltip title={`切换为${resolvedTheme === 'dark' ? '亮色' : '暗色'}主题`}>
             <FloatButton
               icon={resolvedTheme === 'dark' ? <SunOutlined /> : <MoonOutlined />}
               type="primary"
@@ -296,7 +284,7 @@ export function AppProviders({ children }: AppProvidersProps) {
               className="yclaw-theme-toggle"
               description={themePreference === 'system' ? <BulbOutlined /> : undefined}
             />
-          </Tooltip>
+          </Tooltip> */}
         </AntdApp>
       </ConfigProvider>
     </ThemeContext.Provider>

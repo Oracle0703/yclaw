@@ -9,11 +9,25 @@ import { AddressBar } from './components/AddressBar';
 import { DouyinInsightPanel } from './components/DouyinInsightPanel';
 import { DouyinSearchPanel } from './components/DouyinSearchPanel';
 import { DouyinTargetPanel } from './components/DouyinTargetPanel';
+import { HotReportPanel } from './components/HotReportPanel';
+import { HotRunPanel } from './components/HotRunPanel';
+import { HotSourcePanel } from './components/HotSourcePanel';
 import { InterventionPanel } from './components/InterventionPanel';
 import { RecorderPanel } from './components/RecorderPanel';
 import { TabBar } from './components/TabBar';
 import { WebViewContainer } from './components/WebViewContainer';
-import type { AIChatResponse, AIConfig, TaskFlow, TaskStep } from '@shared/types';
+import type {
+  AIChatResponse,
+  AIConfig,
+  HotReportSummary,
+  HotRunDetail,
+  HotRunSummary,
+  HotSource,
+  HotSourceDraft,
+  HotWorkspaceMode,
+  TaskFlow,
+  TaskStep,
+} from '@shared/types';
 import type { InterventionState, Tab } from '@shared/types/browser';
 import type {
   DouyinAnalysisTarget,
@@ -34,6 +48,17 @@ import {
 } from './douyin/workspace';
 
 const DEFAULT_COLLECTION_URL = 'https://www.baidu.com';
+const DEFAULT_HOT_DRAFT: HotSourceDraft = {
+  name: '',
+  sourceKind: 'api',
+  siteKey: '',
+  entryUrl: '',
+  parserKey: '',
+  sessionId: null,
+  schedule: { type: 'manual' },
+  enabled: true,
+  tags: [],
+};
 
 interface PlatformPreset {
   name: string;
@@ -59,10 +84,30 @@ const PLATFORM_CATEGORIES: PlatformCategory[] = [
     title: '电商与交易',
     summary: '适合抓商品详情、搜索结果、评价和店铺页，优先结合开放接口或商品库。',
     items: [
-      { name: '淘宝', url: 'https://www.taobao.com', description: '商品详情、店铺、评价区', modes: ['浏览器', '需登录'] },
-      { name: '京东', url: 'https://www.jd.com', description: '商品页、价格、促销信息', modes: ['API优先', '浏览器补充'] },
-      { name: '拼多多', url: 'https://www.pinduoduo.com', description: '活动页、商品聚合、评论', modes: ['浏览器', '反爬注意'] },
-      { name: '1688', url: 'https://www.1688.com', description: '工厂货盘、批发商品、供应商', modes: ['浏览器', '企业采购'] },
+      {
+        name: '淘宝',
+        url: 'https://www.taobao.com',
+        description: '商品详情、店铺、评价区',
+        modes: ['浏览器', '需登录'],
+      },
+      {
+        name: '京东',
+        url: 'https://www.jd.com',
+        description: '商品页、价格、促销信息',
+        modes: ['API优先', '浏览器补充'],
+      },
+      {
+        name: '拼多多',
+        url: 'https://www.pinduoduo.com',
+        description: '活动页、商品聚合、评论',
+        modes: ['浏览器', '反爬注意'],
+      },
+      {
+        name: '1688',
+        url: 'https://www.1688.com',
+        description: '工厂货盘、批发商品、供应商',
+        modes: ['浏览器', '企业采购'],
+      },
     ],
   },
   {
@@ -70,10 +115,30 @@ const PLATFORM_CATEGORIES: PlatformCategory[] = [
     title: '内容与社区',
     summary: '适合抓笔记、帖子、评论和用户主页，通常需要登录态或滚动加载支持。',
     items: [
-      { name: '小红书', url: 'https://www.xiaohongshu.com', description: '笔记详情、评论、达人页', modes: ['浏览器', '需登录'] },
-      { name: '知乎', url: 'https://www.zhihu.com', description: '问题、回答、专栏、评论', modes: ['API优先', '浏览器补充'] },
-      { name: '微博', url: 'https://weibo.com', description: '热搜、博文、评论流', modes: ['浏览器', '滚动加载'] },
-      { name: 'B站', url: 'https://www.bilibili.com', description: '视频页、评论区、UP主页', modes: ['API优先', '浏览器补充'] },
+      {
+        name: '小红书',
+        url: 'https://www.xiaohongshu.com',
+        description: '笔记详情、评论、达人页',
+        modes: ['浏览器', '需登录'],
+      },
+      {
+        name: '知乎',
+        url: 'https://www.zhihu.com',
+        description: '问题、回答、专栏、评论',
+        modes: ['API优先', '浏览器补充'],
+      },
+      {
+        name: '微博',
+        url: 'https://weibo.com',
+        description: '热搜、博文、评论流',
+        modes: ['浏览器', '滚动加载'],
+      },
+      {
+        name: 'B站',
+        url: 'https://www.bilibili.com',
+        description: '视频页、评论区、UP主页',
+        modes: ['API优先', '浏览器补充'],
+      },
     ],
   },
   {
@@ -81,10 +146,30 @@ const PLATFORM_CATEGORIES: PlatformCategory[] = [
     title: '短视频与直播',
     summary: '适合处理强前端渲染页面，优先保留浏览器会话或切 Chrome 执行。',
     items: [
-      { name: '抖音', url: 'https://www.douyin.com', description: '视频详情、评论、账号主页', modes: ['浏览器', '登录态'] },
-      { name: '快手', url: 'https://www.kuaishou.com', description: '短视频、直播间、评论', modes: ['浏览器', '滚动加载'] },
-      { name: '视频号', url: 'https://channels.weixin.qq.com', description: '微信生态视频内容', modes: ['浏览器', '微信生态'] },
-      { name: '虎牙直播', url: 'https://www.huya.com', description: '直播间、主播页、弹幕信息', modes: ['浏览器', '直播场景'] },
+      {
+        name: '抖音',
+        url: 'https://www.douyin.com',
+        description: '视频详情、评论、账号主页',
+        modes: ['浏览器', '登录态'],
+      },
+      {
+        name: '快手',
+        url: 'https://www.kuaishou.com',
+        description: '短视频、直播间、评论',
+        modes: ['浏览器', '滚动加载'],
+      },
+      {
+        name: '视频号',
+        url: 'https://channels.weixin.qq.com',
+        description: '微信生态视频内容',
+        modes: ['浏览器', '微信生态'],
+      },
+      {
+        name: '虎牙直播',
+        url: 'https://www.huya.com',
+        description: '直播间、主播页、弹幕信息',
+        modes: ['浏览器', '直播场景'],
+      },
     ],
   },
   {
@@ -92,10 +177,30 @@ const PLATFORM_CATEGORIES: PlatformCategory[] = [
     title: '本地生活与服务',
     summary: '适合门店列表、套餐、团购和评论采集，常用 API 与浏览器混合方案。',
     items: [
-      { name: '大众点评', url: 'https://www.dianping.com', description: '门店页、评价、榜单', modes: ['浏览器', '反爬注意'] },
-      { name: '美团', url: 'https://www.meituan.com', description: '本地生活、团购、商家信息', modes: ['浏览器', '混合采集'] },
-      { name: '58同城', url: 'https://www.58.com', description: '分类信息、房产、招聘', modes: ['浏览器', '类目广'] },
-      { name: '安居客', url: 'https://www.anjuke.com', description: '房源页、楼盘、租售列表', modes: ['浏览器', '房产场景'] },
+      {
+        name: '大众点评',
+        url: 'https://www.dianping.com',
+        description: '门店页、评价、榜单',
+        modes: ['浏览器', '反爬注意'],
+      },
+      {
+        name: '美团',
+        url: 'https://www.meituan.com',
+        description: '本地生活、团购、商家信息',
+        modes: ['浏览器', '混合采集'],
+      },
+      {
+        name: '58同城',
+        url: 'https://www.58.com',
+        description: '分类信息、房产、招聘',
+        modes: ['浏览器', '类目广'],
+      },
+      {
+        name: '安居客',
+        url: 'https://www.anjuke.com',
+        description: '房源页、楼盘、租售列表',
+        modes: ['浏览器', '房产场景'],
+      },
     ],
   },
   {
@@ -103,10 +208,30 @@ const PLATFORM_CATEGORIES: PlatformCategory[] = [
     title: '招聘与企业信息',
     summary: '适合职位列表、企业信息和工商数据核验，结构化需求可优先 API。',
     items: [
-      { name: 'Boss直聘', url: 'https://www.zhipin.com', description: '职位页、公司页、筛选结果', modes: ['浏览器', '需登录'] },
-      { name: '智联招聘', url: 'https://www.zhaopin.com', description: '职位搜索、城市分类、企业页', modes: ['浏览器', '招聘场景'] },
-      { name: '企查查', url: 'https://www.qcc.com', description: '企业工商、风险、股权信息', modes: ['API优先', '浏览器补充'] },
-      { name: '天眼查', url: 'https://www.tianyancha.com', description: '企业图谱、法务、招投标', modes: ['API优先', '浏览器补充'] },
+      {
+        name: 'Boss直聘',
+        url: 'https://www.zhipin.com',
+        description: '职位页、公司页、筛选结果',
+        modes: ['浏览器', '需登录'],
+      },
+      {
+        name: '智联招聘',
+        url: 'https://www.zhaopin.com',
+        description: '职位搜索、城市分类、企业页',
+        modes: ['浏览器', '招聘场景'],
+      },
+      {
+        name: '企查查',
+        url: 'https://www.qcc.com',
+        description: '企业工商、风险、股权信息',
+        modes: ['API优先', '浏览器补充'],
+      },
+      {
+        name: '天眼查',
+        url: 'https://www.tianyancha.com',
+        description: '企业图谱、法务、招投标',
+        modes: ['API优先', '浏览器补充'],
+      },
     ],
   },
 ];
@@ -460,10 +585,7 @@ function buildExecutionTaskBlueprint(
   if (intent === 'comment') {
     return {
       intentLabel: '评论草案',
-      notes: [
-        ...genericNotes,
-        '需要先替换评论输入框选择器，再决定是否执行输入动作。',
-      ],
+      notes: [...genericNotes, '需要先替换评论输入框选择器，再决定是否执行输入动作。'],
       steps: [
         ...baseSteps,
         {
@@ -493,10 +615,7 @@ function buildExecutionTaskBlueprint(
   if (intent === 'follow') {
     return {
       intentLabel: '关注复核',
-      notes: [
-        ...genericNotes,
-        '需要人工替换关注按钮选择器，再决定是否执行点击动作。',
-      ],
+      notes: [...genericNotes, '需要人工替换关注按钮选择器，再决定是否执行点击动作。'],
       steps: [
         ...baseSteps,
         {
@@ -524,10 +643,7 @@ function buildExecutionTaskBlueprint(
 
   return {
     intentLabel: intent === 'download' ? '素材复核' : '人工复核',
-    notes: [
-      ...genericNotes,
-      '默认只生成页面确认与信息采集步骤，后续动作在自动化页补全。',
-    ],
+    notes: [...genericNotes, '默认只生成页面确认与信息采集步骤，后续动作在自动化页补全。'],
     steps: baseSteps,
   };
 }
@@ -587,6 +703,15 @@ export default function App() {
   const [downloadRequest, setDownloadRequest] = useState<DouyinDownloadRequest | null>(null);
   const [downloadAuthorizationChecked, setDownloadAuthorizationChecked] = useState(false);
   const [downloadRecords, setDownloadRecords] = useState<DouyinDownloadRecord[]>([]);
+  const [workspaceMode, setWorkspaceMode] = useState<HotWorkspaceMode>('browser-session');
+  const [hotDraft, setHotDraft] = useState<HotSourceDraft>(DEFAULT_HOT_DRAFT);
+  const [hotSources, setHotSources] = useState<HotSource[]>([]);
+  const [hotRuns, setHotRuns] = useState<HotRunSummary[]>([]);
+  const [hotReports, setHotReports] = useState<HotReportSummary[]>([]);
+  const [selectedHotSourceId, setSelectedHotSourceId] = useState<string | null>(null);
+  const [editingHotSourceId, setEditingHotSourceId] = useState<string | null>(null);
+  const [selectedHotRunBatchId, setSelectedHotRunBatchId] = useState<string | null>(null);
+  const [hotRunDetail, setHotRunDetail] = useState<HotRunDetail | null>(null);
 
   const reportActionError = (error: unknown, fallbackMessage: string) => {
     message.error(error instanceof Error ? error.message : fallbackMessage);
@@ -613,11 +738,20 @@ export default function App() {
     ? reviewQueue.filter((item) => item.platformName === selectedPlatform.name)
     : [];
   const currentDownloadRecord = douyinTarget
-    ? downloadRecords.find((item) => item.targetId === douyinTarget.item.id) ?? null
+    ? (downloadRecords.find((item) => item.targetId === douyinTarget.item.id) ?? null)
     : null;
+  const visibleHotRuns = selectedHotSourceId
+    ? hotRuns.filter((item) => item.sourceId === selectedHotSourceId)
+    : hotRuns;
+  const visibleHotReports = selectedHotSourceId
+    ? hotReports.filter((item) => item.sourceId === selectedHotSourceId)
+    : hotReports;
   const browserKpis = [
     { title: '平台分类数', value: `${PLATFORM_CATEGORIES.length}` },
-    { title: '平台入口数', value: `${PLATFORM_CATEGORIES.reduce((count, category) => count + category.items.length, 0)}` },
+    {
+      title: '平台入口数',
+      value: `${PLATFORM_CATEGORIES.reduce((count, category) => count + category.items.length, 0)}`,
+    },
     { title: '打开采集页', value: `${tabs.length}` },
     { title: '当前站点', value: activeTab?.url ? getHostnameLabel(activeTab.url) : '未选择' },
   ] as const;
@@ -684,6 +818,172 @@ export default function App() {
       await createTab(action.url);
     }
     setWorkspaceNote(action.note);
+  };
+
+  const resetHotDraft = () => {
+    setHotDraft(DEFAULT_HOT_DRAFT);
+    setEditingHotSourceId(null);
+  };
+
+  const loadHotWorkspace = async (preferredSourceId?: string | null) => {
+    try {
+      const [sources, runs, reports] = await Promise.all([
+        invoke<HotSource[]>(IPC_CHANNELS.HOT_SOURCE_LIST),
+        invoke<HotRunSummary[]>(IPC_CHANNELS.HOT_RUN_LIST),
+        invoke<HotReportSummary[]>(IPC_CHANNELS.HOT_REPORT_LIST),
+      ]);
+      const nextSources = sources ?? [];
+      const nextRuns = runs ?? [];
+      const nextReports = reports ?? [];
+      setHotSources(nextSources);
+      setHotRuns(nextRuns);
+      setHotReports(nextReports);
+      setSelectedHotRunBatchId((current) => {
+        const nextSelectedBatchId = current;
+        if (nextSelectedBatchId && nextRuns.some((item) => item.batchId === nextSelectedBatchId)) {
+          return nextSelectedBatchId;
+        }
+        return nextRuns[0]?.batchId ?? null;
+      });
+      setHotRunDetail((current) => {
+        if (current && nextRuns.some((item) => item.batchId === current.batchId)) {
+          return current;
+        }
+        return null;
+      });
+      setSelectedHotSourceId((current) => {
+        const nextSelectedId = preferredSourceId ?? current;
+        if (nextSelectedId && nextSources.some((item) => item.id === nextSelectedId)) {
+          return nextSelectedId;
+        }
+        return nextSources[0]?.id ?? null;
+      });
+    } catch (error) {
+      reportActionError(error, '加载 HOT 采集工作台失败');
+    }
+  };
+
+  const switchWorkspaceMode = (mode: HotWorkspaceMode) => {
+    setWorkspaceMode(mode);
+    if (mode === 'hot-workspace') {
+      void loadHotWorkspace();
+    }
+  };
+
+  const handleHotDraftChange = <Field extends keyof HotSourceDraft>(
+    field: Field,
+    value: HotSourceDraft[Field],
+  ) => {
+    setHotDraft((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const createHotSource = async () => {
+    try {
+      const payload: HotSourceDraft = {
+        ...hotDraft,
+        sourceKind: hotDraft.sourceKind ?? 'api',
+        enabled: hotDraft.enabled ?? true,
+        tags: hotDraft.tags?.length ? hotDraft.tags : hotDraft.siteKey ? [hotDraft.siteKey] : [],
+      };
+      const created = await invoke<HotSource>(IPC_CHANNELS.HOT_SOURCE_CREATE, payload);
+      resetHotDraft();
+      await loadHotWorkspace(created.id);
+    } catch (error) {
+      reportActionError(error, '创建 HOT 采集源失败');
+    }
+  };
+
+  const loadHotSourceDetail = async (sourceId: string) => {
+    try {
+      const source = await invoke<HotSource>(IPC_CHANNELS.HOT_SOURCE_DETAIL, { sourceId });
+      setHotDraft({
+        name: source.name,
+        sourceKind: source.sourceKind,
+        siteKey: source.siteKey,
+        entryUrl: source.entryUrl,
+        parserKey: source.parserKey,
+        sessionId: source.sessionId ?? null,
+        schedule: source.schedule ?? { type: 'manual' },
+        enabled: source.enabled,
+        tags: source.tags,
+      });
+      setEditingHotSourceId(source.id);
+      setSelectedHotSourceId(source.id);
+    } catch (error) {
+      reportActionError(error, '加载 HOT 采集源详情失败');
+    }
+  };
+
+  const updateHotSource = async () => {
+    if (!editingHotSourceId) {
+      return;
+    }
+
+    try {
+      await invoke<HotSource>(IPC_CHANNELS.HOT_SOURCE_UPDATE, {
+        sourceId: editingHotSourceId,
+        updates: {
+          ...hotDraft,
+          sourceKind: hotDraft.sourceKind ?? 'api',
+          enabled: hotDraft.enabled ?? true,
+          tags: hotDraft.tags?.length ? hotDraft.tags : hotDraft.siteKey ? [hotDraft.siteKey] : [],
+        },
+      });
+      resetHotDraft();
+      await loadHotWorkspace(editingHotSourceId);
+    } catch (error) {
+      reportActionError(error, '更新 HOT 采集源失败');
+    }
+  };
+
+  const deleteHotSource = async (sourceId: string) => {
+    try {
+      await invoke(IPC_CHANNELS.HOT_SOURCE_DELETE, { sourceId });
+      if (editingHotSourceId === sourceId) {
+        resetHotDraft();
+      }
+      await loadHotWorkspace(selectedHotSourceId === sourceId ? null : selectedHotSourceId);
+    } catch (error) {
+      reportActionError(error, '删除 HOT 采集源失败');
+    }
+  };
+
+  const startHotRun = async (sourceId: string) => {
+    try {
+      await invoke(IPC_CHANNELS.HOT_RUN_START, { sourceId });
+      await loadHotWorkspace();
+    } catch (error) {
+      reportActionError(error, '启动 HOT 运行失败');
+    }
+  };
+
+  const loadHotRunDetail = async (run: HotRunSummary) => {
+    try {
+      const detail = await invoke<HotRunDetail>(IPC_CHANNELS.HOT_RUN_DETAIL, {
+        sourceId: run.sourceId,
+        batchId: run.batchId,
+      });
+      setSelectedHotRunBatchId(run.batchId);
+      setHotRunDetail(detail);
+    } catch (error) {
+      reportActionError(error, '加载 HOT 运行详情失败');
+    }
+  };
+
+  const generateHotReport = async (run: HotRunSummary) => {
+    try {
+      await invoke(IPC_CHANNELS.HOT_REPORT_GENERATE, {
+        sourceId: run.sourceId,
+        batchId: run.batchId,
+        format: 'md',
+      });
+      await loadHotWorkspace();
+    } catch (error) {
+      reportActionError(error, '生成 HOT 报告失败');
+    }
   };
 
   const runDouyinSearch = () => {
@@ -774,7 +1074,9 @@ export default function App() {
     }
 
     const savedPath = `/downloads/${douyinTarget.item.id}.mp4`;
-    setDownloadRequest((current) => (current ? markDownloadCompleted(current, savedPath) : current));
+    setDownloadRequest((current) =>
+      current ? markDownloadCompleted(current, savedPath) : current,
+    );
     setDownloadRecords((current) =>
       current.map((item) =>
         item.targetId === douyinTarget.item.id
@@ -824,7 +1126,10 @@ export default function App() {
       platformName,
       title,
       status: 'pending',
-      createdAtLabel: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      createdAtLabel: new Date().toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
       note: resolvedNote,
     };
     setReviewQueue((current) => [queueItem, ...current]);
@@ -888,7 +1193,7 @@ export default function App() {
 
     const drafts = buildCommentDrafts(
       selectedPlatform.name,
-      isDouyinPlatform ? douyinTarget?.item.title ?? draftContext : draftContext,
+      isDouyinPlatform ? (douyinTarget?.item.title ?? draftContext) : draftContext,
       draftTone,
       workspaceConfig.commentStarters,
     );
@@ -1012,6 +1317,17 @@ export default function App() {
           ))}
         </Row>
 
+        <Card className="yclaw-panel-card" title="工作模式">
+          <div className="browser-review-queue-actions">
+            <button type="button" onClick={() => switchWorkspaceMode('browser-session')}>
+              浏览器会话
+            </button>
+            <button type="button" onClick={() => switchWorkspaceMode('hot-workspace')}>
+              HOT采集
+            </button>
+          </div>
+        </Card>
+
         <Card className="yclaw-panel-card" title="国内平台分类">
           <div className="browser-platform-categories">
             {PLATFORM_CATEGORIES.map((category) => (
@@ -1044,20 +1360,21 @@ export default function App() {
                         setDouyinInsight(null);
                         setDownloadRequest(null);
                         setDownloadAuthorizationChecked(false);
-                        setWorkspaceNote(`已进入 ${item.name} 功能页。先选择一个入口动作，再决定是否开启评论草稿或人工确认流程。`);
+                        setWorkspaceNote(
+                          `已进入 ${item.name} 功能页。先选择一个入口动作，再决定是否开启评论草稿或人工确认流程。`,
+                        );
                       }}
                     >
                       <div className="browser-platform-tile-head">
                         <span className="browser-platform-tile-name">{item.name}</span>
-                        <span className="browser-platform-tile-domain">{getHostnameLabel(item.url)}</span>
+                        <span className="browser-platform-tile-domain">
+                          {getHostnameLabel(item.url)}
+                        </span>
                       </div>
                       <div className="browser-platform-tile-description">{item.description}</div>
                       <div className="browser-platform-tile-tags">
                         {item.modes.map((mode) => (
-                          <span
-                            key={`${item.name}-${mode}`}
-                            className="browser-platform-pill"
-                          >
+                          <span key={`${item.name}-${mode}`} className="browser-platform-pill">
                             {mode}
                           </span>
                         ))}
@@ -1092,9 +1409,57 @@ export default function App() {
 
         <Card
           className="yclaw-panel-card"
-          title={workspaceConfig ? workspaceConfig.title : '平台功能页'}
+          title={
+            workspaceMode === 'hot-workspace'
+              ? 'HOT采集工作台'
+              : workspaceConfig
+                ? workspaceConfig.title
+                : '平台功能页'
+          }
         >
-          {selectedPlatform && workspaceConfig ? (
+          {workspaceMode === 'hot-workspace' ? (
+            <div className="browser-workspace-grid">
+              <HotSourcePanel
+                draft={hotDraft}
+                sources={hotSources}
+                selectedSourceId={selectedHotSourceId}
+                editingSourceId={editingHotSourceId}
+                onDraftChange={handleHotDraftChange}
+                onCreate={() => {
+                  void createHotSource();
+                }}
+                onUpdate={() => {
+                  void updateHotSource();
+                }}
+                onCancelEdit={resetHotDraft}
+                onSelect={setSelectedHotSourceId}
+                onLoadDetail={(sourceId) => {
+                  void loadHotSourceDetail(sourceId);
+                }}
+                onStartRun={(sourceId) => {
+                  void startHotRun(sourceId);
+                }}
+                onDelete={(sourceId) => {
+                  void deleteHotSource(sourceId);
+                }}
+              />
+              <HotRunPanel
+                runs={visibleHotRuns}
+                selectedBatchId={selectedHotRunBatchId}
+                detail={hotRunDetail}
+                onViewDetail={(run) => {
+                  void loadHotRunDetail(run);
+                }}
+                onRerun={(run) => {
+                  void startHotRun(run.sourceId);
+                }}
+                onGenerateReport={(run) => {
+                  void generateHotReport(run);
+                }}
+              />
+              <HotReportPanel reports={visibleHotReports} />
+            </div>
+          ) : selectedPlatform && workspaceConfig ? (
             isDouyinPlatform ? (
               <div className="browser-workspace-grid is-douyin-analysis">
                 <DouyinSearchPanel
@@ -1164,7 +1529,10 @@ export default function App() {
                   <div className="browser-workspace-summary">{workspaceConfig.summary}</div>
                   <div className="browser-platform-tile-tags">
                     {selectedPlatform.modes.map((mode) => (
-                      <span key={`${selectedPlatform.name}-${mode}`} className="browser-platform-pill">
+                      <span
+                        key={`${selectedPlatform.name}-${mode}`}
+                        className="browser-platform-pill"
+                      >
                         {mode}
                       </span>
                     ))}
@@ -1173,7 +1541,9 @@ export default function App() {
                     {workspaceConfig.actions.map((action) => (
                       <div key={action.key} className="browser-workspace-action-card">
                         <div className="browser-workspace-action-title">{action.title}</div>
-                        <div className="browser-workspace-action-description">{action.description}</div>
+                        <div className="browser-workspace-action-description">
+                          {action.description}
+                        </div>
                         <div className="browser-workspace-action-meta">{action.reviewMode}</div>
                         <Button
                           type="primary"
@@ -1284,67 +1654,67 @@ export default function App() {
                   <div className="browser-workspace-list">
                     {selectedPlatformQueue.length > 0 ? (
                       selectedPlatformQueue.map((item) => (
-                          <div key={item.id} className="browser-review-queue-card">
-                            <div className="browser-review-queue-title">
-                              <span>{item.title}</span>
-                              <span className={`browser-review-status is-${item.status}`}>
-                                {item.status === 'pending'
-                                  ? '待复核'
-                                  : item.status === 'ready'
-                                    ? '可执行'
-                                    : '已归档'}
-                              </span>
-                            </div>
-                            <div className="browser-workspace-action-meta">{item.createdAtLabel}</div>
-                            <div className="browser-workspace-action-description">{item.note}</div>
-                            {item.linkedTaskId ? (
-                              <div className="browser-workspace-action-meta">
-                                已建任务：{item.linkedTaskName ?? item.linkedTaskId}
-                              </div>
-                            ) : null}
-                            <div className="browser-review-queue-actions">
-                              <Button
-                                onClick={() => {
-                                  setWorkspaceNote(item.note);
-                                }}
-                              >
-                                写入备注
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  updateQueueStatus(item.id, 'ready');
-                                }}
-                              >
-                                标记可执行
-                              </Button>
-                              {item.status === 'ready' && !item.linkedTaskId ? (
-                                <Button
-                                  onClick={() => {
-                                    void linkQueueItemTask(item);
-                                  }}
-                                >
-                                  生成执行任务
-                                </Button>
-                              ) : null}
-                              {item.linkedTaskId ? (
-                                <Button
-                                  onClick={() => {
-                                    void openAutomationWorkspace();
-                                  }}
-                                >
-                                  打开自动化页
-                                </Button>
-                              ) : null}
-                              <Button
-                                onClick={() => {
-                                  updateQueueStatus(item.id, 'archived');
-                                }}
-                              >
-                                归档
-                              </Button>
-                            </div>
+                        <div key={item.id} className="browser-review-queue-card">
+                          <div className="browser-review-queue-title">
+                            <span>{item.title}</span>
+                            <span className={`browser-review-status is-${item.status}`}>
+                              {item.status === 'pending'
+                                ? '待复核'
+                                : item.status === 'ready'
+                                  ? '可执行'
+                                  : '已归档'}
+                            </span>
                           </div>
-                        ))
+                          <div className="browser-workspace-action-meta">{item.createdAtLabel}</div>
+                          <div className="browser-workspace-action-description">{item.note}</div>
+                          {item.linkedTaskId ? (
+                            <div className="browser-workspace-action-meta">
+                              已建任务：{item.linkedTaskName ?? item.linkedTaskId}
+                            </div>
+                          ) : null}
+                          <div className="browser-review-queue-actions">
+                            <Button
+                              onClick={() => {
+                                setWorkspaceNote(item.note);
+                              }}
+                            >
+                              写入备注
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                updateQueueStatus(item.id, 'ready');
+                              }}
+                            >
+                              标记可执行
+                            </Button>
+                            {item.status === 'ready' && !item.linkedTaskId ? (
+                              <Button
+                                onClick={() => {
+                                  void linkQueueItemTask(item);
+                                }}
+                              >
+                                生成执行任务
+                              </Button>
+                            ) : null}
+                            {item.linkedTaskId ? (
+                              <Button
+                                onClick={() => {
+                                  void openAutomationWorkspace();
+                                }}
+                              >
+                                打开自动化页
+                              </Button>
+                            ) : null}
+                            <Button
+                              onClick={() => {
+                                updateQueueStatus(item.id, 'archived');
+                              }}
+                            >
+                              归档
+                            </Button>
+                          </div>
+                        </div>
+                      ))
                     ) : (
                       <div className="browser-workspace-empty">
                         还没有待复核动作，点击上面的动作项即可加入队列。
@@ -1354,7 +1724,10 @@ export default function App() {
                   <div className="browser-workspace-section-title">边界说明</div>
                   <div className="browser-workspace-list">
                     {workspaceConfig.guardrails.map((item) => (
-                      <div key={`${selectedPlatform.name}-guard-${item}`} className="browser-workspace-guardrail">
+                      <div
+                        key={`${selectedPlatform.name}-guard-${item}`}
+                        className="browser-workspace-guardrail"
+                      >
                         {item}
                       </div>
                     ))}

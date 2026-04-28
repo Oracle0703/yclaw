@@ -2,12 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  loadDirectory,
-  loadFile,
-  resolveReferences,
-  LOADER_SAFETY,
-} from '@shared/serialization';
+import { loadDirectory, loadFile, resolveReferences, LOADER_SAFETY } from '@shared/serialization';
 
 const TASK_A = `
 schemaVersion: 1
@@ -62,7 +57,10 @@ describe('serialization · loader · loadFile', () => {
 
   it('throws on schema-invalid file with summary', async () => {
     const p = join(dir, 'bad.yaml');
-    writeFileSync(p, `schemaVersion: 1\nkind: Task\nmetadata: { id: '!!', name: '' }\nspec: { steps: [] }\n`);
+    writeFileSync(
+      p,
+      `schemaVersion: 1\nkind: Task\nmetadata: { id: '!!', name: '' }\nspec: { steps: [] }\n`,
+    );
     await expect(loadFile(p)).rejects.toThrow(/Failed to load/);
   });
 
@@ -70,7 +68,11 @@ describe('serialization · loader · loadFile', () => {
     const target = join(dir, 'real.yaml');
     writeFileSync(target, TASK_A);
     const link = join(dir, 'link.yaml');
-    symlinkSync(target, link);
+    try {
+      symlinkSync(target, link);
+    } catch {
+      return; /* skip when symlink not permitted */
+    }
     await expect(loadFile(link)).rejects.toThrow(/symlink/i);
   });
 
@@ -115,7 +117,11 @@ describe('serialization · loader · loadDirectory', () => {
     writeFileSync(join(dir, '.hidden', 'x.yaml'), TASK_B_NO_REF);
     mkdirSync(join(dir, 'node_modules'));
     writeFileSync(join(dir, 'node_modules', 'y.yaml'), TASK_B_NO_REF);
-    symlinkSync(dir, join(dir, 'loop'));
+    try {
+      symlinkSync(dir, join(dir, 'loop'));
+    } catch {
+      /* symlink not permitted; the rest of the assertions still hold */
+    }
     const reg = await loadDirectory(dir);
     expect(reg.tasks.size).toBe(1);
     expect(reg.tasks.has('task-a')).toBe(true);

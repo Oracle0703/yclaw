@@ -283,7 +283,6 @@ canvas {
   height: auto;
   padding: 14px 24px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(14px);
   line-height: 1.2;
 }
@@ -299,7 +298,6 @@ canvas {
 .yclaw-admin-content {
   flex: 1;
   min-height: 0;
-  padding: 0 24px 24px;
   background: var(--yclaw-shell-gradient);
   overflow-y: auto;
   overflow-x: hidden;

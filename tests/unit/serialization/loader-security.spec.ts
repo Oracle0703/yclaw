@@ -29,7 +29,11 @@ describe('serialization · loader · security', () => {
     mkdirSync(real);
     writeFileSync(join(real, 't.yaml'), TASK);
     const link = join(dir, 'link');
-    symlinkSync(real, link);
+    try {
+      symlinkSync(real, link);
+    } catch {
+      return; /* skip when symlink not permitted */
+    }
     const reg = await loadDirectory(link);
     expect(reg.tasks.size).toBe(0);
     expect(reg.issues.some((i) => /symlink root/.test(i.message))).toBe(true);
