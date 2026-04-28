@@ -154,4 +154,41 @@ describe('buildAliyunDriveSigninScript', () => {
       detail: expect.stringContaining('已领取'),
     });
   });
+
+  it('can enter the daily sign-in card from the home page before claiming the reward', async () => {
+    const signinCard = document.createElement('button');
+    signinCard.textContent = '每日签到';
+    signinCard.addEventListener('click', () => {
+      const rewardButton = document.createElement('button');
+      rewardButton.textContent = '立即领取';
+      rewardButton.addEventListener('click', () => {
+        rewardButton.textContent = '已领取';
+      });
+      document.body.appendChild(rewardButton);
+    });
+    document.body.appendChild(signinCard);
+
+    const result = await window.eval(buildAliyunDriveSigninScript());
+
+    expect(result).toMatchObject({
+      success: true,
+      detail: expect.stringContaining('已领取'),
+    });
+  });
+
+  it('claims the reward directly when the page already exposes an immediate claim button', async () => {
+    const rewardButton = document.createElement('button');
+    rewardButton.textContent = '立即领取';
+    rewardButton.addEventListener('click', () => {
+      rewardButton.textContent = '已领取';
+    });
+    document.body.appendChild(rewardButton);
+
+    const result = await window.eval(buildAliyunDriveSigninScript());
+
+    expect(result).toMatchObject({
+      success: true,
+      detail: expect.stringContaining('已领取'),
+    });
+  });
 });

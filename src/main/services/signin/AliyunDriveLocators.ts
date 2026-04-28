@@ -1,5 +1,13 @@
 export const ACTIVITY_SECTION_TEXTS = ['精选活动'] as const;
-export const REWARD_BUTTON_TEXTS = ['领取', '立即领取', '马上领取', '已领取'] as const;
+export const SIGNIN_ENTRY_TEXTS = ['每日签到', '去签到', '立即签到', '签到领福利'] as const;
+export const REWARD_BUTTON_TEXTS = [
+  '领取',
+  '立即领取',
+  '马上领取',
+  '去领取',
+  '领取奖励',
+  '已领取',
+] as const;
 export const REWARD_SUCCESS_TEXTS = ['已领取', '领取成功', '今日奖励已领取'] as const;
 export const DATE_CARD_PATTERN_SOURCES = [
   '\\d{1,2}月\\d{1,2}日',
@@ -11,6 +19,7 @@ export function buildAliyunDriveSigninScript(): string {
   return `
     (async () => {
       const activityTexts = ${JSON.stringify([...ACTIVITY_SECTION_TEXTS])};
+      const signinEntryTexts = ${JSON.stringify([...SIGNIN_ENTRY_TEXTS])};
       const rewardButtonTexts = ${JSON.stringify([...REWARD_BUTTON_TEXTS])};
       const rewardSuccessTexts = ${JSON.stringify([...REWARD_SUCCESS_TEXTS])};
       const dateCardPatterns = ${JSON.stringify([...DATE_CARD_PATTERN_SOURCES])}
@@ -70,6 +79,22 @@ export function buildAliyunDriveSigninScript(): string {
       const hasActivityAnchor = () => {
         const pageText = document.body?.innerText ?? '';
         return textIncludes(pageText, activityTexts);
+      };
+      const findSigninEntryCard = () => {
+        const candidates = Array.from(
+          document.querySelectorAll(
+            'button, a, [role="button"], .card, .card-item, .activity-card, li, div, section'
+          )
+        ).filter((element) => {
+          const text = getText(element);
+          return (
+            isVisible(element) &&
+            textIncludes(text, signinEntryTexts) &&
+            !textIncludes(text, rewardSuccessTexts)
+          );
+        });
+
+        return candidates[0] ?? null;
       };
       const collectDebugSnapshot = () => {
         const signBarCount = document.querySelectorAll('[class*="sign-bar"]').length;
@@ -155,9 +180,69 @@ export function buildAliyunDriveSigninScript(): string {
         const pageText = getText(document.body);
         return textIncludes(pageText, rewardSuccessTexts);
       };
+      const resolveRewardButtonFlow = async () => {
+        let rewardButton = findRewardButton();
+        for (let attempt = 0; !rewardButton && attempt < 6; attempt += 1) {
+          await sleep(150);
+          rewardButton = findRewardButton();
+        }
+
+        if (!rewardButton) {
+          return hasRewardSuccess()
+            ? {
+                success: true,
+                detail: '今日奖励已领取',
+              }
+            : null;
+        }
+
+        const rewardText = getText(rewardButton);
+        if (textIncludes(rewardText, ['已领取'])) {
+          return {
+            success: true,
+            detail: '今日奖励已领取',
+          };
+        }
+
+        clickElement(rewardButton);
+
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          await sleep(150);
+          rewardButton = findRewardButton();
+          const nextRewardText = getText(rewardButton);
+          if (textIncludes(nextRewardText, ['已领取']) || hasRewardSuccess()) {
+            return {
+              success: true,
+              detail: '今日奖励已领取',
+            };
+          }
+        }
+
+        return {
+          success: false,
+          failureReason: 'unknown',
+          detail: '已点击领取按钮，但未观察到成功反馈',
+          debug: collectDebugSnapshot(),
+        };
+      };
 
       if (document.querySelector('[data-testid="login"], .login, [href*="login"]')) {
         return buildFailure('session_expired', '检测到登录入口，当前会话可能已失效');
+      }
+
+      const directRewardResult = await resolveRewardButtonFlow();
+      if (directRewardResult) {
+        return directRewardResult;
+      }
+
+      const signinEntryCard = findSigninEntryCard();
+      if (signinEntryCard) {
+        clickElement(signinEntryCard);
+        await sleep(200);
+        const rewardAfterEntry = await resolveRewardButtonFlow();
+        if (rewardAfterEntry) {
+          return rewardAfterEntry;
+        }
       }
 
       const initialDateCard = findDateCard();
@@ -194,54 +279,15 @@ export function buildAliyunDriveSigninScript(): string {
 
       clickElement(dateCard);
       await sleep(150);
-
-      let rewardButton = findRewardButton();
-      for (let attempt = 0; !rewardButton && attempt < 5; attempt += 1) {
-        await sleep(150);
-        rewardButton = findRewardButton();
-      }
-
-      if (!rewardButton) {
-        if (hasRewardSuccess()) {
-          return {
-            success: true,
-            detail: '今日奖励已领取',
-          };
-        }
-        return {
-          success: false,
-          failureReason: 'reward_button_not_found',
-          detail: '未找到领取按钮或奖励弹窗',
-          debug: collectDebugSnapshot(),
-        };
-      }
-
-      const rewardText = getText(rewardButton);
-      if (textIncludes(rewardText, ['已领取'])) {
-        return {
-          success: true,
-          detail: '今日奖励已领取',
-        };
-      }
-
-      clickElement(rewardButton);
-
-      for (let attempt = 0; attempt < 6; attempt += 1) {
-        await sleep(150);
-        rewardButton = findRewardButton();
-        const nextRewardText = getText(rewardButton);
-        if (textIncludes(nextRewardText, ['已领取']) || hasRewardSuccess()) {
-          return {
-            success: true,
-            detail: '今日奖励已领取',
-          };
-        }
+      const rewardResult = await resolveRewardButtonFlow();
+      if (rewardResult) {
+        return rewardResult;
       }
 
       return {
         success: false,
-        failureReason: 'unknown',
-        detail: '已点击领取按钮，但未观察到成功反馈',
+        failureReason: 'reward_button_not_found',
+        detail: '未找到领取按钮或奖励弹窗',
         debug: collectDebugSnapshot(),
       };
     })();
