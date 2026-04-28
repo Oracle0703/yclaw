@@ -540,7 +540,7 @@ graph TB
 | 状态管理  | Zustand 5                        | 轻量、无样板代码、支持持久化中间件 |
 | 路由      | React Router v6                  | 每个入口独立路由实例               |
 | UI 组件库 | Ant Design 5 + Pro Components    | 企业级组件库、可定制主题           |
-| 图表库    | Lightweight Charts (TradingView) | 专业金融图表、K 线原生支持、高性能 |
+| 图表库    | 自定义 Canvas KLineChart         | 当前已落地实现；支持 K 线、十字光标、全屏与指标叠加 |
 | CSS 方案  | CSS Modules                      | 模块化样式隔离                     |
 
 ### 数据 & 存储

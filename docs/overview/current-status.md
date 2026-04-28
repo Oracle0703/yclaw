@@ -15,11 +15,13 @@
 | `docs/architecture/architecture.md` | 技术分层、调用链路、进程模型 | 想了解“系统怎么工作” |
 | `docs/architecture/structure.md` | 实际目录结构与模块职责 | 想快速定位代码 |
 | `docs/architecture/dev-runtime.md` | `npm run dev` 启动链路与运行时问题说明 | 想排查 dev 环境、端口和 Electron 启动问题 |
+| `docs/architecture/feature-pack-plugin-governance.md` | 功能包与插件分发治理说明 | 想了解模块拆包、插件安装和权限边界 |
 | `docs/product/prd.md` | 产品愿景、角色、场景 | 想了解“为什么做这个项目” |
 | `docs/product/plan.md` | 可行性分析与阶段路线 | 想了解“整体怎么推进” |
 | `docs/specs/v1.0-baseline.md` | 基线规格与验收目标 | 想了解“V1.0 要交付什么” |
 | `docs/specs/v1.1-enhancements.md` | 增强项规格 | 想了解“V1.1 之后补什么” |
 | `docs/specs/browser-hot-workspace-v1.md` | 浏览器 `HOT` 工作台与抖音分析台稳定规格 | 想了解浏览器采集台内部双工作模式 |
+| `docs/specs/stock-analysis-v1.md` | 股票分析模块稳定规格 | 想了解 `stock` 模块当前真实边界 |
 
 ---
 
@@ -47,7 +49,9 @@
 | --- | --- | --- |
 | 主线文档覆盖 | 基本齐全 | 自动化、Task Ops、Data Center、Task-as-Code、MCP、Headless Runner、Remote Runner、Scheduler 均已有 stable docs |
 | 浏览器新业务文档 | 已补齐基础专项文档 | 已新增 `docs/specs/browser-hot-workspace-v1.md` 承接 `HOT` 工作台与抖音分析台 |
+| 股票分析文档 | 已补齐基础专项文档 | 已新增 `docs/specs/stock-analysis-v1.md` 承接 `stock` 模块当前真实边界 |
 | 工程运行时文档 | 已补齐基础说明 | 已新增 `docs/architecture/dev-runtime.md` 说明 `predev`、端口与 Electron 启动链路 |
+| 功能包 / 插件治理文档 | 已补齐基础说明 | 已新增 `docs/architecture/feature-pack-plugin-governance.md` 说明分发、安装落点与权限边界 |
 | 结构说明 | 已补强 | `docs/architecture/structure.md` 已回写 `src/cli/`、`src/mcp/`、`tests/integration/` 等真实结构 |
 | 详细审计 | 已新增 | 详见 `docs/overview/implementation-audit.md` |
 
@@ -61,6 +65,7 @@
 | `docs/specs/v1.1-enhancements.md` | 部分完成 | 命令面板、AI 面板、设置页增强、多数运营/浏览器增强已进入代码 | 文档中的部分 UI 勾选项仍需与真实实现继续对齐 |
 | `docs/specs/automation-browser-ops-v1.md` | 部分完成到基础闭环 | 任务、批次、结果、会话、告警、执行日志、介入面板、模板等主链路已具备基础版 | 完整 Electron 成品态验收和部分深水区交互仍待补齐 |
 | `docs/specs/browser-hot-workspace-v1.md` | 基础版已落地 | 浏览器 `HOT` 工作台、抖音分析台、双工作模式、IPC 与数据模型边界已有稳定文档承接 | 当前仍未独立成单独菜单或 renderer entry |
+| `docs/specs/stock-analysis-v1.md` | 基础版已落地 | 股票分析模块的 K 线工作台、指标、数据源边界与未完成项已有稳定文档承接 | 当前仍不是完整投研终端 |
 | `docs/specs/task-as-code-v1.md` | 基础版已落地 / UI 待补 | 核心序列化、CLI、IPC、preload 桥接、目录监听、Persistence 适配、README quick-start 与示例已落地 | 任务中心 / 模板中心 UI 导入导出入口、shutdown 等少量防御性尾项仍待补齐 |
 | `docs/specs/mcp-integration-v1.md` | 基础版已落地 / 验收收尾 | MCP Server `stdio/http`、token 鉴权、dangerous 标记、外部 MCP Client、设置页、AI 工具可见性、审计面板、Claude/Cursor 示例已落地 | 最终逐条验收、资源/审计筛选和远程访问边界仍待收口 |
 | `docs/specs/data-center-v1.md` | P0 已可用 / P1.5 持续完善中 | 已具备独立 `data-center` 模块、结果资产总览、结果详情、持久化导出任务、状态筛选、取消任务、失败重试、导出创建弹窗、数据集保存、本地只读 API、Webhook 目标保存/编辑/删除/连通性测试、API Token 生成/列表/模板/吊销、Webhook 导出底层链路、token 校验底层预留、数据质量一键扫描、质量规则启停配置、质量评分、批次洞察、findings / insight 持久化、自动化页跳转入口 | Token 更细权限治理、Webhook 更完整配置治理、复杂规则编辑器与长期趋势洞察仍属后续阶段 |
@@ -73,6 +78,7 @@
 | `docs/design/page-container-optimization.md` | 未系统推进 | 局部页面样式已有演进，但未按文档做专项改造 | 仍属于设计建议 |
 | `docs/design/package-size-optimization.md` | 部分处理 | 仓库中已有相关 review / remediation 记录 | 尚未形成持续化、指标化的专项实施线 |
 | `docs/architecture/dev-runtime.md` | 已新增 | 解释 `npm run dev`、端口变化、Electron 启动条件与运行时检查 | 用于回答“浏览器打不开但 Electron 正常”这类问题 |
+| `docs/architecture/feature-pack-plugin-governance.md` | 已新增 | 解释功能包 manifest、安装落点、模块打开策略、插件权限和本地安装边界 | 用于回答“功能包和插件现在到底怎么分发” |
 | `docs/overview/implementation-audit.md` | 已新增 | 对照真实代码、测试与脚本标注文档齐全度与已做 / 未做 | 用于回答“实现有没有文档承接” |
 
 ### 2.3 docs 中尚未启动或仅停留在设计层的方向

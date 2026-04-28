@@ -51,6 +51,7 @@
 - [architecture/architecture.md](architecture/architecture.md)：进程模型、分层、调用链
 - [architecture/structure.md](architecture/structure.md)：实际目录结构与模块职责
 - [architecture/dev-runtime.md](architecture/dev-runtime.md)：`npm run dev` 启动链路与常见运行时问题
+- [architecture/feature-pack-plugin-governance.md](architecture/feature-pack-plugin-governance.md)：功能包与插件分发治理
 
 ### 2.4 规格与实施（specs / plans）
 
@@ -59,6 +60,7 @@
 - [specs/automation-browser-ops-v1.md](specs/automation-browser-ops-v1.md)：自动化采集 V1 规格
 - [specs/browser-hot-workspace-v1.md](specs/browser-hot-workspace-v1.md)：浏览器 `HOT` 工作台与抖音分析台 V1 规格
 - [specs/data-center-v1.md](specs/data-center-v1.md)：数据中心 / 数据出口中心 V1 规格
+- [specs/stock-analysis-v1.md](specs/stock-analysis-v1.md)：股票分析模块 V1 规格
 - [specs/headless-runner-v1.md](specs/headless-runner-v1.md)：Headless Runner / CLI V1 规格
 - [specs/remote-runner-control-plane-v1.md](specs/remote-runner-control-plane-v1.md)：Remote Runner 控制面 V1 规格
 - [specs/capacity-aware-runner-scheduler-v1.md](specs/capacity-aware-runner-scheduler-v1.md)：容量感知 Runner 调度器 V1 规格

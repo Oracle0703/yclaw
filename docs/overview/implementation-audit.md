@@ -28,6 +28,7 @@
 | `docs/overview/roadmap.md` | 后续演进路线 | `齐全` | `🟡` 以阶段状态为主 | 主要回答“接下来做什么”，不是实现反查文档 |
 | `docs/architecture/architecture.md` | 架构、进程模型、调用链路 | `部分齐全` | `🟡` | 主架构成立，工程运行时细节已拆到 `docs/architecture/dev-runtime.md` |
 | `docs/architecture/dev-runtime.md` | 开发运行时、端口、Electron 启动链路 | `✅ 已补` | `✅` | 当前承接 `npm run dev`、`predev`、端口与故障排查说明 |
+| `docs/architecture/feature-pack-plugin-governance.md` | 功能包与插件分发治理 | `✅ 已补` | `✅` | 当前承接模块拆包、安装落点、插件本地安装和权限边界说明 |
 | `docs/architecture/structure.md` | 实际目录结构与职责 | `✅ 本轮校准` | `✅` | 原先未完整反映 `src/cli/`、`src/mcp/`、`tests/integration/`、`hot` 等目录 |
 | `docs/product/prd.md` | 产品愿景、长期场景 | `齐全` | `⬜` 不以已做/未做为主 | 偏上位产品文档，不负责实现状态 |
 | `docs/product/plan.md` | 阶段计划、可行性 | `齐全` | `⬜` 不以已做/未做为主 | 偏规划，不替代实现审计 |
@@ -36,6 +37,7 @@
 | `docs/specs/v1.1-enhancements.md` | 增强规格 | `部分齐全` | `🟡` | 能覆盖部分增强项，但不是最新实现全景 |
 | `docs/specs/automation-browser-ops-v1.md` | 自动化与浏览器主线 | `齐全` | `✅` | 浏览器子域细节已由 `docs/specs/browser-hot-workspace-v1.md` 补充承接 |
 | `docs/specs/browser-hot-workspace-v1.md` | 浏览器 `HOT` 工作台与抖音分析台 | `✅ 已补` | `✅` | 现在已有稳定专项文档，而不是只依赖过程文档 |
+| `docs/specs/stock-analysis-v1.md` | 股票分析模块 | `✅ 已补` | `✅` | 当前已对 K 线工作台、指标与数据源边界形成稳定专项文档 |
 | `docs/specs/task-operations-center-v1.md` | 任务运营中台 | `部分齐全` | `✅` | 覆盖任务运营闭环，不覆盖浏览器 `HOT` 专项 |
 | `docs/specs/data-center-v1.md` | Data Center | `齐全` | `✅` | 有明确阶段与验收边界 |
 | `docs/specs/task-as-code-v1.md` | Task-as-Code | `齐全` | `✅` | 文档、示例、README 链路较完整 |
@@ -68,8 +70,8 @@
 | Task-as-Code | `src/shared/serialization/` `src/main/services/task-as-code/` `src/cli/lint.ts` | `✅ 已做基础版`：YAML、lint/import/export、watcher、Persistence 已存在 | `task-as-code-v1.md` `README.md` `src/shared/serialization/README.md` | 文档整体齐全 |
 | AI / MCP | `src/main/ai/` `src/mcp/` `tests/integration/mcp/` | `✅ 已做基础版`：MCP server/client、嵌入式 HTTP、外部 tool 注册、危险确认与审计已存在 | `mcp-integration-v1.md` `design/ai-assistant.md` `current-status.md` | `structure.md` 原先未完整体现 `src/mcp/`，本轮已修正 |
 | Headless Runner / Remote Runner / Scheduler | `src/runner/` `src/main/remote-runner/` `src/main/services/runner-scheduler/` | `✅ 已做基础版`：CLI、daemon、控制面、统一 Runner 池、dispatch、lease、reconcile 已存在 | `headless-runner-v1.md` `remote-runner-control-plane-v1.md` `capacity-aware-runner-scheduler-v1.md` | 文档整体齐全 |
-| Plugin Center / Plugin Host / Feature Pack | `src/renderer/entries/plugin-center/` `src/renderer/plugin-host/` `scripts/build-feature-pack.ts` | `✅ 已做基础版`：插件生命周期、权限确认、宿主桥接、功能包构建链路已存在 | `README.md` `current-status.md` `structure.md` | 缺少单独的 feature pack / 安装治理文档 |
-| Stock | `src/renderer/entries/stock/` `src/engines/analytics/` | `✅ 已做基础版`：K 线与指标能力已存在 | `README.md` `current-status.md` | 无独立 stable spec，但当前复杂度尚可接受 |
+| Plugin Center / Plugin Host / Feature Pack | `src/renderer/entries/plugin-center/` `src/renderer/plugin-host/` `scripts/build-feature-pack.ts` | `✅ 已做基础版`：插件生命周期、权限确认、宿主桥接、功能包构建链路已存在 | `README.md` `current-status.md` `structure.md` `docs/architecture/feature-pack-plugin-governance.md` | `.ycplugin`、签名和市场同步仍未做 |
+| Stock | `src/renderer/entries/stock/` `src/engines/analytics/` | `✅ 已做基础版`：K 线与指标能力已存在 | `README.md` `current-status.md` `docs/specs/stock-analysis-v1.md` | 策略回测、提醒、数据源管理 UI 仍未做 |
 | Dev Runtime / Build Tooling | `scripts/dev.ts` `scripts/ensure-dev-runtime.cjs` `scripts/dist-win-core.ts` | `✅ 已做`：开发环境探测、Electron/Vite/tsc 联合启动、构建与分发脚本已存在 | `README.md` `package.json` `structure.md` `docs/architecture/dev-runtime.md` | feature pack 构建治理仍可后续继续细化 |
 | 测试体系 | `tests/unit/` `tests/integration/` `tests/e2e/` | `✅ 已做`：单测、集成、e2e、脚本测试、序列化安全测试已存在 | `README.md` `structure.md` | `AGENTS.md` 之前仍按“仅规划仓库”描述测试状态，本轮已修正 |
 
@@ -79,8 +81,7 @@
 
 | 优先级 | 建议文档 | 原因 | 建议承载内容 |
 | --- | --- | --- | --- |
-| `P1` | 插件 / 特性包分发说明 | 代码已存在 feature pack 构建与宿主机制 | 功能包产物位置、安装策略、窗口打开策略、错误提示约定 |
-| `P2` | Stock 独立 spec | 目前只有总览级描述 | 若后续继续做回测、提醒、策略，再拆独立 spec |
+| `当前无 P0/P1 缺口` | 暂无必须立即新增的 stable doc | `HOT`、stock、dev runtime、feature pack / plugin 治理已补齐基础承接 | 后续以“实现增量持续回写”方式维护现有文档即可 |
 
 ---
 
@@ -90,7 +91,9 @@
 | --- | --- |
 | `docs/overview/implementation-audit.md` | 新增，实现反查总表与文档齐全度结论 |
 | `docs/specs/browser-hot-workspace-v1.md` | 新增，承接浏览器 `HOT` 工作台与抖音分析台稳定规格 |
+| `docs/specs/stock-analysis-v1.md` | 新增，承接股票分析模块稳定规格 |
 | `docs/architecture/dev-runtime.md` | 新增，承接 `npm run dev` 与运行时问题说明 |
+| `docs/architecture/feature-pack-plugin-governance.md` | 新增，承接功能包与插件分发治理说明 |
 | `docs/overview/current-status.md` | 补充文档反查结论、更新时间、浏览器 `HOT` / 抖音 / 单实例 / dev runtime 状态 |
 | `docs/architecture/structure.md` | 校准真实目录结构，补 `src/cli/`、`src/mcp/`、`hot` / `data-center` / `task-as-code`、`tests/integration/` 等 |
 | `docs/README.md` | 增加实现反查审计入口 |
@@ -104,5 +107,5 @@
 | --- | --- |
 | 文档是否齐全 | `基本齐全，但仍有细分工程文档可继续补` |
 | 哪些主线已经有较完整文档 | 自动化、Task Ops、Data Center、Task-as-Code、MCP、Headless Runner、Remote Runner、Runner Scheduler |
-| 哪些实现仍值得继续补文档 | feature pack / 插件分发治理、Stock 深化规格 |
-| 本轮完成了什么 | 已把 `HOT` 工作台、抖音分析台和 dev runtime 从“缺 stable docs”状态推进到有专门文档承接 |
+| 哪些实现仍值得继续补文档 | 以当前代码面看，主要缺口已从“无稳定文档”转为“后续增量持续回写” |
+| 本轮完成了什么 | 已把 `HOT` 工作台、抖音分析台、stock、dev runtime、功能包 / 插件治理从“缺 stable docs”状态推进到有专门文档承接 |
