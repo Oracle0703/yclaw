@@ -3,12 +3,14 @@ import React, { useEffect } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 
-const { invokeMock, messageSuccessMock, messageErrorMock, setThemePreferenceMock } = vi.hoisted(() => ({
-  invokeMock: vi.fn(),
-  messageSuccessMock: vi.fn(),
-  messageErrorMock: vi.fn(),
-  setThemePreferenceMock: vi.fn(),
-}));
+const { invokeMock, messageSuccessMock, messageErrorMock, setThemePreferenceMock } = vi.hoisted(
+  () => ({
+    invokeMock: vi.fn(),
+    messageSuccessMock: vi.fn(),
+    messageErrorMock: vi.fn(),
+    setThemePreferenceMock: vi.fn(),
+  }),
+);
 
 const formValues = {
   theme: 'dark',
@@ -33,13 +35,13 @@ vi.mock('antd', () => {
       form?: typeof mockForm;
       onFinish?: (values: typeof formValues) => Promise<boolean>;
     }) => {
-    useEffect(() => {
-      if (form) {
-        form.submit.mockImplementation(() => onFinish?.(formValues) ?? Promise.resolve(true));
-      }
-    }, [form, onFinish]);
+      useEffect(() => {
+        if (form) {
+          form.submit.mockImplementation(() => onFinish?.(formValues) ?? Promise.resolve(true));
+        }
+      }, [form, onFinish]);
 
-    return <form>{children}</form>;
+      return <form>{children}</form>;
     },
     {
       useForm: () => [mockForm],
@@ -61,13 +63,7 @@ vi.mock('antd', () => {
         },
       }),
     },
-    Button: ({
-      children,
-      onClick,
-    }: {
-      children?: React.ReactNode;
-      onClick?: () => void;
-    }) => (
+    Button: ({ children, onClick }: { children?: React.ReactNode; onClick?: () => void }) => (
       <button type="button" onClick={onClick}>
         {children}
       </button>
@@ -91,22 +87,8 @@ vi.mock('antd', () => {
       },
     ),
     Form,
-    Input: Object.assign(({
-      onChange,
-      placeholder,
-      value,
-    }: {
-      onChange?: (event: { target: { value: string } }) => void;
-      placeholder?: string;
-      value?: string;
-    }) => (
-      <input
-        placeholder={placeholder}
-        value={value ?? ''}
-        onChange={(event) => onChange?.({ target: { value: event.target.value } })}
-      />
-    ), {
-      TextArea: ({
+    Input: Object.assign(
+      ({
         onChange,
         placeholder,
         value,
@@ -115,13 +97,30 @@ vi.mock('antd', () => {
         placeholder?: string;
         value?: string;
       }) => (
-        <textarea
+        <input
           placeholder={placeholder}
           value={value ?? ''}
           onChange={(event) => onChange?.({ target: { value: event.target.value } })}
         />
       ),
-    }),
+      {
+        TextArea: ({
+          onChange,
+          placeholder,
+          value,
+        }: {
+          onChange?: (event: { target: { value: string } }) => void;
+          placeholder?: string;
+          value?: string;
+        }) => (
+          <textarea
+            placeholder={placeholder}
+            value={value ?? ''}
+            onChange={(event) => onChange?.({ target: { value: event.target.value } })}
+          />
+        ),
+      },
+    ),
     InputNumber: ({
       onChange,
       value,
@@ -149,6 +148,88 @@ vi.mock('antd', () => {
     Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Switch: () => <button type="button" role="switch" />,
     Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Segmented: ({
+      options,
+      onChange,
+      value,
+    }: {
+      options?: Array<{ label: string; value: string }>;
+      onChange?: (value: string) => void;
+      value?: string;
+    }) => (
+      <div role="tablist">
+        {options?.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            role="tab"
+            aria-selected={value === option.value}
+            onClick={() => onChange?.(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    ),
+    Slider: ({
+      onChangeComplete,
+      value,
+    }: {
+      onChangeComplete?: (value: number) => void;
+      value?: number;
+    }) => (
+      <input
+        aria-label="蒙层透明度"
+        type="range"
+        value={value ?? 0}
+        onChange={(event) => onChangeComplete?.(Number(event.target.value))}
+      />
+    ),
+    Radio: Object.assign(
+      ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+      {
+        Group: ({
+          children,
+          onChange,
+          value,
+        }: {
+          children?: React.ReactNode;
+          onChange?: (event: { target: { value: string } }) => void;
+          value?: string;
+        }) => (
+          <div
+            data-value={value}
+            onClick={(event) => {
+              const target = event.target as HTMLElement;
+              const dataValue = target.getAttribute('data-radio-value');
+              if (dataValue && onChange) {
+                onChange({ target: { value: dataValue } });
+              }
+            }}
+          >
+            {children}
+          </div>
+        ),
+        Button: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
+          <button type="button" data-radio-value={value}>
+            {children}
+          </button>
+        ),
+      },
+    ),
+    ColorPicker: ({
+      value,
+      onChangeComplete,
+    }: {
+      value?: string;
+      onChangeComplete?: (color: { toHexString: () => string }) => void;
+    }) => (
+      <input
+        aria-label="背景颜色"
+        value={value ?? ''}
+        onChange={(event) => onChangeComplete?.({ toHexString: () => event.target.value })}
+      />
+    ),
     Typography: {
       Title: ({ children }: { children?: React.ReactNode }) => <h2>{children}</h2>,
       Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
@@ -158,13 +239,7 @@ vi.mock('antd', () => {
 });
 
 vi.mock('@renderer/shared/components/PageShell', () => ({
-  PageShell: ({
-    children,
-    title,
-  }: {
-    children: React.ReactNode;
-    title: React.ReactNode;
-  }) => (
+  PageShell: ({ children, title }: { children: React.ReactNode; title: React.ReactNode }) => (
     <div>
       <h1>{title}</h1>
       {children}
@@ -175,6 +250,11 @@ vi.mock('@renderer/shared/components/PageShell', () => ({
 vi.mock('@renderer/shared/components/AppProviders', () => ({
   useThemeMode: () => ({
     setThemePreference: setThemePreferenceMock,
+  }),
+  useBackground: () => ({
+    background: { type: 'preset', value: 'aurora' },
+    setBackground: vi.fn().mockResolvedValue(undefined),
+    resetBackground: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 

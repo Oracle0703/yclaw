@@ -7,6 +7,7 @@ describe('AliyunDriveSigninProvider', () => {
   const executeJavaScript = vi.fn();
   const captureDebugContext = vi.fn();
   const fallbackRun = vi.fn<({ refreshToken: string }) => Promise<SigninProviderResult>>();
+  const logInfo = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -28,6 +29,9 @@ describe('AliyunDriveSigninProvider', () => {
       fallback: {
         run: fallbackRun,
       },
+      logService: {
+        info: logInfo,
+      },
     });
 
     const result = await provider.run({
@@ -43,6 +47,14 @@ describe('AliyunDriveSigninProvider', () => {
       detail: '今日奖励已领取',
     });
     expect(fallbackRun).not.toHaveBeenCalled();
+    expect(logInfo).toHaveBeenCalledWith(
+      'main',
+      'signin browser flow started',
+      expect.objectContaining({
+        taskId: 'task-1',
+        reason: 'no_refresh_token',
+      }),
+    );
   });
 
   it('uses api first when refresh token exists and skips browser on api success', async () => {
@@ -59,6 +71,9 @@ describe('AliyunDriveSigninProvider', () => {
       } as never,
       fallback: {
         run: fallbackRun,
+      },
+      logService: {
+        info: logInfo,
       },
     });
 
@@ -77,6 +92,13 @@ describe('AliyunDriveSigninProvider', () => {
     expect(fallbackRun).toHaveBeenCalledWith({ refreshToken: 'rt-demo' });
     expect(openSessionPage).not.toHaveBeenCalled();
     expect(executeJavaScript).not.toHaveBeenCalled();
+    expect(logInfo).toHaveBeenCalledWith(
+      'main',
+      'signin api fallback succeeded',
+      expect.objectContaining({
+        taskId: 'task-1',
+      }),
+    );
   });
 
   it('falls back to browser when api-first execution fails', async () => {
@@ -100,6 +122,9 @@ describe('AliyunDriveSigninProvider', () => {
       fallback: {
         run: fallbackRun,
       },
+      logService: {
+        info: logInfo,
+      },
     });
 
     const result = await provider.run({
@@ -115,6 +140,22 @@ describe('AliyunDriveSigninProvider', () => {
       strategyUsed: 'browser',
       detail: '今日奖励已领取',
     });
+    expect(logInfo).toHaveBeenCalledWith(
+      'main',
+      'signin api fallback failed',
+      expect.objectContaining({
+        taskId: 'task-1',
+        failureReason: 'api_request_failed',
+      }),
+    );
+    expect(logInfo).toHaveBeenCalledWith(
+      'main',
+      'signin browser flow started',
+      expect.objectContaining({
+        taskId: 'task-1',
+        reason: 'api_failed',
+      }),
+    );
   });
 
   it('requests intervention when api and browser both fail', async () => {
@@ -137,6 +178,9 @@ describe('AliyunDriveSigninProvider', () => {
       } as never,
       fallback: {
         run: fallbackRun,
+      },
+      logService: {
+        info: logInfo,
       },
     });
 
@@ -183,6 +227,9 @@ describe('AliyunDriveSigninProvider', () => {
       } as never,
       fallback: {
         run: fallbackRun,
+      },
+      logService: {
+        info: logInfo,
       },
     });
 
@@ -242,6 +289,9 @@ describe('AliyunDriveSigninProvider', () => {
       } as never,
       fallback: {
         run: fallbackRun,
+      },
+      logService: {
+        info: logInfo,
       },
     });
 

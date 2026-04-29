@@ -77,4 +77,56 @@ describe('AliyunDriveApiFallback', () => {
       failureReason: 'api_token_invalid',
     });
   });
+
+  it('uses captured access token directly before trying refresh token', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          success: true,
+          result: {
+            signInCount: 7,
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        json: async () => ({
+          success: true,
+          result: {
+            name: '7天奖励',
+            description: '领取成功',
+          },
+        }),
+      });
+
+    const fallback = new AliyunDriveApiFallback({
+      fetch: fetchMock as typeof fetch,
+    });
+
+    const result = await fallback.run({
+      accessToken: 'captured-access-token',
+      refreshToken: 'rt-demo',
+    });
+
+    expect(result).toMatchObject({
+      status: 'success',
+      strategyUsed: 'api-fallback',
+      detail: expect.stringContaining('本月累计签到 7 天'),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://member.aliyundrive.com/v1/activity/sign_in_list',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'captured-access-token',
+        }),
+      }),
+    );
+  });
 });

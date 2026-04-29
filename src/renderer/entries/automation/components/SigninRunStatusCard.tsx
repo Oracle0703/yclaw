@@ -37,6 +37,27 @@ export function SigninRunStatusCard(props: SigninRunStatusCardProps) {
               />
             ) : null}
 
+            {summary.reward ? (
+              <Space direction="vertical" size={4}>
+                {typeof summary.reward.earnedBeans === 'number' ? (
+                  <Typography.Text>
+                    本次获得：{summary.reward.earnedBeans} 京豆
+                  </Typography.Text>
+                ) : null}
+                {typeof summary.reward.balance === 'number' ? (
+                  <Typography.Text>
+                    当前余额：{summary.reward.balance} 京豆
+                  </Typography.Text>
+                ) : null}
+                {summary.reward.balanceStr ? (
+                  <Typography.Text>余额显示：{summary.reward.balanceStr}</Typography.Text>
+                ) : null}
+                {summary.reward.detailText ? (
+                  <Typography.Text>最近明细：{summary.reward.detailText}</Typography.Text>
+                ) : null}
+              </Space>
+            ) : null}
+
             {summary.debug ? (
               <Space direction="vertical" size={4}>
                 {summary.debug.pageTitle ? (

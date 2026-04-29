@@ -32,7 +32,7 @@ describe('SigninTaskService', () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     getTaskDetail.mockReturnValue(signinTask);
     listSessions.mockReturnValue([
       {
@@ -70,6 +70,7 @@ describe('SigninTaskService', () => {
 
     expect(runProvider).toHaveBeenCalledWith({
       taskId: 'task-signin-1',
+      site: 'aliyundrive',
       sessionPartition: 'persist:session_1',
       entryUrl: 'https://www.aliyundrive.com/',
       refreshToken: 'rt-demo',
@@ -89,6 +90,114 @@ describe('SigninTaskService', () => {
       expect.objectContaining({
         taskId: 'task-signin-1',
         status: 'success',
+      }),
+    );
+  });
+
+  it('passes the sign-in site to the provider and preserves reward details', async () => {
+    const jdSigninTask: TaskFlow = {
+      ...signinTask,
+      id: 'task-jd-1',
+      name: '京东签到',
+      kind: 'jd-signin',
+      entryUrl: 'https://interact.jd.com/',
+      signin: {
+        ...signinTask.signin!,
+        site: 'jd',
+        refreshToken: null,
+      },
+    };
+    getTaskDetail.mockReturnValueOnce(jdSigninTask);
+    runProvider.mockResolvedValueOnce({
+      status: 'success',
+      strategyUsed: 'browser',
+      detail: '京东签到成功，本次获得 2 京豆，当前余额 2 京豆',
+      reward: {
+        earnedBeans: 2,
+        balance: 2,
+        balanceStr: '0.02',
+      },
+    });
+
+    const service = new SigninTaskService({
+      taskService: { getTaskDetail },
+      sessionRegistry: { listSessions },
+      provider: { run: runProvider },
+      scheduler: { scheduleRetry },
+      notificationService: { notify },
+      runRepository: {
+        saveRun,
+        getLatestRun: getPersistedLatestRun,
+        listRuns: listPersistedRuns,
+      },
+    });
+
+    const result = await service.runTask('task-jd-1');
+
+    expect(runProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-jd-1',
+        site: 'jd',
+        entryUrl: 'https://interact.jd.com/',
+      }),
+    );
+    expect(result).toMatchObject({
+      status: 'success',
+      reward: {
+        earnedBeans: 2,
+        balance: 2,
+        balanceStr: '0.02',
+      },
+    });
+    expect(saveRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reward: {
+          earnedBeans: 2,
+          balance: 2,
+          balanceStr: '0.02',
+        },
+      }),
+    );
+  });
+
+  it('treats legacy tasks with JD entry URL as JD sign-in even when site was saved incorrectly', async () => {
+    getTaskDetail.mockReturnValueOnce({
+      ...signinTask,
+      id: 'task-legacy-jd',
+      kind: 'aliyundrive-signin',
+      entryUrl: 'https://interact.jd.com/',
+      signin: {
+        ...signinTask.signin!,
+        site: 'aliyundrive',
+        refreshToken: null,
+      },
+    });
+    runProvider.mockResolvedValueOnce({
+      status: 'success',
+      strategyUsed: 'api-fallback',
+      detail: '京东今日已签到，当前余额 2 京豆',
+    });
+
+    const service = new SigninTaskService({
+      taskService: { getTaskDetail },
+      sessionRegistry: { listSessions },
+      provider: { run: runProvider },
+      scheduler: { scheduleRetry },
+      notificationService: { notify },
+      runRepository: {
+        saveRun,
+        getLatestRun: getPersistedLatestRun,
+        listRuns: listPersistedRuns,
+      },
+    });
+
+    await service.runTask('task-legacy-jd');
+
+    expect(runProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-legacy-jd',
+        site: 'jd',
+        entryUrl: 'https://interact.jd.com/',
       }),
     );
   });

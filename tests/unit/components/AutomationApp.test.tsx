@@ -194,7 +194,7 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
       sessionId?: string | null;
       enabled?: boolean;
       signin?: {
-        site: 'aliyundrive';
+        site: 'jd';
         mode: 'browser-first-api-fallback' | 'api-first-browser-fallback';
         fallbackApiEnabled: boolean;
         refreshToken?: string | null;
@@ -210,7 +210,7 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
       sessionId: string | null;
       enabled: boolean;
       signin: {
-        site: 'aliyundrive';
+        site: 'jd';
         mode: 'browser-first-api-fallback' | 'api-first-browser-fallback';
         fallbackApiEnabled: boolean;
         refreshToken: string | null;
@@ -227,14 +227,14 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
           onClick={() =>
             void onCaptureLogin({
               taskId: taskId ?? null,
-              name: initialTaskName ?? '阿里云盘签到',
-              entryUrl: initialValue?.entryUrl ?? 'https://www.aliyundrive.com/',
+              name: initialTaskName ?? '京东签到',
+              entryUrl: initialValue?.entryUrl ?? 'https://interact.jd.com/',
               sessionId: initialValue?.sessionId ?? null,
               enabled: initialValue?.enabled ?? true,
               signin: {
-                site: 'aliyundrive',
-                mode: initialValue?.signin?.mode ?? 'api-first-browser-fallback',
-                fallbackApiEnabled: initialValue?.signin?.fallbackApiEnabled ?? true,
+                site: 'jd',
+                mode: initialValue?.signin?.mode ?? 'browser-first-api-fallback',
+                fallbackApiEnabled: initialValue?.signin?.fallbackApiEnabled ?? false,
                 refreshToken: initialValue?.signin?.refreshToken ?? null,
                 maxRetryPerDay: initialValue?.signin?.maxRetryPerDay ?? 1,
                 manualInterventionEnabled: true,
@@ -250,8 +250,8 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
         onClick={() =>
           onSubmit({
             taskId: taskId ?? null,
-            name: '阿里云盘签到',
-            entryUrl: 'https://www.aliyundrive.com/',
+            name: '京东签到',
+            entryUrl: 'https://interact.jd.com/',
           })
         }
       >
@@ -581,19 +581,19 @@ describe('Automation App', () => {
     });
   });
 
-  it('renders sign-in panels for aliyundrive tasks and routes actions through sign-in IPC channels', async () => {
+  it('renders sign-in panels for JD tasks and routes actions through sign-in IPC channels', async () => {
     invokeMock.mockImplementation((channel: string, payload?: { taskId?: string; name?: string; entryUrl?: string }) => {
       if (channel === IPC_CHANNELS.TASK_GET) {
         return Promise.resolve({
           id: 'task-signin-1',
-          name: '阿里云盘签到',
-          kind: 'aliyundrive-signin',
+          name: '京东签到',
+          kind: 'jd-signin',
           steps: [],
-          entryUrl: 'https://www.aliyundrive.com/',
+          entryUrl: 'https://interact.jd.com/',
           signin: {
-            site: 'aliyundrive',
+            site: 'jd',
             mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: true,
+            fallbackApiEnabled: false,
             maxRetryPerDay: 2,
             manualInterventionEnabled: true,
           },
@@ -623,14 +623,14 @@ describe('Automation App', () => {
       if (channel === IPC_CHANNELS.SIGNIN_TASK_SAVE) {
         return Promise.resolve({
           id: payload?.taskId ?? 'task-signin-1',
-          name: payload?.name ?? '阿里云盘签到',
-          kind: 'aliyundrive-signin',
+          name: payload?.name ?? '京东签到',
+          kind: 'jd-signin',
           steps: [],
-          entryUrl: payload?.entryUrl ?? 'https://www.aliyundrive.com/',
+          entryUrl: payload?.entryUrl ?? 'https://interact.jd.com/',
           signin: {
-            site: 'aliyundrive',
+            site: 'jd',
             mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: true,
+            fallbackApiEnabled: false,
             maxRetryPerDay: 2,
             manualInterventionEnabled: true,
           },
@@ -648,7 +648,11 @@ describe('Automation App', () => {
       }
       if (channel === IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE) {
         return Promise.resolve({
-          refreshToken: 'rt-captured',
+          refreshToken: null,
+          userName: '京东账号',
+          localStorageSnapshot: {
+            area: '22_1930',
+          },
           timedOut: false,
         });
       }
@@ -679,8 +683,8 @@ describe('Automation App', () => {
         IPC_CHANNELS.SIGNIN_TASK_SAVE,
         expect.objectContaining({
           taskId: 'task-signin-1',
-          name: '阿里云盘签到',
-          entryUrl: 'https://www.aliyundrive.com/',
+          name: '京东签到',
+          entryUrl: 'https://interact.jd.com/',
         }),
       );
       expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_RUN_NOW, {
@@ -700,14 +704,14 @@ describe('Automation App', () => {
       if (channel === IPC_CHANNELS.SIGNIN_TASK_SAVE) {
         return Promise.resolve({
           id: payload?.taskId ?? 'task-signin-new',
-          name: payload?.name ?? '阿里云盘签到',
-          kind: 'aliyundrive-signin',
+          name: payload?.name ?? '京东签到',
+          kind: 'jd-signin',
           steps: [],
-          entryUrl: payload?.entryUrl ?? 'https://www.aliyundrive.com/',
+          entryUrl: payload?.entryUrl ?? 'https://interact.jd.com/',
           signin: {
-            site: 'aliyundrive',
-            mode: 'api-first-browser-fallback',
-            fallbackApiEnabled: true,
+            site: 'jd',
+            mode: 'browser-first-api-fallback',
+            fallbackApiEnabled: false,
             maxRetryPerDay: 1,
             manualInterventionEnabled: true,
           },
@@ -717,7 +721,11 @@ describe('Automation App', () => {
       }
       if (channel === IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE) {
         return Promise.resolve({
-          refreshToken: 'rt-captured',
+          refreshToken: null,
+          userName: '京东账号',
+          localStorageSnapshot: {
+            area: '22_1930',
+          },
           timedOut: false,
         });
       }
@@ -743,7 +751,7 @@ describe('Automation App', () => {
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_SAVE, expect.objectContaining({
         taskId: null,
-        name: '阿里云盘签到',
+        name: '京东签到',
       }));
       expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, {
         taskId: 'task-signin-new',

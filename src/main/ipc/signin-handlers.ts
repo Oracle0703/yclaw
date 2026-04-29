@@ -157,11 +157,11 @@ function assertString(value: unknown, field: string): string {
 
 function normalizeTaskName(value: unknown): string {
   if (typeof value !== 'string') {
-    return '阿里云盘签到';
+    return '京东签到';
   }
 
   const normalized = value.trim();
-  return normalized.length > 0 ? normalized : '阿里云盘签到';
+  return normalized.length > 0 ? normalized : '京东签到';
 }
 
 function extractTaskId(value: unknown): string | null {

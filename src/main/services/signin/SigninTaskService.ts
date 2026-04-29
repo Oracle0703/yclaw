@@ -78,7 +78,7 @@ export class SigninTaskService {
 
   private async execute(taskId: string, manualRetry: boolean): Promise<SigninRunSummary> {
     const task = this.taskService.getTaskDetail(taskId);
-    if (!task || task.kind !== 'aliyundrive-signin' || !task.signin) {
+    if (!task || !task.kind?.endsWith('-signin') || !task.signin) {
       throw new Error(`Sign-in task "${taskId}" not found`);
     }
 
@@ -88,10 +88,12 @@ export class SigninTaskService {
       this.retryCounts.set(taskId, nextRetryCount);
     }
 
+    const resolvedSite = resolveSigninSite(task);
     const result = await this.provider.run({
       taskId,
+      site: resolvedSite,
       sessionPartition: this.resolveSessionPartition(task.sessionId),
-      entryUrl: task.entryUrl ?? 'https://www.aliyundrive.com/',
+      entryUrl: task.entryUrl ?? resolveDefaultEntryUrl(resolvedSite),
       refreshToken: task.signin.refreshToken ?? null,
       browserFallbackEnabled: task.signin.fallbackApiEnabled,
       maxRetryPerDay: task.signin.maxRetryPerDay,
@@ -106,6 +108,7 @@ export class SigninTaskService {
       failureReason: result.failureReason,
       detail: result.detail,
       debug: result.debug,
+      reward: result.reward,
       runAt: new Date().toISOString(),
       retryCount: result.status === 'retry_scheduled'
         ? existingRetryCount + 1
@@ -158,4 +161,16 @@ export class SigninTaskService {
     this.retryCounts.set(taskId, persisted.retryCount);
     return persisted.retryCount;
   }
+}
+
+function resolveSigninSite(task: TaskFlow): NonNullable<TaskFlow['signin']>['site'] {
+  const entryUrl = task.entryUrl ?? '';
+  if (/https?:\/\/(?:[^/]+\.)?jd\.com(?:\/|$)/i.test(entryUrl) || entryUrl.includes('interact.jd.com')) {
+    return 'jd';
+  }
+  return task.signin?.site ?? 'aliyundrive';
+}
+
+function resolveDefaultEntryUrl(site: NonNullable<TaskFlow['signin']>['site']): string {
+  return site === 'jd' ? 'https://interact.jd.com/' : 'https://www.aliyundrive.com/';
 }

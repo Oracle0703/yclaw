@@ -1,4 +1,6 @@
-export type SigninTaskKind = 'aliyundrive-signin';
+export type SigninSite = 'aliyundrive' | 'jd';
+
+export type SigninTaskKind = 'aliyundrive-signin' | 'jd-signin';
 
 export type SigninFailureReason =
   | 'session_expired'
@@ -43,7 +45,7 @@ export interface SigninLoginSnapshot {
 }
 
 export interface SigninTaskConfig extends SigninLoginSnapshot {
-  site: 'aliyundrive';
+  site: SigninSite;
   mode: 'api-first-browser-fallback' | 'browser-first-api-fallback';
   fallbackApiEnabled: boolean;
   maxRetryPerDay: number;
@@ -70,8 +72,16 @@ export interface SigninRunSummary {
   failureReason?: SigninFailureReason;
   detail?: string;
   debug?: SigninDebugSnapshot;
+  reward?: SigninRewardSummary;
   runAt: string;
   retryCount: number;
+}
+
+export interface SigninRewardSummary {
+  earnedBeans?: number;
+  balance?: number;
+  balanceStr?: string;
+  detailText?: string;
 }
 
 export interface EmailNotificationConfig {

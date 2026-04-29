@@ -1,4 +1,10 @@
-export type { IpcResponse, WindowOpenParams, LogWriteParams, ElectronAPI, AlertRecord } from './ipc';
+export type {
+  IpcResponse,
+  WindowOpenParams,
+  LogWriteParams,
+  ElectronAPI,
+  AlertRecord,
+} from './ipc';
 export type { AlertLevel, AlertStatus } from './ipc';
 export type { PluginManifest, PluginRegistryEntry } from './plugin';
 export { PluginStatus } from './plugin';
@@ -28,9 +34,17 @@ export { TaskStatus } from './task';
 export type { ActionType } from './task';
 export type { OHLCVData, DataSourceConfig, IndicatorParams, IndicatorResult } from './stock';
 export type { IndicatorType } from './stock';
-export type { AppConfig, GeneralConfig, ModuleConfig, PluginConfig } from './config';
+export type {
+  AppConfig,
+  AppearanceConfig,
+  BackgroundConfig,
+  GeneralConfig,
+  ModuleConfig,
+  PluginConfig,
+} from './config';
 export type {
   SigninTaskKind,
+  SigninSite,
   SigninFailureReason,
   SigninRunStatus,
   SigninCaptureDiagnostics,
@@ -38,6 +52,7 @@ export type {
   SigninTaskConfig,
   SigninDebugSnapshot,
   SigninRunSummary,
+  SigninRewardSummary,
   EmailNotificationConfig,
 } from './signin';
 export type {
@@ -104,7 +119,19 @@ export type {
   McpClientServerConfig,
   McpClientServerStatus,
 } from './ai';
-export type { Tab, BrowserSession, FlowRunnerStatus, InterventionState } from './browser';
+export type {
+  Tab,
+  BrowserSession,
+  FlowRunnerStatus,
+  InterventionState,
+  RecorderSitePreset,
+  RecorderStartOptions,
+  InvestigationNetworkRecord,
+  InvestigationStorageSnapshot,
+  InvestigationCookie,
+  ApiReplayDraft,
+  InvestigationRecordingResult,
+} from './browser';
 export type {
   WorkspaceMemberRole,
   WorkspaceMemberStatus,

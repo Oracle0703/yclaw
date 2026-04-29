@@ -270,10 +270,11 @@ export class TaskService {
     const id = randomUUID();
     const now = new Date().toISOString();
     const resolvedName = payload.name.trim() || '未命名任务';
+    const kind = payload.signin ? resolveSigninKind(payload.signin.site) : (payload.kind ?? 'generic');
     const flow: TaskFlow = {
       id,
       name: resolvedName,
-      kind: payload.signin ? 'aliyundrive-signin' : (payload.kind ?? 'generic'),
+      kind,
       description: payload.description,
       steps: (payload.steps ?? []) as TaskFlow['steps'],
       entryUrl: payload.entryUrl,
@@ -291,10 +292,10 @@ export class TaskService {
       name: resolvedName,
       description: payload.description,
       flowJson: JSON.stringify({
-        steps: flow.steps,
-        entryUrl: flow.entryUrl,
-        kind: flow.kind ?? 'generic',
-        signin: flow.signin ?? null,
+            steps: flow.steps,
+            entryUrl: flow.entryUrl,
+            kind: flow.kind ?? 'generic',
+            signin: flow.signin ?? null,
       }),
       scheduleJson: payload.schedule ? JSON.stringify(payload.schedule) : null,
       sessionId: payload.sessionId ?? null,
@@ -328,7 +329,9 @@ export class TaskService {
         ? JSON.stringify({
             steps: payload.steps ?? existing.steps,
             entryUrl: payload.entryUrl ?? existing.entryUrl,
-            kind: payload.signin ? 'aliyundrive-signin' : (payload.kind ?? existing.kind ?? 'generic'),
+            kind: payload.signin
+              ? resolveSigninKind(payload.signin.site)
+              : (payload.kind ?? existing.kind ?? 'generic'),
             signin: payload.signin ?? existing.signin ?? null,
           })
         : undefined;
@@ -416,4 +419,8 @@ export class TaskService {
     this.taskRepository.updateTaskStatus(taskId, status);
     this.eventBus.emit(EVENTS.TASK_STATUS_CHANGED, { flowId, taskId, status });
   }
+}
+
+function resolveSigninKind(site: NonNullable<TaskFlow['signin']>['site']): NonNullable<TaskFlow['kind']> {
+  return site === 'jd' ? 'jd-signin' : 'aliyundrive-signin';
 }

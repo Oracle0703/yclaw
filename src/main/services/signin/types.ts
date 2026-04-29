@@ -1,12 +1,15 @@
 import type {
   SigninDebugSnapshot,
   SigninFailureReason,
+  SigninRewardSummary,
   SigninRunStatus,
+  SigninSite,
   SigninTaskConfig,
 } from '@shared/types';
 
 export interface SigninExecutionContext {
   taskId: string;
+  site: SigninSite;
   sessionPartition: string;
   entryUrl: string;
   refreshToken?: string | null;
@@ -20,6 +23,7 @@ export interface SigninProviderResult {
   failureReason?: SigninFailureReason;
   detail?: string;
   debug?: SigninDebugSnapshot;
+  reward?: SigninRewardSummary;
 }
 
 export interface BrowserSigninGateway {
@@ -29,6 +33,17 @@ export interface BrowserSigninGateway {
   }): Promise<{ tabId: number; webContentsId: number }>;
   executeJavaScript(script: string, tabId: number): Promise<unknown>;
   captureDebugContext?(tabId: number): Promise<SigninDebugSnapshot | undefined>;
+  fetchWithSession?(input: {
+    sessionPartition: string;
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+  }): Promise<{
+    ok: boolean;
+    status: number;
+    text(): Promise<string>;
+  }>;
 }
 
 export interface SigninFallbackGateway {

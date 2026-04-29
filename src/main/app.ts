@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, session } from 'electron';
 import type { WebContents } from 'electron';
 import { WindowManager } from './windows/WindowManager';
 import { IpcController } from './ipc/IpcController';
@@ -118,6 +118,7 @@ import type {
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { AliyunDriveApiFallback } from './services/signin/AliyunDriveApiFallback';
 import { AliyunDriveSigninProvider } from './services/signin/AliyunDriveSigninProvider';
+import { JdSigninProvider } from './services/signin/JdSigninProvider';
 import { EmailNotifier } from './services/signin/EmailNotifier';
 import { NotificationService } from './services/signin/NotificationService';
 import { SigninTaskService } from './services/signin/SigninTaskService';
@@ -173,6 +174,7 @@ export class App {
   private notificationService: NotificationService;
   private signinTaskService: SigninTaskService;
   private signinPreviewWindow: BrowserWindow | null = null;
+  private browserRecorderWindow: BrowserWindow | null = null;
   private dataCenterService: DataCenterService;
   private dataQualityService: DataQualityService;
   private dataExportService: DataExportService;
@@ -331,32 +333,63 @@ export class App {
       emailNotifier,
       configService: this.configService,
     });
+    const signinBrowserGateway = {
+      openSessionPage: async ({ sessionPartition, url }: {
+        sessionPartition: string;
+        url: string;
+      }) => {
+        const view = this.tabManager.getOrCreateTabBySession(sessionPartition, 'about:blank');
+        // 关键：把 WebContentsView 挂到一个真实可见的 BrowserWindow，否则
+        // chromium 认为 viewport 0x0 / visibilityState=hidden，阿里云盘等
+        // 依赖懒加载/IntersectionObserver 的活动区根本不会渲染，签到 JS
+        // 会找不到 "精选活动" DOM 节点（failureReason: activity_not_found）。
+        // 同时这也满足 "立即执行能看到具体页面" 的诉求。
+        this.attachToSigninPreviewWindow(view);
+        await view.webContents.loadURL(url);
+        await this.waitForSigninSurfaceVisible(view.webContents.id, url);
+        return {
+          tabId: view.webContents.id,
+          webContentsId: view.webContents.id,
+        };
+      },
+      executeJavaScript: async (script: string, tabId: number) =>
+        this.tabManager.executeJavaScript(script, tabId),
+      captureDebugContext: async (tabId: number) => this.captureSigninDebugContext(tabId),
+      fetchWithSession: async ({ sessionPartition, url, method, headers, body }: {
+        sessionPartition: string;
+        url: string;
+        method?: string;
+        headers?: Record<string, string>;
+        body?: string;
+      }) => {
+        const targetSession = sessionPartition === 'default'
+          ? session.defaultSession
+          : session.fromPartition(sessionPartition);
+        return targetSession.fetch(url, {
+          method,
+          headers,
+          body,
+        });
+      },
+    };
+    const aliyunSigninProvider = new AliyunDriveSigninProvider({
+      browser: signinBrowserGateway,
+      fallback: new AliyunDriveApiFallback(),
+      logService: this.logService,
+    });
+    const jdSigninProvider = new JdSigninProvider({
+      browser: signinBrowserGateway,
+      logService: this.logService,
+    });
     this.signinTaskService = new SigninTaskService({
       taskService: this.taskService,
       runRepository: signinRunRepository,
       sessionRegistry: this.sessionRegistry,
-      provider: new AliyunDriveSigninProvider({
-        browser: {
-          openSessionPage: async ({ sessionPartition, url }) => {
-            const view = this.tabManager.getOrCreateTabBySession(sessionPartition, 'about:blank');
-            // 关键：把 WebContentsView 挂到一个真实可见的 BrowserWindow，否则
-            // chromium 认为 viewport 0x0 / visibilityState=hidden，阿里云盘等
-            // 依赖懒加载/IntersectionObserver 的活动区根本不会渲染，签到 JS
-            // 会找不到 "精选活动" DOM 节点（failureReason: activity_not_found）。
-            // 同时这也满足 "立即执行能看到具体页面" 的诉求。
-            this.attachToSigninPreviewWindow(view);
-            await view.webContents.loadURL(url);
-            return {
-              tabId: view.webContents.id,
-              webContentsId: view.webContents.id,
-            };
-          },
-          executeJavaScript: async (script, tabId) =>
-            this.tabManager.executeJavaScript(script, tabId),
-          captureDebugContext: async (tabId) => this.captureSigninDebugContext(tabId),
-        },
-        fallback: new AliyunDriveApiFallback(),
-      }),
+      provider: {
+        run: (context) => context.site === 'jd'
+          ? jdSigninProvider.run(context)
+          : aliyunSigninProvider.run(context),
+      },
       scheduler: this.schedulerService,
       notificationService: this.notificationService,
     });
@@ -567,6 +600,10 @@ export class App {
       const { taskId } = (payload as { taskId?: string }) ?? {};
       if (typeof taskId !== 'string' || taskId.length === 0) {
         throw new Error('taskId is required');
+      }
+      const task = this.taskService.getTaskDetail(taskId);
+      if (this.isJdSigninTask(task)) {
+        return this.captureJdLoginState(taskId);
       }
       return this.captureAliyunDriveLoginToken(taskId);
     });
@@ -963,8 +1000,15 @@ export class App {
     });
 
     this.ipcController.handle(IPC_CHANNELS.RECORDER_START, async (params: unknown) => {
-      const { tabId } = (params as { tabId?: number }) ?? {};
-      return this.tabManager.startRecorder(tabId);
+      const { tabId, options } = (params as {
+        tabId?: number;
+        options?: Parameters<TabManager['startRecorder']>[1];
+      }) ?? {};
+      const view = this.tabManager.getView(tabId);
+      if (view) {
+        this.attachToBrowserRecorderWindow(view);
+      }
+      return this.tabManager.startRecorder(tabId, options);
     });
 
     this.ipcController.handle(IPC_CHANNELS.RECORDER_STOP, async (params: unknown) => {
@@ -1019,6 +1063,7 @@ export class App {
     this.ipcController.handle(IPC_CHANNELS.BROWSER_CREATE_TAB, (params: unknown) => {
       const { url } = (params as { url?: string }) ?? {};
       const view = this.tabManager.createTab(url);
+      this.attachToBrowserRecorderWindow(view);
       const tabInfo = this.tabManager.getTabInfo(view.webContents.id);
       if (!tabInfo) {
         throw new Error('Failed to create browser tab');
@@ -1037,6 +1082,10 @@ export class App {
 
     this.ipcController.handle(IPC_CHANNELS.BROWSER_NAVIGATE, (params: unknown) => {
       const { tabId, url } = params as { tabId: number; url: string };
+      const view = this.tabManager.getView(tabId);
+      if (view) {
+        this.attachToBrowserRecorderWindow(view);
+      }
       this.tabManager.navigate(url, tabId);
     });
 
@@ -1165,7 +1214,7 @@ export class App {
 
   private async executeTask(taskId: string, tabId?: number): Promise<unknown> {
     const task = this.taskService.getTaskDetail(taskId);
-    if (task?.kind === 'aliyundrive-signin') {
+    if (task?.kind?.endsWith('-signin')) {
       return this.signinTaskService.runTask(taskId);
     }
 
@@ -1224,6 +1273,118 @@ export class App {
     } else {
       previewWindow.focus();
     }
+  }
+
+  /**
+   * `/browser` 的录制目标必须挂到真实 BrowserWindow 上，否则页面会停留在
+   * 隐藏 WebContentsView 状态，用户看不到也无法操作。
+   */
+  private attachToBrowserRecorderWindow(view: import('electron').WebContentsView): void {
+    let win = this.browserRecorderWindow;
+    if (!win || win.isDestroyed()) {
+      win = new BrowserWindow({
+        width: 1280,
+        height: 860,
+        title: '浏览器录制窗口',
+        autoHideMenuBar: true,
+      });
+      win.on('closed', () => {
+        this.browserRecorderWindow = null;
+      });
+      this.browserRecorderWindow = win;
+    }
+
+    const recorderWindow = win;
+    const children = recorderWindow.contentView.children ?? [];
+    for (const existing of children) {
+      if (existing !== view) {
+        try {
+          recorderWindow.contentView.removeChildView(existing);
+        } catch {
+          /* noop */
+        }
+      }
+    }
+    if (!children.includes(view)) {
+      recorderWindow.contentView.addChildView(view);
+    }
+
+    const applyBounds = () => {
+      const bounds = recorderWindow.getContentBounds();
+      view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+    };
+    applyBounds();
+    recorderWindow.removeAllListeners('resize');
+    recorderWindow.on('resize', applyBounds);
+
+    if (!recorderWindow.isVisible()) {
+      recorderWindow.show();
+    } else {
+      recorderWindow.focus();
+    }
+  }
+
+  private async waitForSigninSurfaceVisible(tabId: number, url: string): Promise<void> {
+    const timeoutMs = 10_000;
+    const intervalMs = 150;
+    const deadline = Date.now() + timeoutMs;
+    let lastSnapshot:
+      | {
+        readyState?: string;
+        visibilityState?: string;
+        viewport?: string;
+      }
+      | undefined;
+
+    while (Date.now() <= deadline) {
+      try {
+        const snapshot = await this.tabManager.executeJavaScript(
+          `
+          (() => {
+            const readyState =
+              typeof document.readyState === 'string' ? document.readyState : undefined;
+            const visibilityState =
+              typeof document.visibilityState === 'string' ? document.visibilityState : undefined;
+            const viewport =
+              typeof window.innerWidth === 'number' && typeof window.innerHeight === 'number'
+                ? window.innerWidth + 'x' + window.innerHeight
+                : undefined;
+            return {
+              readyState,
+              visibilityState,
+              viewport,
+            };
+          })();
+          `,
+          tabId,
+        ) as {
+          readyState?: string;
+          visibilityState?: string;
+          viewport?: string;
+        } | null;
+
+        lastSnapshot = snapshot ?? undefined;
+        const readyState = snapshot?.readyState ?? '';
+        const visibilityState = snapshot?.visibilityState ?? '';
+        const viewport = snapshot?.viewport ?? '';
+        const [width, height] = viewport.split('x').map((value) => Number.parseInt(value, 10));
+        const hasViewport = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
+
+        if (readyState !== 'loading' && visibilityState === 'visible' && hasViewport) {
+          return;
+        }
+      } catch {
+        // 页面跳转 / 渲染切换过程中 executeJavaScript 可能短暂失败，继续轮询。
+      }
+
+      await new Promise<void>((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    this.logService.warn('main', 'signin preview visibility wait timed out', {
+      tabId,
+      url,
+      ...lastSnapshot,
+    });
   }
 
   /**
@@ -1490,6 +1651,213 @@ export class App {
       });
       throw error;
     }
+  }
+
+  private isJdSigninTask(task: ReturnType<TaskService['getTaskDetail']>): boolean {
+    if (!task?.signin) {
+      return false;
+    }
+    const entryUrl = task.entryUrl ?? '';
+    return task.signin.site === 'jd' ||
+      task.kind === 'jd-signin' ||
+      entryUrl.includes('jd.com') ||
+      entryUrl.includes('interact.jd.com');
+  }
+
+  private resolveTaskSessionPartition(sessionId: string | null | undefined): string {
+    if (!sessionId) {
+      return 'default';
+    }
+    return this.sessionRegistry.listSessions().find((item) => item.id === sessionId)?.partition
+      ?? 'default';
+  }
+
+  private async captureJdLoginState(taskId: string): Promise<{
+    refreshToken: string | null;
+    userName?: string | null;
+    localStorageSnapshot?: Record<string, string> | null;
+    captureDiagnostics?: {
+      pageUrl?: string | null;
+      pageTitle?: string | null;
+      localStorageKeys?: string[];
+      sessionStorageKeys?: string[];
+      cookieDomains?: string[];
+      networkResponseCount?: number;
+      tokenHintResponseUrls?: string[];
+    } | null;
+    timedOut: boolean;
+  }> {
+    const task = this.taskService.getTaskDetail(taskId);
+    if (!task || !task.signin || !this.isJdSigninTask(task)) {
+      throw new Error(`JD sign-in task "${taskId}" not found`);
+    }
+
+    const sessionPartition = this.resolveTaskSessionPartition(task.sessionId);
+    const loginUrl = 'https://passport.jd.com/new/login.aspx?ReturnUrl=https%3A%2F%2Finteract.jd.com%2F';
+    const captureContext = {
+      taskId,
+      taskName: task.name,
+      sessionId: task.sessionId ?? null,
+      sessionPartition,
+      loginUrl,
+    };
+    this.logService.info('main', 'jd signin login capture started', captureContext);
+
+    try {
+      const view = this.tabManager.getOrCreateTabBySession(sessionPartition, 'about:blank');
+      this.attachToSigninPreviewWindow(view);
+      await view.webContents.loadURL(loginUrl);
+
+      const targetSession = sessionPartition === 'default'
+        ? session.defaultSession
+        : session.fromPartition(sessionPartition);
+      const deadline = Date.now() + 5 * 60 * 1000;
+      const pollIntervalMs = 1500;
+
+      while (Date.now() < deadline) {
+        if (view.webContents.isDestroyed()) break;
+        const cookies = await targetSession.cookies.get({});
+        const hasJdLoginCookie = cookies.some((cookie) =>
+          ['pin', 'thor', 'pt_key', 'pt_pin'].includes(cookie.name) &&
+          /(^|\.)jd\.com$/.test((cookie.domain ?? '').replace(/^\./, '')),
+        );
+        if (hasJdLoginCookie) {
+          const snapshot = await this.collectPageStorageSnapshot(view.webContents);
+          this.taskService.updateTaskFlow(taskId, {
+            entryUrl: 'https://interact.jd.com/',
+            signin: {
+              ...task.signin,
+              site: 'jd',
+              mode: 'browser-first-api-fallback',
+              fallbackApiEnabled: false,
+              refreshToken: null,
+              userName: snapshot.userName,
+              localStorageSnapshot: snapshot.localStorageSnapshot,
+              captureDiagnostics: {
+                pageUrl: snapshot.pageUrl,
+                pageTitle: snapshot.pageTitle,
+                localStorageKeys: Object.keys(snapshot.localStorageSnapshot ?? {}),
+                sessionStorageKeys: snapshot.sessionStorageKeys,
+                cookieDomains: normalizeCookieDomains(cookies),
+                networkResponseCount: 0,
+                tokenHintResponseUrls: [],
+              },
+            },
+          });
+
+          this.logService.info('main', 'jd signin login capture succeeded', {
+            ...captureContext,
+            userName: snapshot.userName,
+            cookieCount: cookies.length,
+          });
+
+          const previewWindow = this.signinPreviewWindow;
+          if (previewWindow && !previewWindow.isDestroyed()) {
+            previewWindow.close();
+          }
+
+          return {
+            refreshToken: null,
+            userName: snapshot.userName,
+            localStorageSnapshot: snapshot.localStorageSnapshot,
+            captureDiagnostics: {
+              pageUrl: snapshot.pageUrl,
+              pageTitle: snapshot.pageTitle,
+              localStorageKeys: Object.keys(snapshot.localStorageSnapshot ?? {}),
+              sessionStorageKeys: snapshot.sessionStorageKeys,
+              cookieDomains: normalizeCookieDomains(cookies),
+              networkResponseCount: 0,
+              tokenHintResponseUrls: [],
+            },
+            timedOut: false,
+          };
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, pollIntervalMs));
+      }
+
+      return {
+        refreshToken: null,
+        captureDiagnostics: await this.collectGenericCaptureDiagnostics(view.webContents),
+        timedOut: true,
+      };
+    } catch (error) {
+      this.logService.error('main', 'jd signin login capture failed', {
+        ...captureContext,
+        error: this.serializeErrorForLog(error),
+      });
+      throw error;
+    }
+  }
+
+  private async collectPageStorageSnapshot(webContents: WebContents): Promise<{
+    pageUrl: string | null;
+    pageTitle: string | null;
+    userName: string | null;
+    localStorageSnapshot: Record<string, string>;
+    sessionStorageKeys: string[];
+  }> {
+    try {
+      return await webContents.executeJavaScript(`
+        (() => {
+          const localStorageSnapshot = {};
+          for (let index = 0; index < window.localStorage.length; index += 1) {
+            const key = window.localStorage.key(index);
+            if (!key) continue;
+            const value = window.localStorage.getItem(key);
+            if (typeof value === 'string') localStorageSnapshot[key] = value;
+          }
+          const sessionStorageKeys = [];
+          for (let index = 0; index < window.sessionStorage.length; index += 1) {
+            const key = window.sessionStorage.key(index);
+            if (key) sessionStorageKeys.push(key);
+          }
+          const text = document.body?.innerText || '';
+          const userNameMatch = text.match(/我的京东\\s*返回京东首页|([^\\s]{1,24})\\s+我的订单/);
+          return {
+            pageUrl: location.href,
+            pageTitle: document.title,
+            userName: userNameMatch && userNameMatch[1] ? userNameMatch[1] : null,
+            localStorageSnapshot,
+            sessionStorageKeys,
+          };
+        })();
+      `) as {
+        pageUrl: string | null;
+        pageTitle: string | null;
+        userName: string | null;
+        localStorageSnapshot: Record<string, string>;
+        sessionStorageKeys: string[];
+      };
+    } catch {
+      return {
+        pageUrl: webContents.getURL() || null,
+        pageTitle: null,
+        userName: null,
+        localStorageSnapshot: {},
+        sessionStorageKeys: [],
+      };
+    }
+  }
+
+  private async collectGenericCaptureDiagnostics(webContents: WebContents): Promise<{
+    pageUrl?: string | null;
+    pageTitle?: string | null;
+    localStorageKeys?: string[];
+    sessionStorageKeys?: string[];
+    cookieDomains?: string[];
+    networkResponseCount?: number;
+    tokenHintResponseUrls?: string[];
+  }> {
+    const snapshot = await this.collectPageStorageSnapshot(webContents);
+    return {
+      pageUrl: snapshot.pageUrl,
+      pageTitle: snapshot.pageTitle,
+      localStorageKeys: Object.keys(snapshot.localStorageSnapshot ?? {}),
+      sessionStorageKeys: snapshot.sessionStorageKeys,
+      cookieDomains: [],
+      networkResponseCount: 0,
+      tokenHintResponseUrls: [],
+    };
   }
 
   private async attachAliyunDriveLoginNetworkCapture(webContents: WebContents): Promise<{
@@ -1929,6 +2297,15 @@ export class App {
       }
     }
     this.signinPreviewWindow = null;
+    const recorderWindow = this.browserRecorderWindow;
+    if (recorderWindow && !recorderWindow.isDestroyed()) {
+      try {
+        recorderWindow.close();
+      } catch {
+        /* noop */
+      }
+    }
+    this.browserRecorderWindow = null;
     this.ipcController.dispose();
     this.dataSourceManager.closeAll();
     this.databaseService.close();
@@ -2323,4 +2700,14 @@ export class App {
 
     return getRendererUrl(module);
   }
+}
+
+function normalizeCookieDomains(cookies: Array<{ domain?: string }>): string[] {
+  return Array.from(
+    new Set(
+      cookies
+        .map((cookie) => cookie.domain)
+        .filter((domain): domain is string => typeof domain === 'string' && domain.length > 0),
+    ),
+  ).sort();
 }

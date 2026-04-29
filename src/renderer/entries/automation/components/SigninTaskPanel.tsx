@@ -31,7 +31,7 @@ interface SigninTaskPanelProps {
   sessions: BrowserSession[];
   onSubmit: (payload: SigninTaskPanelSubmitPayload) => void | Promise<void>;
   /**
-   * 打开阿里云盘登录页采集登录态。返回值由调用方负责持久化与提示，
+   * 打开京东登录页采集登录态。返回值由调用方负责持久化与提示，
    * 此处只负责拿到结果后把登录态回填到表单。
    */
   onCaptureLogin?: (payload: SigninTaskPanelSubmitPayload) => Promise<(SigninLoginSnapshot & {
@@ -40,7 +40,8 @@ interface SigninTaskPanelProps {
   }) | null>;
 }
 
-const DEFAULT_ENTRY_URL = 'https://www.aliyundrive.com/';
+const DEFAULT_ENTRY_URL = 'https://interact.jd.com/';
+const DEFAULT_TASK_NAME = '京东签到';
 
 export function SigninTaskPanel(props: SigninTaskPanelProps) {
   const {
@@ -52,12 +53,13 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
     onCaptureLogin,
   } = props;
   const [taskName, setTaskName] = useState(initialTaskName ?? '');
-  const [entryUrl, setEntryUrl] = useState(initialValue?.entryUrl ?? DEFAULT_ENTRY_URL);
+  const [entryUrl, setEntryUrl] = useState(
+    initialValue?.signin?.site === 'jd' && initialValue.entryUrl
+      ? initialValue.entryUrl
+      : DEFAULT_ENTRY_URL,
+  );
   const [sessionId, setSessionId] = useState(initialValue?.sessionId ?? null);
   const [enabled, setEnabled] = useState(initialValue?.enabled ?? true);
-  const [fallbackApiEnabled, setFallbackApiEnabled] = useState(
-    initialValue?.signin?.fallbackApiEnabled ?? false,
-  );
   const [refreshToken, setRefreshToken] = useState(initialValue?.signin?.refreshToken ?? '');
   const [loginSnapshot, setLoginSnapshot] = useState<SigninLoginSnapshot>(
     pickLoginSnapshot(initialValue?.signin),
@@ -65,7 +67,8 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
   const [maxRetryPerDay, setMaxRetryPerDay] = useState(initialValue?.signin?.maxRetryPerDay ?? 1);
   const [capturing, setCapturing] = useState(false);
   const canCaptureLogin = typeof onCaptureLogin === 'function';
-  const resolvedTaskName = taskName.trim() || initialTaskName?.trim() || '阿里云盘签到';
+  const resolvedTaskName =
+    taskName.trim() || initialTaskName?.trim() || DEFAULT_TASK_NAME;
   const localStorageKeys = Object.keys(loginSnapshot.localStorageSnapshot ?? {});
   const captureDiagnostics = loginSnapshot.captureDiagnostics ?? null;
   const hasCapturedSnapshot =
@@ -85,12 +88,12 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
     sessionId,
     enabled,
     signin: {
-      site: 'aliyundrive',
-      mode: 'api-first-browser-fallback',
-      fallbackApiEnabled,
+      site: 'jd',
+      mode: 'browser-first-api-fallback',
+      fallbackApiEnabled: false,
       ...normalizeLoginSnapshot({
         ...loginSnapshot,
-        refreshToken,
+        refreshToken: null,
       }),
       maxRetryPerDay,
       manualInterventionEnabled: true,
@@ -99,10 +102,13 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
 
   useEffect(() => {
     setTaskName(initialTaskName ?? '');
-    setEntryUrl(initialValue?.entryUrl ?? DEFAULT_ENTRY_URL);
+    setEntryUrl(
+      initialValue?.signin?.site === 'jd' && initialValue.entryUrl
+        ? initialValue.entryUrl
+        : DEFAULT_ENTRY_URL,
+    );
     setSessionId(initialValue?.sessionId ?? null);
     setEnabled(initialValue?.enabled ?? true);
-    setFallbackApiEnabled(initialValue?.signin?.fallbackApiEnabled ?? false);
     setRefreshToken(initialValue?.signin?.refreshToken ?? '');
     setLoginSnapshot(pickLoginSnapshot(initialValue?.signin));
     setMaxRetryPerDay(initialValue?.signin?.maxRetryPerDay ?? 1);
@@ -111,13 +117,11 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
   const canSubmit = resolvedTaskName.length > 0 && entryUrl.trim().length > 0;
 
   return (
-    <ProCard className="yclaw-panel-card" title="阿里云盘签到配置">
+    <ProCard className="yclaw-panel-card" title="京东签到配置">
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         <Space wrap>
-          <Tag color="processing">AliyunDrive</Tag>
-          <Tag color={fallbackApiEnabled ? 'warning' : 'default'}>
-            {fallbackApiEnabled ? 'API 优先 + 页面补充' : '仅 API 签到'}
-          </Tag>
+          <Tag color="processing">JD</Tag>
+          <Tag color="warning">API 优先 + 浏览器补领</Tag>
           {hasCapturedSnapshot ? <Tag color="success">已采集</Tag> : null}
         </Space>
 
@@ -127,7 +131,7 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
             aria-label="任务名称"
             value={taskName}
             onChange={(event) => setTaskName(event.target.value)}
-            placeholder="例如：阿里云盘签到"
+            placeholder={`例如：${DEFAULT_TASK_NAME}`}
             style={{ display: 'block', width: '100%', marginTop: 6 }}
           />
         </label>
@@ -160,24 +164,9 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
           </select>
         </label>
 
-        <label>
-          <Typography.Text>Refresh Token</Typography.Text>
-          <textarea
-            aria-label="Refresh Token"
-            value={refreshToken}
-            onChange={(event) => {
-              const nextRefreshToken = event.target.value;
-              setRefreshToken(nextRefreshToken);
-              setLoginSnapshot((prev) => ({
-                ...prev,
-                refreshToken: nextRefreshToken,
-              }));
-            }}
-            placeholder="推荐配置。默认先走 API，失败后再回落页面校验"
-            rows={3}
-            style={{ display: 'block', width: '100%', marginTop: 6 }}
-          />
-        </label>
+        <Typography.Text type="secondary">
+          复用京东浏览器会话 Cookie/localStorage
+        </Typography.Text>
 
         {canCaptureLogin ? (
           <Space>
@@ -194,21 +183,18 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
                       ...captured,
                     }));
                   }
-                  if (captured?.refreshToken) {
-                    setRefreshToken(captured.refreshToken);
-                    setFallbackApiEnabled(true);
-                  }
+                  setRefreshToken(captured?.refreshToken ?? '');
                 } finally {
                   setCapturing(false);
                 }
               }}
             >
-              打开登录页采集 Token
+              打开浏览器采集登录态
             </Button>
             {!taskId && canSubmit ? (
               <Typography.Text type="secondary">将先自动保存当前草稿，再采集登录态</Typography.Text>
             ) : null}
-            <Typography.Text type="secondary">检测到登录态后会自动保存并关闭预览窗口</Typography.Text>
+            <Typography.Text type="secondary">检测到京东 Cookie/localStorage 后会自动保存并关闭窗口</Typography.Text>
           </Space>
         ) : null}
 
@@ -252,7 +238,6 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
             <div>登录态已获取，预览窗口会自动关闭</div>
             <div style={{ marginTop: 8 }}>账号昵称：{loginSnapshot.userName ?? '-'}</div>
             <div>用户 ID：{loginSnapshot.userId ?? '-'}</div>
-            <div>默认网盘 ID：{loginSnapshot.defaultDriveId ?? '-'}</div>
             <div>Token 类型：{loginSnapshot.tokenType ?? '-'}</div>
             <div>过期时间：{loginSnapshot.expiresAt ?? '-'}</div>
             <div>Access Token：{loginSnapshot.accessToken ?? '-'}</div>
@@ -304,16 +289,6 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
             }}
             style={{ display: 'block', width: 120, marginTop: 6 }}
           />
-        </label>
-
-        <label>
-          <input
-            aria-label="启用页面补充"
-            type="checkbox"
-            checked={fallbackApiEnabled}
-            onChange={(event) => setFallbackApiEnabled(event.target.checked)}
-          />
-          <span style={{ marginLeft: 8 }}>启用页面补充</span>
         </label>
 
         <label>

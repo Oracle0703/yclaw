@@ -4,12 +4,16 @@ import {
   Button,
   Card,
   Col,
+  ColorPicker,
   Descriptions,
   Form,
   Input,
   InputNumber,
+  Radio,
   Row,
+  Segmented,
   Select,
+  Slider,
   Space,
   Switch,
   Tag,
@@ -26,8 +30,13 @@ import type {
 } from '@shared/types';
 import type { LogEntry } from '@shared/utils';
 import { useIpc } from '../../../shared/hooks';
-import { useThemeMode } from '../../../shared/components/AppProviders';
+import { useThemeMode, useBackground } from '../../../shared/components/AppProviders';
 import { PageShell } from '../../../shared/components/PageShell';
+import {
+  BACKGROUND_PRESETS,
+  DEFAULT_BACKGROUND,
+  resolveBackground,
+} from '../../../shared/utils/background';
 
 interface EmbeddedMcpHttpStatus {
   running: boolean;
@@ -96,6 +105,187 @@ const DEFAULT_MCP_CONFIG: EmbeddedMcpHttpConfig = {
 const DEFAULT_MCP_CLIENT_STATUSES: McpClientServerStatus[] = [];
 const DEFAULT_MCP_AUDIT_ENTRIES: LogEntry[] = [];
 
+function BackgroundSettingsSection() {
+  const { message } = AntdApp.useApp();
+  const { background, setBackground, resetBackground } = useBackground();
+  const [saving, setSaving] = useState(false);
+  const [imageUrlDraft, setImageUrlDraft] = useState(
+    background.type === 'image' ? background.value : '',
+  );
+
+  const handleSave = async (next: typeof background) => {
+    try {
+      setSaving(true);
+      await setBackground(next, { persist: true, broadcast: true });
+      message.success('背景已更新');
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '保存背景失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const previewStyle = (() => {
+    const applied = resolveBackground(background);
+    return {
+      height: 96,
+      borderRadius: 12,
+      border: '1px solid rgba(148, 163, 184, 0.24)',
+      background: applied.cssBackground,
+      backgroundColor: applied.pageColor,
+    };
+  })();
+
+  return (
+    <Card
+      type="inner"
+      title="桌面背景"
+      className="yclaw-settings-section"
+      extra={<Tag color="geekblue">背景</Tag>}
+    >
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <div aria-label="背景预览" data-testid="background-preview" style={previewStyle} />
+
+        <Segmented
+          aria-label="背景类型"
+          value={background.type}
+          onChange={(value) => {
+            const nextType = value as typeof background.type;
+            if (nextType === background.type) return;
+            if (nextType === 'preset') {
+              void handleSave({ type: 'preset', value: background.value || 'aurora' });
+            } else if (nextType === 'solid') {
+              void handleSave({ type: 'solid', value: '#eef4fb' });
+            } else {
+              void handleSave({
+                type: 'image',
+                value:
+                  imageUrlDraft ||
+                  'https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?w=1600',
+                overlayOpacity: 0.35,
+                fit: 'cover',
+              });
+            }
+          }}
+          options={[
+            { label: '预设渐变', value: 'preset' },
+            { label: '纯色', value: 'solid' },
+            { label: '图片', value: 'image' },
+          ]}
+        />
+
+        {background.type === 'preset' ? (
+          <Radio.Group
+            aria-label="预设渐变"
+            value={background.value}
+            disabled={saving}
+            onChange={(event) => {
+              void handleSave({ type: 'preset', value: event.target.value as string });
+            }}
+          >
+            <Space wrap>
+              {BACKGROUND_PRESETS.map((preset) => (
+                <Radio.Button key={preset.id} value={preset.id}>
+                  {preset.label}
+                </Radio.Button>
+              ))}
+            </Space>
+          </Radio.Group>
+        ) : null}
+
+        {background.type === 'solid' ? (
+          <Space>
+            <span>背景颜色：</span>
+            <ColorPicker
+              aria-label="背景颜色"
+              value={background.value}
+              disabledAlpha
+              onChangeComplete={(color) => {
+                void handleSave({ type: 'solid', value: color.toHexString() });
+              }}
+            />
+            <Typography.Text type="secondary">{background.value}</Typography.Text>
+          </Space>
+        ) : null}
+
+        {background.type === 'image' ? (
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Input
+              aria-label="背景图片地址"
+              placeholder="https:// 或 data:image/ 协议"
+              value={imageUrlDraft}
+              onChange={(event) => setImageUrlDraft(event.target.value)}
+              onBlur={() => {
+                if (imageUrlDraft && imageUrlDraft !== background.value) {
+                  void handleSave({
+                    type: 'image',
+                    value: imageUrlDraft,
+                    overlayOpacity: background.overlayOpacity ?? 0.35,
+                    fit: background.fit ?? 'cover',
+                  });
+                }
+              }}
+            />
+            <Space>
+              <span>适配方式：</span>
+              <Segmented
+                aria-label="图片适配"
+                value={background.fit ?? 'cover'}
+                onChange={(value) => {
+                  void handleSave({
+                    ...background,
+                    fit: value as 'cover' | 'contain' | 'tile',
+                  });
+                }}
+                options={[
+                  { label: '填充', value: 'cover' },
+                  { label: '完整', value: 'contain' },
+                  { label: '平铺', value: 'tile' },
+                ]}
+              />
+            </Space>
+            <Space style={{ width: '100%' }} align="center">
+              <span style={{ minWidth: 90 }}>蒙层透明度：</span>
+              <Slider
+                aria-label="蒙层透明度"
+                min={0}
+                max={1}
+                step={0.05}
+                style={{ width: 240 }}
+                value={background.overlayOpacity ?? 0.35}
+                onChangeComplete={(value) => {
+                  void handleSave({
+                    ...background,
+                    overlayOpacity: typeof value === 'number' ? value : 0.35,
+                  });
+                }}
+              />
+              <Typography.Text type="secondary">
+                {Math.round((background.overlayOpacity ?? 0.35) * 100)}%
+              </Typography.Text>
+            </Space>
+          </Space>
+        ) : null}
+
+        <Space>
+          <Button
+            onClick={() => {
+              setImageUrlDraft('');
+              void resetBackground({ persist: true, broadcast: true });
+            }}
+            disabled={saving}
+          >
+            恢复默认背景
+          </Button>
+          <Typography.Text type="secondary">背景偏好将持久化并自动同步到所有窗口。</Typography.Text>
+        </Space>
+
+        {background === DEFAULT_BACKGROUND ? null : null}
+      </Space>
+    </Card>
+  );
+}
+
 export default function Settings() {
   const { invoke } = useIpc();
   const { message } = AntdApp.useApp();
@@ -158,7 +348,12 @@ export default function Settings() {
 
     void (async () => {
       try {
-        await Promise.all([loadConfig(), loadMcpStatus(), loadMcpClientStatuses(), loadMcpAuditEntries()]);
+        await Promise.all([
+          loadConfig(),
+          loadMcpStatus(),
+          loadMcpClientStatuses(),
+          loadMcpAuditEntries(),
+        ]);
         hasLoadedRef.current = true;
       } catch {
         message.error('读取配置失败');
@@ -333,7 +528,9 @@ export default function Settings() {
                   await invoke(IPC_CHANNELS.CONFIG_SET, { key: 'general', value: nextValues });
                   setCurrentValues(nextValues);
                   setNotificationEmail(nextValues.notificationEmail ?? DEFAULT_NOTIFICATION_EMAIL);
-                  setNotificationRecipientsText((nextValues.notificationEmail?.to ?? []).join(', '));
+                  setNotificationRecipientsText(
+                    (nextValues.notificationEmail?.to ?? []).join(', '),
+                  );
                   await setThemePreference(nextValues.theme, { broadcast: true });
                   message.success('设置已保存');
                   return true;
@@ -374,6 +571,8 @@ export default function Settings() {
                 </Row>
               </Card>
 
+              <BackgroundSettingsSection />
+
               <Card
                 type="inner"
                 title="启动策略"
@@ -389,11 +588,7 @@ export default function Settings() {
                     ]}
                   />
                 </Form.Item>
-                <Form.Item
-                  name="closeToTray"
-                  label="关闭主窗口时缩到托盘"
-                  valuePropName="checked"
-                >
+                <Form.Item name="closeToTray" label="关闭主窗口时缩到托盘" valuePropName="checked">
                   <Switch />
                 </Form.Item>
               </Card>
@@ -663,7 +858,8 @@ export default function Settings() {
                   <Space direction="vertical" size={8} style={{ width: '100%' }}>
                     <Typography.Text strong>外部 MCP Servers</Typography.Text>
                     <Typography.Paragraph type="secondary">
-                      使用 JSON 数组配置外部 MCP server，字段包括 id、name、command、args、env、enabled。
+                      使用 JSON 数组配置外部 MCP server，字段包括
+                      id、name、command、args、env、enabled。
                     </Typography.Paragraph>
                     <Input.TextArea
                       rows={8}

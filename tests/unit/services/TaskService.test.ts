@@ -519,6 +519,29 @@ describe('TaskService', () => {
     );
   });
 
+  it('uses jd-signin kind when creating a JD sign-in task', () => {
+    service.createTask({
+      name: '京东签到',
+      entryUrl: 'https://interact.jd.com/',
+      sessionId: null,
+      enabled: true,
+      signin: {
+        site: 'jd',
+        mode: 'browser-first-api-fallback',
+        fallbackApiEnabled: false,
+        refreshToken: null,
+        maxRetryPerDay: 1,
+        manualInterventionEnabled: true,
+      },
+    });
+
+    expect(mockTaskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        flowJson: expect.stringContaining('"kind":"jd-signin"'),
+      }),
+    );
+  });
+
   it('preserves sign-in metadata when saving task flow updates', () => {
     const signinFlow = {
       ...sampleFlow,

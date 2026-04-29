@@ -932,6 +932,14 @@ export class DatabaseService {
         INSERT INTO migrations (version) VALUES (21);
       `);
     }
+
+    if (currentDbVersion < 22) {
+      if (!this.hasColumn('signin_task_runs', 'reward_json')) {
+        this.db!.exec('ALTER TABLE signin_task_runs ADD COLUMN reward_json TEXT;');
+      }
+
+      this.db!.exec('INSERT INTO migrations (version) VALUES (22);');
+    }
   }
 
   private hasTable(tableName: string): boolean {

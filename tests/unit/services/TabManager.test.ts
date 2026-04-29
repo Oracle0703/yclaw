@@ -2,6 +2,55 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { session } from 'electron';
 
 let nextTabId = 1;
+let lastDebuggerMock: {
+  isAttached: ReturnType<typeof vi.fn>;
+  attach: ReturnType<typeof vi.fn>;
+  detach: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
+  off: ReturnType<typeof vi.fn>;
+  sendCommand: ReturnType<typeof vi.fn>;
+  emit: (event: string, ...args: unknown[]) => void;
+} | null = null;
+
+function createDebuggerMock() {
+  const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+  const mock = {
+    isAttached: vi.fn(() => false),
+    attach: vi.fn(),
+    detach: vi.fn(),
+    on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+      const current = listeners.get(event) ?? [];
+      current.push(listener);
+      listeners.set(event, current);
+    }),
+    off: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+      const current = listeners.get(event) ?? [];
+      listeners.set(
+        event,
+        current.filter((item) => item !== listener),
+      );
+    }),
+    sendCommand: vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'Network.getResponseBody' && params?.requestId === 'request-1') {
+        return {
+          base64Encoded: false,
+          body: JSON.stringify({
+            result: 'signed',
+            beanCount: 10,
+          }),
+        };
+      }
+      return {};
+    }),
+    emit: (event: string, ...args: unknown[]) => {
+      for (const listener of listeners.get(event) ?? []) {
+        listener(...args);
+      }
+    },
+  };
+  lastDebuggerMock = mock;
+  return mock;
+}
 
 // Mock Electron modules
 vi.mock('electron', () => ({
@@ -10,6 +59,7 @@ vi.mock('electron', () => ({
     webContents: {
       id: nextTabId++,
       on: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
       loadURL: vi.fn(),
       close: vi.fn(),
       getTitle: vi.fn().mockReturnValue('Test Page'),
@@ -21,6 +71,42 @@ vi.mock('electron', () => ({
       goForward: vi.fn(),
       reload: vi.fn(),
       executeJavaScript: vi.fn().mockResolvedValue('result'),
+      debugger: createDebuggerMock(),
+      session: {
+        cookies: {
+          get: vi.fn(async () => [
+            {
+              name: 'pt_key',
+              value: 'demo-key',
+              domain: '.jd.com',
+              path: '/',
+              secure: true,
+              httpOnly: true,
+              session: false,
+              expirationDate: 1777450000,
+              sameSite: 'unspecified',
+            },
+            {
+              name: 'api_cookie',
+              value: 'demo-api',
+              domain: 'api.m.jd.com',
+              path: '/',
+              secure: true,
+              httpOnly: false,
+              session: true,
+            },
+            {
+              name: 'aliyun_cookie',
+              value: 'ignore',
+              domain: '.aliyundrive.com',
+              path: '/',
+              secure: true,
+              httpOnly: true,
+              session: true,
+            },
+          ]),
+        },
+      },
     },
   })),
   session: {
@@ -43,6 +129,7 @@ describe('TabManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     nextTabId = 1;
+    lastDebuggerMock = null;
     tabManager = new TabManager({ maxTabs: 5, eventBus: mockEventBus as never });
   });
 
@@ -82,6 +169,26 @@ describe('TabManager', () => {
       expect(view.webContents.on).toHaveBeenCalledWith('did-stop-loading', expect.any(Function));
       expect(view.webContents.on).toHaveBeenCalledWith('page-title-updated', expect.any(Function));
       expect(view.webContents.on).toHaveBeenCalledWith('did-navigate', expect.any(Function));
+    });
+
+    it('redirects new window requests into the current tab so recording continues', () => {
+      const view = tabManager.createTab('https://www.jd.com');
+      expect(view.webContents.setWindowOpenHandler).toHaveBeenCalledWith(expect.any(Function));
+
+      const handler = vi.mocked(view.webContents.setWindowOpenHandler).mock.calls[0][0] as (
+        details: { url: string },
+      ) => { action: string };
+      const result = handler({ url: 'https://interact.jd.com/' });
+
+      expect(result).toEqual({ action: 'deny' });
+      expect(view.webContents.loadURL).toHaveBeenCalledWith('https://interact.jd.com/');
+      expect(mockEventBus.emit).toHaveBeenCalledWith(
+        'tab:navigate',
+        expect.objectContaining({
+          id: view.webContents.id,
+          url: 'https://interact.jd.com/',
+        }),
+      );
     });
 
     it('should assign a default viewport to background tabs', () => {
@@ -180,6 +287,111 @@ describe('TabManager', () => {
 
     it('should throw when no active tab', async () => {
       await expect(tabManager.executeJavaScript('test')).rejects.toThrow('No active tab');
+    });
+  });
+
+  describe('investigation recorder', () => {
+    it('captures filtered network traffic and returns replay candidates', async () => {
+      const view = tabManager.createTab('https://www.jd.com');
+
+      await tabManager.startRecorder(view.webContents.id, {
+        mode: 'investigation',
+        domainAllowlist: ['api.m.jd.com'],
+        includeNetwork: true,
+      });
+
+      expect(lastDebuggerMock?.attach).toHaveBeenCalledWith('1.3');
+      expect(lastDebuggerMock?.sendCommand).toHaveBeenCalledWith('Network.enable');
+
+      lastDebuggerMock?.emit(
+        'message',
+        {},
+        'Network.requestWillBeSent',
+        {
+          requestId: 'request-1',
+          request: {
+            method: 'POST',
+            url: 'https://api.m.jd.com/client.action?functionId=signBeanAct',
+            headers: {
+              cookie: 'pt_key=demo',
+              'content-type': 'application/x-www-form-urlencoded',
+            },
+            postData: 'functionId=signBeanAct&body={}',
+          },
+          timestamp: 1,
+        },
+      );
+      lastDebuggerMock?.emit(
+        'message',
+        {},
+        'Network.responseReceived',
+        {
+          requestId: 'request-1',
+          response: {
+            url: 'https://api.m.jd.com/client.action?functionId=signBeanAct',
+            status: 200,
+            statusText: 'OK',
+            headers: {
+              'content-type': 'application/json',
+            },
+            mimeType: 'application/json',
+          },
+          timestamp: 2,
+        },
+      );
+      lastDebuggerMock?.emit(
+        'message',
+        {},
+        'Network.loadingFinished',
+        {
+          requestId: 'request-1',
+          timestamp: 3,
+        },
+      );
+
+      const result = await tabManager.stopRecorder(view.webContents.id);
+
+      expect(Array.isArray(result)).toBe(false);
+      expect(result).toMatchObject({
+        kind: 'investigation-recording',
+        steps: [],
+        storageSnapshot: {
+          cookieDomains: expect.arrayContaining(['.jd.com', 'api.m.jd.com']),
+          cookies: expect.arrayContaining([
+            expect.objectContaining({
+              name: 'pt_key',
+              value: 'demo-key',
+              domain: '.jd.com',
+            }),
+            expect.objectContaining({
+              name: 'api_cookie',
+              value: 'demo-api',
+              domain: 'api.m.jd.com',
+            }),
+          ]),
+        },
+        network: [
+          {
+            requestId: 'request-1',
+            method: 'POST',
+            url: 'https://api.m.jd.com/client.action?functionId=signBeanAct',
+            requestHeaders: {
+              cookie: 'pt_key=demo',
+            },
+            requestBody: 'functionId=signBeanAct&body={}',
+            status: 200,
+            responseBody: expect.stringContaining('signed'),
+          },
+        ],
+        replayDrafts: [
+          expect.objectContaining({
+            method: 'POST',
+            url: 'https://api.m.jd.com/client.action?functionId=signBeanAct',
+            reason: expect.stringContaining('sign'),
+          }),
+        ],
+      });
+      expect(JSON.stringify(result)).not.toContain('aliyun_cookie');
     });
   });
 

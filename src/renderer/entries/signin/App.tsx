@@ -16,6 +16,7 @@ interface SigninTaskSummary {
   id: string;
   name: string;
   kind?: TaskFlow['kind'];
+  entryUrl?: string;
   enabled?: boolean;
   updatedAt: string;
   signin?: TaskFlow['signin'] | null;
@@ -27,15 +28,15 @@ function createDefaultSigninFlow(): {
   flow: Pick<TaskFlow, 'entryUrl' | 'sessionId' | 'enabled' | 'signin'>;
 } {
   return {
-    taskName: '阿里云盘签到',
+    taskName: '京东签到',
     flow: {
-      entryUrl: 'https://www.aliyundrive.com/',
+      entryUrl: 'https://interact.jd.com/',
       sessionId: null,
       enabled: true,
       signin: {
-        site: 'aliyundrive',
-        mode: 'api-first-browser-fallback',
-        fallbackApiEnabled: true,
+        site: 'jd',
+        mode: 'browser-first-api-fallback',
+        fallbackApiEnabled: false,
         refreshToken: null,
         maxRetryPerDay: 1,
         manualInterventionEnabled: true,
@@ -76,9 +77,7 @@ export default function App() {
     setLoading(true);
     try {
       const taskList = await invoke<SigninTaskSummary[]>(IPC_CHANNELS.TASK_LIST);
-      const signinTasks = (Array.isArray(taskList) ? taskList : []).filter(
-        (task) => typeof task.kind === 'string' && task.kind.endsWith('-signin'),
-      );
+      const signinTasks = (Array.isArray(taskList) ? taskList : []).filter(isJdSigninTask);
       const summaryEntries = await Promise.all(
         signinTasks.map(async (task) => {
           try {
@@ -168,7 +167,7 @@ export default function App() {
   ) => {
     const normalizedPayload = {
       ...payload,
-      name: payload.name.trim() || '阿里云盘签到',
+      name: payload.name.trim() || '京东签到',
     };
     const saved = await invoke<TaskFlow>(IPC_CHANNELS.SIGNIN_TASK_SAVE, normalizedPayload);
     setSelectedTaskId(saved.id);
@@ -233,7 +232,7 @@ export default function App() {
         timedOut: boolean;
       }>(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, { taskId: saved.id });
 
-      if (captured?.refreshToken) {
+      if (captured && !captured.timedOut) {
         message.success(buildSigninCaptureSuccessMessage(captured));
         setDraftSigninFlow((prev) =>
           prev?.signin
@@ -241,7 +240,7 @@ export default function App() {
                 ...prev,
                 signin: {
                   ...prev.signin,
-                  refreshToken: captured.refreshToken,
+                  refreshToken: captured.refreshToken ?? null,
                   accessToken: captured.accessToken ?? null,
                   userName: captured.userName ?? null,
                   userId: captured.userId ?? null,
@@ -402,7 +401,7 @@ export default function App() {
     <PageShell
       title="自动签到"
       subTitle="将签到任务独立收口到可扩展的签到中心"
-      content="当前优先承接阿里云盘签到，后续可继续扩展京东、淘宝等站点，不再和普通采集任务混放。"
+      content="当前承接京东签到领京豆，执行时优先用会话 API 查询余额和明细，必要时再打开页面补领。"
       extra={
         <Space wrap className="yclaw-page-actions">
           <Tag color="processing">Signin Center</Tag>
@@ -508,10 +507,18 @@ function countCapturedFields(captured: SigninLoginSnapshot): number {
 }
 
 function resolveSiteLabel(task: SigninTaskSummary): string {
-  if (task.signin?.site === 'aliyundrive') {
-    return '阿里云盘';
+  if (task.signin?.site === 'jd') {
+    return '京东';
   }
-  return task.signin?.site ?? '未知站点';
+  return '京东';
+}
+
+function isJdSigninTask(task: SigninTaskSummary): boolean {
+  const entryUrl = task.entryUrl ?? '';
+  return task.signin?.site === 'jd' ||
+    task.kind === 'jd-signin' ||
+    /https?:\/\/(?:[^/]+\.)?jd\.com(?:\/|$)/i.test(entryUrl) ||
+    entryUrl.includes('interact.jd.com');
 }
 
 function renderLatestResultTag(summary?: SigninRunSummary | null) {

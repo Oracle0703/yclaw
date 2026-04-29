@@ -200,8 +200,50 @@ const mockTrayCreate = vi.fn();
 const mockTrayDestroy = vi.fn();
 const mockCheckForUpdates = vi.fn();
 const mockShowOpenDialog = vi.hoisted(() => vi.fn());
-const mockCreateTab = vi.fn(() => ({ webContents: { id: 1 } }));
+const mockBrowserRecorderChildren = vi.hoisted(() => [] as unknown[]);
+const mockBrowserWindowConstructor = vi.hoisted(() => {
+  const ctor = vi.fn(() => ({
+    isDestroyed: () => false,
+    isVisible: () => true,
+    focus: vi.fn(),
+    show: vi.fn(),
+    close: vi.fn(),
+    getContentBounds: () => ({ width: 1280, height: 860 }),
+    removeAllListeners: vi.fn(),
+    on: vi.fn(),
+    contentView: {
+      children: mockBrowserRecorderChildren,
+      addChildView: vi.fn((view: unknown) => {
+        mockBrowserRecorderChildren.push(view);
+      }),
+      removeChildView: vi.fn((view: unknown) => {
+        const index = mockBrowserRecorderChildren.indexOf(view);
+        if (index >= 0) {
+          mockBrowserRecorderChildren.splice(index, 1);
+        }
+      }),
+    },
+  }));
+  return Object.assign(ctor, {
+    getFocusedWindow: vi.fn(() => null),
+  });
+});
+const mockCreateTab = vi.fn(() => ({ setBounds: vi.fn(), webContents: { id: 1 } }));
+const mockGetTabInfo = vi.fn((id: number) => ({
+  id,
+  title: 'Browser Tab',
+  url: 'https://www.jd.com/',
+  loading: false,
+  canGoBack: false,
+  canGoForward: false,
+  sessionPartition: 'default',
+}));
+const mockGetAllTabs = vi.fn(() => []);
 const mockGetOrCreateTabBySession = vi.fn();
+const mockTabExecuteJavaScript = vi.fn();
+const mockGetView = vi.fn();
+const mockStartRecorder = vi.fn(() => []);
+const mockStopRecorder = vi.fn(() => []);
 const mockCloseTab = vi.fn();
 const mockNavigate = vi.fn();
 const mockGoBack = vi.fn();
@@ -295,6 +337,12 @@ const mockTemplateDelete = vi.fn();
 const mockAlertAggregate = vi.fn(() => []);
 const mockAlertList = vi.fn(() => []);
 const mockAlertDismiss = vi.fn();
+const mockAlertPush = vi.fn((alert) => ({
+  id: 'alert-1',
+  createdAt: '2026-04-29T00:00:00.000Z',
+  read: false,
+  ...alert,
+}));
 const mockResultList = vi.fn(() => []);
 const mockResultGet = vi.fn(() => null);
 const mockResultExport = vi.fn(() => 'results.csv');
@@ -358,9 +406,7 @@ vi.mock('electron', () => ({
     getVersion: vi.fn(() => '1.0.0'),
     getName: vi.fn(() => 'YClaw'),
   },
-  BrowserWindow: {
-    getFocusedWindow: vi.fn(() => null),
-  },
+  BrowserWindow: mockBrowserWindowConstructor,
   dialog: {
     showOpenDialog: mockShowOpenDialog,
   },
@@ -448,7 +494,13 @@ vi.mock('@main/services/FeaturePackageService', () => ({
 vi.mock('@main/browser/TabManager', () => ({
   TabManager: vi.fn().mockImplementation(() => ({
     createTab: mockCreateTab,
+    getTabInfo: mockGetTabInfo,
+    getAllTabs: mockGetAllTabs,
     getOrCreateTabBySession: mockGetOrCreateTabBySession,
+    executeJavaScript: mockTabExecuteJavaScript,
+    getView: mockGetView,
+    startRecorder: mockStartRecorder,
+    stopRecorder: mockStopRecorder,
     closeTab: mockCloseTab,
     navigate: mockNavigate,
     goBack: mockGoBack,
@@ -505,6 +557,7 @@ vi.mock('@main/services/AlertService', () => ({
     aggregateFromExecutionLogs: mockAlertAggregate,
     listAlerts: mockAlertList,
     dismissAlert: mockAlertDismiss,
+    pushAlert: mockAlertPush,
   })),
 }));
 
@@ -570,7 +623,10 @@ describe('App IPC integration', () => {
   beforeEach(() => {
     handlers.clear();
     vi.clearAllMocks();
+    mockBrowserRecorderChildren.length = 0;
     mockConfigGet.mockImplementation(defaultConfigGet);
+    mockTabExecuteJavaScript.mockReset();
+    mockGetView.mockReset();
 
     const existingTaskIds = new Set(['task-1']);
 
@@ -664,6 +720,80 @@ describe('App IPC integration', () => {
       ]),
     );
     expect(mockPluginLoadAll).toHaveBeenCalled();
+  });
+
+  it('passes recorder investigation options through recorder:start ipc handler', async () => {
+    mockStartRecorder.mockReturnValueOnce({
+      mode: 'investigation',
+      sitePreset: 'jd',
+      startedAt: '2026-04-29T00:00:00.000Z',
+      stoppedAt: '2026-04-29T00:00:05.000Z',
+      networkRecords: [],
+      storage: {
+        localStorage: {},
+        sessionStorage: {},
+        cookies: [],
+      },
+      replayDrafts: [],
+    });
+
+    const app = new App();
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.RECORDER_START);
+    expect(handler).toBeDefined();
+
+    const options = {
+      mode: 'investigation' as const,
+      sitePreset: 'jd' as const,
+      includeNetwork: true,
+      domainAllowlist: ['jd.com', 'api.m.jd.com'],
+    };
+    const response = await handler!({}, { tabId: 99, options });
+
+    expect(mockStartRecorder).toHaveBeenCalledWith(99, options);
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        mode: 'investigation',
+        sitePreset: 'jd',
+      },
+    });
+  });
+
+  it('opens a visible recorder window when creating a browser tab', async () => {
+    const view = {
+      setBounds: vi.fn(),
+      webContents: {
+        id: 77,
+      },
+    };
+    mockCreateTab.mockReturnValueOnce(view);
+
+    const app = new App();
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.BROWSER_CREATE_TAB);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, { url: 'https://www.jd.com/' });
+
+    expect(mockCreateTab).toHaveBeenCalledWith('https://www.jd.com/');
+    expect(mockBrowserWindowConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: '浏览器录制窗口',
+        width: 1280,
+        height: 860,
+      }),
+    );
+    expect(mockBrowserRecorderChildren).toContain(view);
+    expect(view.setBounds).toHaveBeenCalledWith({ x: 0, y: 0, width: 1280, height: 860 });
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        id: 77,
+      },
+    });
   });
 
   it('injects explicit AI repositories and context when constructing AIService', () => {
@@ -1659,6 +1789,124 @@ describe('App IPC integration', () => {
           networkResponseCount: 1,
         }),
       );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits until signin preview page becomes visible before executing browser signin script', async () => {
+    vi.useFakeTimers();
+    try {
+      mockSessionList.mockReturnValueOnce([
+        {
+          id: 'session-signin-1',
+          name: '阿里云盘账号',
+          domain: 'aliyundrive.com',
+          partition: 'persist:session_signin_1',
+          createdAt: '2026-04-28T00:00:00.000Z',
+          updatedAt: '2026-04-28T00:00:00.000Z',
+        },
+      ]);
+      mockDbGetTaskFlow.mockImplementation((taskId: string) =>
+        taskId === 'task-signin-1'
+          ? {
+              ...buildSigninTaskFlow(taskId),
+              signin: {
+                ...buildSigninTaskFlow(taskId).signin,
+                refreshToken: null,
+              },
+            }
+          : buildGenericTaskFlow(taskId),
+      );
+
+      const view = {
+        setBounds: vi.fn(),
+        webContents: {
+          id: 80,
+          isDestroyed: () => false,
+          loadURL: vi.fn(async () => undefined),
+        },
+      };
+      mockGetOrCreateTabBySession.mockReturnValueOnce(view);
+
+      let visibilityProbeCount = 0;
+      mockTabExecuteJavaScript.mockImplementation(async (script: string, tabId: number) => {
+        expect(tabId).toBe(80);
+
+        if (
+          script.includes('activity_not_found')
+          || script.includes('reward_button_not_found')
+          || script.includes('精选活动')
+        ) {
+          return visibilityProbeCount >= 2
+            ? {
+                success: true,
+                status: 'success',
+                detail: '今日奖励已领取',
+              }
+            : {
+                success: false,
+                failureReason: 'activity_not_found',
+                detail: '未找到精选活动区域',
+                debug: {
+                  readyState: 'complete',
+                  visibilityState: 'hidden',
+                  viewport: '1266x823',
+                  activityAnchorFound: false,
+                  signBarCount: 0,
+                  dateCardCandidateCount: 0,
+                },
+            };
+        }
+
+        if (script.includes('document.visibilityState') && script.includes('document.readyState')) {
+          visibilityProbeCount += 1;
+          return {
+            readyState: 'complete',
+            visibilityState: visibilityProbeCount >= 2 ? 'visible' : 'hidden',
+            viewport: '1266x823',
+          };
+        }
+
+        if (script.includes('document.body?.innerText')) {
+          return {
+            pageUrl: 'https://www.aliyundrive.com/home',
+            pageTitle: '阿里云盘',
+            domSummary: '文件 最近 活动',
+            readyState: 'complete',
+            visibilityState: 'hidden',
+            viewport: '1266x823',
+          };
+        }
+
+        return null;
+      });
+
+      const app = new App();
+      const previewWindow = createSigninPreviewWindowMock();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (app as any).signinPreviewWindow = previewWindow;
+
+      await app.start();
+
+      const handler = handlers.get(IPC_CHANNELS.SIGNIN_TASK_RUN_NOW);
+      expect(handler).toBeDefined();
+
+      const responsePromise = handler!({}, { taskId: 'task-signin-1' });
+      await vi.advanceTimersByTimeAsync(1000);
+      const response = await responsePromise;
+
+      expect(response).toMatchObject({
+        success: true,
+        data: {
+          taskId: 'task-signin-1',
+          status: 'success',
+          strategyUsed: 'browser',
+          detail: '今日奖励已领取',
+        },
+      });
+      expect(view.webContents.loadURL).toHaveBeenCalledWith('https://www.aliyundrive.com/');
+      expect(visibilityProbeCount).toBeGreaterThanOrEqual(2);
     } finally {
       vi.useRealTimers();
     }

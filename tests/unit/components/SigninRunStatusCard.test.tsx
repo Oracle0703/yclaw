@@ -108,6 +108,38 @@ describe('SigninRunStatusCard', () => {
     expect(onRetryIntervention).toHaveBeenCalledWith('task-signin-1');
   });
 
+  it('renders JD bean reward summary when present', () => {
+    const summary: SigninRunSummary = {
+      taskId: 'task-jd-1',
+      status: 'success',
+      strategyUsed: 'browser',
+      detail: '京东签到成功，本次获得 2 京豆，当前余额 2 京豆',
+      reward: {
+        earnedBeans: 2,
+        balance: 2,
+        balanceStr: '0.02',
+        detailText: '活动奖励京豆',
+      },
+      runAt: '2026-04-29T09:30:00.000Z',
+      retryCount: 0,
+    };
+
+    render(
+      <SigninRunStatusCard
+        taskId="task-jd-1"
+        summary={summary}
+        history={[]}
+        onRunNow={vi.fn()}
+        onRetryIntervention={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('本次获得：2 京豆')).toBeDefined();
+    expect(screen.getByText('当前余额：2 京豆')).toBeDefined();
+    expect(screen.getByText('余额显示：0.02')).toBeDefined();
+    expect(screen.getByText('最近明细：活动奖励京豆')).toBeDefined();
+  });
+
   it('renders debug snapshot details when present', () => {
     const summary: SigninRunSummary = {
       taskId: 'task-signin-1',

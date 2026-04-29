@@ -68,7 +68,7 @@ export default function App() {
       attribute: String(step.action.params?.attribute ?? 'textContent'),
     }));
 
-  const isSigninTask = selectedTaskKind === 'aliyundrive-signin';
+  const isSigninTask = typeof selectedTaskKind === 'string' && selectedTaskKind.endsWith('-signin');
 
   useEffect(() => {
     if (!isSigninTask && !signinFlow) {
@@ -104,7 +104,7 @@ export default function App() {
       setTaskName(flow.name);
       setSelectedTaskId(flow.id);
       setSelectedTaskKind(nextKind);
-      if (nextKind === 'aliyundrive-signin') {
+      if (typeof nextKind === 'string' && nextKind.endsWith('-signin')) {
         setSigninFlow({
           entryUrl: flow.entryUrl,
           sessionId: flow.sessionId,
@@ -131,7 +131,7 @@ export default function App() {
   };
 
   const handleSaveTask = async () => {
-    if (selectedTaskKind === 'aliyundrive-signin') {
+    if (typeof selectedTaskKind === 'string' && selectedTaskKind.endsWith('-signin')) {
       return;
     }
     try {
@@ -165,11 +165,11 @@ export default function App() {
   ) => {
     const normalizedPayload = {
       ...payload,
-      name: payload.name.trim() || '阿里云盘签到',
+      name: payload.name.trim() || '京东签到',
     };
     const saved = await invoke<TaskFlow>(IPC_CHANNELS.SIGNIN_TASK_SAVE, normalizedPayload);
     setSelectedTaskId(saved.id);
-    setSelectedTaskKind('aliyundrive-signin');
+    setSelectedTaskKind('jd-signin');
     setTaskName(saved.name);
     setSelectedTaskSummary({
       id: saved.id,
@@ -236,7 +236,7 @@ export default function App() {
         timedOut: boolean;
       }>(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, { taskId: saved.id });
 
-      if (captured?.refreshToken) {
+      if (captured && !captured.timedOut) {
         message.success(buildSigninCaptureSuccessMessage(captured));
         // 同步到本地表单状态：localStorage 已写入服务端任务，刷新本地视图
         setSigninFlow((prev) =>
@@ -245,7 +245,7 @@ export default function App() {
                 ...prev,
                 signin: {
                   ...prev.signin,
-                  refreshToken: captured.refreshToken,
+                  refreshToken: captured.refreshToken ?? null,
                   accessToken: captured.accessToken ?? null,
                   userName: captured.userName ?? null,
                   userId: captured.userId ?? null,
@@ -382,17 +382,17 @@ export default function App() {
             onClick={() => {
               setSelectedTaskId(null);
               setSelectedTaskSummary(null);
-              setSelectedTaskKind('aliyundrive-signin');
-              setTaskName('阿里云盘签到');
+              setSelectedTaskKind('jd-signin');
+              setTaskName('京东签到');
               setSelectedBatchId(null);
               setSigninFlow({
-                entryUrl: 'https://www.aliyundrive.com/',
+                entryUrl: 'https://interact.jd.com/',
                 sessionId: null,
                 enabled: true,
                 signin: {
-                  site: 'aliyundrive',
-                  mode: 'api-first-browser-fallback',
-                  fallbackApiEnabled: true,
+                  site: 'jd',
+                  mode: 'browser-first-api-fallback',
+                  fallbackApiEnabled: false,
                   refreshToken: null,
                   maxRetryPerDay: 1,
                   manualInterventionEnabled: true,

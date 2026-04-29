@@ -88,7 +88,7 @@ export function AdminPageLayout({ children }: PropsWithChildren) {
     <div className="yclaw-admin-shell">
       <Layout className="yclaw-admin-layout">
         <Layout.Sider
-          theme="dark"
+          theme="light"
           width={232}
           collapsible
           trigger={null}
@@ -117,7 +117,7 @@ export function AdminPageLayout({ children }: PropsWithChildren) {
 
             <Menu
               mode="inline"
-              theme="dark"
+              theme="light"
               className="yclaw-admin-menu"
               selectedKeys={[selectedKey]}
               items={MODULE_MENU}
@@ -127,7 +127,11 @@ export function AdminPageLayout({ children }: PropsWithChildren) {
             />
 
             {collapsed ? (
-              <div className="yclaw-menu-footer-collapsed" aria-label="Ops Cockpit" title="Ops Cockpit">
+              <div
+                className="yclaw-menu-footer-collapsed"
+                aria-label="Ops Cockpit"
+                title="Ops Cockpit"
+              >
                 <AppstoreOutlined />
               </div>
             ) : (

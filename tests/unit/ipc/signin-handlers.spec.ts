@@ -11,15 +11,15 @@ describe('registerSigninHandlers', () => {
       }),
     };
     const savePayload = {
-      name: '阿里云盘签到',
-      entryUrl: 'https://www.aliyundrive.com/',
+      name: '京东签到',
+      entryUrl: 'https://interact.jd.com/',
       sessionId: 'session-1',
       enabled: true,
       signin: {
-        site: 'aliyundrive' as const,
+        site: 'jd' as const,
         mode: 'browser-first-api-fallback' as const,
-        fallbackApiEnabled: true,
-        refreshToken: 'rt-demo',
+        fallbackApiEnabled: false,
+        refreshToken: null,
         maxRetryPerDay: 2,
         manualInterventionEnabled: true as const,
       },
@@ -73,7 +73,7 @@ describe('registerSigninHandlers', () => {
 
     expect(await handlers.get(IPC_CHANNELS.SIGNIN_TASK_SAVE)?.(savePayload)).toMatchObject({
       id: 'task-signin-1',
-      name: '阿里云盘签到',
+      name: '京东签到',
     });
     expect(taskService.createTask).toHaveBeenCalledWith(savePayload);
     expect(logService.info).toHaveBeenCalledWith(
@@ -81,8 +81,8 @@ describe('registerSigninHandlers', () => {
       'signin task save requested',
       expect.objectContaining({
         taskId: null,
-        name: '阿里云盘签到',
-        hasRefreshToken: true,
+        name: '京东签到',
+        hasRefreshToken: false,
       }),
     );
     expect(logService.info).toHaveBeenCalledWith(
@@ -91,7 +91,7 @@ describe('registerSigninHandlers', () => {
       expect.objectContaining({
         taskId: null,
         created: true,
-        name: '阿里云盘签到',
+        name: '京东签到',
         savedTaskId: 'task-signin-1',
       }),
     );

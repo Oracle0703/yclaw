@@ -13,6 +13,7 @@ interface SigninRunRow {
   failure_reason?: SigninRunSummary['failureReason'] | null;
   detail?: string | null;
   debug_json?: string | null;
+  reward_json?: string | null;
   run_at: string;
   retry_count: number;
 }
@@ -29,9 +30,10 @@ export class SigninRunRepository {
         failure_reason,
         detail,
         debug_json,
+        reward_json,
         run_at,
         retry_count
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         summary.taskId,
         summary.status,
@@ -39,6 +41,7 @@ export class SigninRunRepository {
         summary.failureReason ?? null,
         summary.detail ?? null,
         summary.debug ? JSON.stringify(summary.debug) : null,
+        summary.reward ? JSON.stringify(summary.reward) : null,
         summary.runAt,
         summary.retryCount,
       ],
@@ -54,6 +57,7 @@ export class SigninRunRepository {
         failure_reason,
         detail,
         debug_json,
+        reward_json,
         run_at,
         retry_count
       FROM signin_task_runs
@@ -74,6 +78,7 @@ export class SigninRunRepository {
       failureReason: row.failure_reason ?? undefined,
       detail: row.detail ?? undefined,
       debug: parseJson(row.debug_json, undefined),
+      reward: parseJson(row.reward_json, undefined),
       runAt: row.run_at,
       retryCount: row.retry_count,
     };
@@ -88,6 +93,7 @@ export class SigninRunRepository {
         failure_reason,
         detail,
         debug_json,
+        reward_json,
         run_at,
         retry_count
       FROM signin_task_runs
@@ -102,6 +108,7 @@ export class SigninRunRepository {
       failureReason: row.failure_reason ?? undefined,
       detail: row.detail ?? undefined,
       debug: parseJson(row.debug_json, undefined),
+      reward: parseJson(row.reward_json, undefined),
       runAt: row.run_at,
       retryCount: row.retry_count,
     }));
