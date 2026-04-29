@@ -232,6 +232,7 @@ export default function App() {
       const saved = await persistSigninTask(payload);
       const captured = await invoke<SigninLoginSnapshot & {
         refreshToken: string | null;
+        captureDiagnostics?: Record<string, unknown> | null;
         timedOut: boolean;
       }>(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, { taskId: saved.id });
 
@@ -258,9 +259,17 @@ export default function App() {
             : prev,
         );
       } else if (captured?.timedOut) {
-        message.warning('5 分钟内未检测到登录态，已取消采集');
+        message.warning(
+          captured.captureDiagnostics
+            ? '5 分钟内未检测到登录态，已记录诊断信息到日志'
+            : '5 分钟内未检测到登录态，已取消采集',
+        );
       } else {
-        message.warning('未采集到 refresh_token');
+        message.warning(
+          captured?.captureDiagnostics
+            ? '未采集到 refresh_token，已记录诊断信息到日志'
+            : '未采集到 refresh_token',
+        );
       }
       return captured
         ? {

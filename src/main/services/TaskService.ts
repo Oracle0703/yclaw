@@ -332,16 +332,43 @@ export class TaskService {
             signin: payload.signin ?? existing.signin ?? null,
           })
         : undefined;
-    this.taskRepository.updateTask(taskId, {
-      name: payload.name,
-      description: payload.description,
-      flowJson,
-      scheduleJson: payload.schedule !== undefined ? JSON.stringify(payload.schedule) : undefined,
-      sessionId: payload.sessionId,
-      templateId: payload.templateId,
-      enabled: payload.enabled,
-      tagsJson: payload.tags !== undefined ? JSON.stringify(payload.tags) : undefined,
-    });
+    const updates: {
+      name?: string;
+      description?: string;
+      flowJson?: string;
+      scheduleJson?: string | null;
+      sessionId?: string | null;
+      templateId?: string | null;
+      enabled?: boolean;
+      tagsJson?: string | null;
+    } = {};
+
+    if (payload.name !== undefined) {
+      updates.name = payload.name;
+    }
+    if (payload.description !== undefined) {
+      updates.description = payload.description;
+    }
+    if (flowJson !== undefined) {
+      updates.flowJson = flowJson;
+    }
+    if (payload.schedule !== undefined) {
+      updates.scheduleJson = JSON.stringify(payload.schedule);
+    }
+    if (payload.sessionId !== undefined) {
+      updates.sessionId = payload.sessionId;
+    }
+    if (payload.templateId !== undefined) {
+      updates.templateId = payload.templateId;
+    }
+    if (payload.enabled !== undefined) {
+      updates.enabled = payload.enabled;
+    }
+    if (payload.tags !== undefined) {
+      updates.tagsJson = JSON.stringify(payload.tags);
+    }
+
+    this.taskRepository.updateTask(taskId, updates);
     return this.taskRepository.getTaskFlow(taskId);
   }
 

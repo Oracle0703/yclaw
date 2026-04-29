@@ -43,12 +43,17 @@ describe('registerSigninHandlers', () => {
     const notificationService = {
       sendTestEmail: vi.fn(async () => ({ delivered: true })),
     };
+    const logService = {
+      info: vi.fn(),
+      error: vi.fn(),
+    };
 
     registerSigninHandlers({
       ipcController,
       taskService,
       signinTaskService,
       notificationService,
+      logService,
     });
 
     const channels = [
@@ -71,6 +76,25 @@ describe('registerSigninHandlers', () => {
       name: '阿里云盘签到',
     });
     expect(taskService.createTask).toHaveBeenCalledWith(savePayload);
+    expect(logService.info).toHaveBeenCalledWith(
+      'main',
+      'signin task save requested',
+      expect.objectContaining({
+        taskId: null,
+        name: '阿里云盘签到',
+        hasRefreshToken: true,
+      }),
+    );
+    expect(logService.info).toHaveBeenCalledWith(
+      'main',
+      'signin task save succeeded',
+      expect.objectContaining({
+        taskId: null,
+        created: true,
+        name: '阿里云盘签到',
+        savedTaskId: 'task-signin-1',
+      }),
+    );
 
     expect(await handlers.get(IPC_CHANNELS.SIGNIN_TASK_SAVE)?.(updatePayload)).toMatchObject({
       id: 'task-signin-1',
@@ -80,6 +104,15 @@ describe('registerSigninHandlers', () => {
       ...savePayload,
       enabled: false,
     });
+    expect(logService.info).toHaveBeenCalledWith(
+      'main',
+      'signin task save succeeded',
+      expect.objectContaining({
+        taskId: 'task-signin-1',
+        created: false,
+        enabled: false,
+      }),
+    );
 
     expect(await handlers.get(IPC_CHANNELS.SIGNIN_TASK_GET)?.({ taskId: 'task-signin-1' })).toMatchObject({
       id: 'task-signin-1',

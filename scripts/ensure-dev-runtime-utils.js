@@ -1,11 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 
+const REQUIRED_NODE_MAJOR = 22;
+
 function readExpectedNodeVersion(rootDir) {
   try {
     return fs.readFileSync(path.join(rootDir, '.nvmrc'), 'utf8').trim();
   } catch {
-    return '20.19.0';
+    return `${REQUIRED_NODE_MAJOR}.x`;
   }
 }
 
@@ -14,8 +16,8 @@ function getDevRuntimeFailure(options) {
   const nodeVersion = options.nodeVersion ?? process.version;
   const major = Number.parseInt((nodeVersion || '').replace(/^v/, '').split('.')[0] || '', 10);
 
-  if (!Number.isFinite(major) || major < 20 || major >= 23) {
-    return `Unsupported Node.js ${nodeVersion}. Use the repo runtime from .nvmrc (${readExpectedNodeVersion(rootDir)}).`;
+  if (!Number.isFinite(major) || major !== REQUIRED_NODE_MAJOR) {
+    return `Unsupported Node.js ${nodeVersion}. Use Node.js ${REQUIRED_NODE_MAJOR}.x from .nvmrc (${readExpectedNodeVersion(rootDir)}).`;
   }
 
   const electronDir = path.join(rootDir, 'node_modules', 'electron');

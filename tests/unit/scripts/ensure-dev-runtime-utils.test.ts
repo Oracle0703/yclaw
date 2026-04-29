@@ -16,7 +16,7 @@ const tempRoots: string[] = [];
 function createTempRoot(): string {
   const rootDir = mkdtempSync(join(tmpdir(), 'yclaw-runtime-check-'));
   tempRoots.push(rootDir);
-  writeFileSync(join(rootDir, '.nvmrc'), '20.19.0\n');
+  writeFileSync(join(rootDir, '.nvmrc'), '22.22.0\n');
   return rootDir;
 }
 
@@ -45,11 +45,27 @@ afterEach(() => {
 });
 
 describe('getDevRuntimeFailure', () => {
-  it('在 Node 版本不受支持时返回明确错误', () => {
+  it('在 Node 主版本不是 22 时返回明确错误（v18）', () => {
     const rootDir = createTempRoot();
 
     expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v18.20.0' })).toContain(
       'Unsupported Node.js v18.20.0',
+    );
+  });
+
+  it('在 Node 主版本不是 22 时返回明确错误（v20）', () => {
+    const rootDir = createTempRoot();
+
+    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v20.19.0' })).toContain(
+      'Unsupported Node.js v20.19.0',
+    );
+  });
+
+  it('在 Node 主版本不是 22 时返回明确错误（v24）', () => {
+    const rootDir = createTempRoot();
+
+    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v24.0.0' })).toContain(
+      'Unsupported Node.js v24.0.0',
     );
   });
 
@@ -58,7 +74,7 @@ describe('getDevRuntimeFailure', () => {
     mkdirSync(join(rootDir, 'node_modules', 'electron'), { recursive: true });
     createBetterSqliteBinding(rootDir);
 
-    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v20.19.0' })).toContain(
+    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v22.22.0' })).toContain(
       'Electron binary is missing',
     );
   });
@@ -69,7 +85,7 @@ describe('getDevRuntimeFailure', () => {
     ensureFile(join(electronDir, 'path.txt'), 'electron.exe');
     createBetterSqliteBinding(rootDir);
 
-    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v20.19.0' })).toContain(
+    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v22.22.0' })).toContain(
       'Electron binary is incomplete',
     );
   });
@@ -78,7 +94,7 @@ describe('getDevRuntimeFailure', () => {
     const rootDir = createTempRoot();
     createElectronInstall(rootDir);
 
-    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v20.19.0' })).toContain(
+    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v22.22.0' })).toContain(
       'better-sqlite3 native binding is missing',
     );
   });
@@ -88,6 +104,21 @@ describe('getDevRuntimeFailure', () => {
     createElectronInstall(rootDir);
     createBetterSqliteBinding(rootDir);
 
-    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v20.19.0' })).toBeNull();
+    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v22.22.0' })).toBeNull();
+  });
+
+  it('在 Node 22 任意补丁版本下都视为受支持', () => {
+    const rootDir = createTempRoot();
+    createElectronInstall(rootDir);
+    createBetterSqliteBinding(rootDir);
+
+    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v22.0.0' })).toBeNull();
+    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v22.99.99' })).toBeNull();
+  });
+
+  it('错误信息包含 .nvmrc 中的目标版本', () => {
+    const rootDir = createTempRoot();
+
+    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v20.0.0' })).toContain('22.22.0');
   });
 });

@@ -581,4 +581,59 @@ describe('TaskService', () => {
       }),
     );
   });
+
+  it('does not include name in repository update payload when updating sign-in metadata without name', () => {
+    const signinFlow = {
+      ...sampleFlow,
+      kind: 'aliyundrive-signin',
+      entryUrl: 'https://www.aliyundrive.com/',
+      signin: {
+        site: 'aliyundrive',
+        mode: 'api-first-browser-fallback',
+        fallbackApiEnabled: true,
+        refreshToken: null,
+        maxRetryPerDay: 1,
+        manualInterventionEnabled: true,
+      },
+    } as TaskFlow & {
+      kind: 'aliyundrive-signin';
+      signin: {
+        site: 'aliyundrive';
+        mode: 'api-first-browser-fallback';
+        fallbackApiEnabled: boolean;
+        refreshToken: string | null;
+        maxRetryPerDay: number;
+        manualInterventionEnabled: true;
+      };
+    };
+    mockTaskRepository.getTaskFlow.mockReturnValueOnce(signinFlow);
+    mockTaskRepository.getTaskFlow.mockReturnValueOnce({
+      ...signinFlow,
+      signin: {
+        ...signinFlow.signin,
+        refreshToken: 'rt-captured',
+      },
+    });
+
+    service.updateTaskFlow('task-1', {
+      entryUrl: 'https://www.aliyundrive.com/',
+      signin: {
+        ...signinFlow.signin,
+        refreshToken: 'rt-captured',
+      },
+    });
+
+    expect(mockTaskRepository.updateTask).toHaveBeenCalledWith(
+      'task-1',
+      expect.not.objectContaining({
+        name: undefined,
+      }),
+    );
+    expect(mockTaskRepository.updateTask).toHaveBeenCalledWith(
+      'task-1',
+      expect.objectContaining({
+        flowJson: expect.any(String),
+      }),
+    );
+  });
 });

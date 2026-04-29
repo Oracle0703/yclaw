@@ -16,6 +16,11 @@ interface NotificationServiceLike {
   sendTestEmail(): Promise<unknown>;
 }
 
+interface LogServiceLike {
+  info(source: 'main', message: string, data?: unknown): void;
+  error(source: 'main', message: string, data?: unknown): void;
+}
+
 interface TaskServiceLike {
   createTask(payload: {
     name: string;
@@ -42,12 +47,14 @@ export function registerSigninHandlers(options: {
   taskService: TaskServiceLike;
   signinTaskService: SigninTaskServiceLike;
   notificationService: NotificationServiceLike;
+  logService?: LogServiceLike;
 }): void {
   const {
     ipcController,
     taskService,
     signinTaskService,
     notificationService,
+    logService,
   } = options;
 
   ipcController.handle(IPC_CHANNELS.SIGNIN_TASK_SAVE, (payload) => {
@@ -62,12 +69,46 @@ export function registerSigninHandlers(options: {
       enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
       signin: body.signin as TaskFlow['signin'],
     };
+    const signinPayload = nextPayload.signin;
+    const signinSite =
+      signinPayload && typeof signinPayload === 'object' && 'site' in signinPayload
+        ? signinPayload.site
+        : null;
+    const refreshTokenValue =
+      signinPayload && typeof signinPayload === 'object' && 'refreshToken' in signinPayload
+        ? signinPayload.refreshToken
+        : null;
+    const requestLog = {
+      taskId,
+      name: nextPayload.name,
+      entryUrl: nextPayload.entryUrl ?? null,
+      sessionId: nextPayload.sessionId ?? null,
+      enabled: nextPayload.enabled ?? null,
+      signinSite,
+      hasRefreshToken: typeof refreshTokenValue === 'string' && refreshTokenValue.length > 0,
+    };
+    logService?.info('main', 'signin task save requested', requestLog);
 
-    if (taskId) {
-      return taskService.updateTaskFlow(taskId, nextPayload);
+    try {
+      const saved = taskId
+        ? taskService.updateTaskFlow(taskId, nextPayload)
+        : taskService.createTask(nextPayload);
+
+      logService?.info('main', 'signin task save succeeded', {
+        ...requestLog,
+        taskId,
+        created: !taskId,
+        savedTaskId: extractTaskId(saved) ?? taskId,
+      });
+
+      return saved;
+    } catch (error) {
+      logService?.error('main', 'signin task save failed', {
+        ...requestLog,
+        error: serializeError(error),
+      });
+      throw error;
     }
-
-    return taskService.createTask(nextPayload);
   });
 
   ipcController.handle(IPC_CHANNELS.SIGNIN_TASK_GET, (payload) => {
@@ -121,4 +162,29 @@ function normalizeTaskName(value: unknown): string {
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : '阿里云盘签到';
+}
+
+function extractTaskId(value: unknown): string | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const taskId = (value as { id?: unknown }).id;
+  return typeof taskId === 'string' && taskId.length > 0 ? taskId : null;
+}
+
+function serializeError(error: unknown): {
+  message: string;
+  stack?: string;
+} {
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    message: String(error),
+  };
 }

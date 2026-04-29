@@ -1427,7 +1427,7 @@ describe('App IPC integration', () => {
 
     expect(mockGetOrCreateTabBySession).toHaveBeenCalledWith(
       'persist:session_signin_1',
-      'https://www.aliyundrive.com/sign/in',
+      'about:blank',
     );
     expect(view.webContents.loadURL).toHaveBeenCalledWith('https://www.aliyundrive.com/sign/in');
     expect(response).toMatchObject({
@@ -1443,6 +1443,25 @@ describe('App IPC integration', () => {
       },
     });
     expect(previewWindow.close).toHaveBeenCalledTimes(1);
+    expect(mockLogInfo).toHaveBeenCalledWith(
+      'main',
+      'signin login capture started',
+      expect.objectContaining({
+        taskId: 'task-signin-1',
+        sessionId: 'session-signin-1',
+        sessionPartition: 'persist:session_signin_1',
+      }),
+    );
+    expect(mockLogInfo).toHaveBeenCalledWith(
+      'main',
+      'signin login capture succeeded',
+      expect.objectContaining({
+        taskId: 'task-signin-1',
+        source: 'storage',
+        userId: 'uid-session',
+        localStorageKeyCount: 1,
+      }),
+    );
   });
 
   it('captures signin token from auth response body when storage does not expose it', async () => {
@@ -1519,7 +1538,127 @@ describe('App IPC integration', () => {
           timedOut: false,
         },
       });
+      expect(mockGetOrCreateTabBySession).toHaveBeenCalledWith(
+        'persist:session_signin_1',
+        'about:blank',
+      );
       expect(previewWindow.close).toHaveBeenCalledTimes(1);
+      expect(mockLogInfo).toHaveBeenCalledWith(
+        'main',
+        'signin login capture succeeded',
+        expect.objectContaining({
+          taskId: 'task-signin-1',
+          source: 'network',
+          userId: 'uid-network',
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('returns capture diagnostics and writes a warning log when signin token capture times out', async () => {
+    vi.useFakeTimers();
+    try {
+      mockSessionList.mockReturnValueOnce([
+        {
+          id: 'session-signin-1',
+          name: '阿里云盘账号',
+          domain: 'aliyundrive.com',
+          partition: 'persist:session_signin_1',
+          createdAt: '2026-04-28T00:00:00.000Z',
+          updatedAt: '2026-04-28T00:00:00.000Z',
+        },
+      ]);
+      mockDbGetTaskFlow.mockImplementation((taskId: string) =>
+        taskId === 'task-signin-1' ? buildSigninTaskFlow(taskId) : buildGenericTaskFlow(taskId),
+      );
+
+      const debuggerMock = createDebuggerMock({
+        responseUrl: 'https://passport.aliyundrive.com/newlogin/login.do?appName=aliyun',
+        responseBody: {
+          content: {
+            data: {
+              message: 'ok-without-token',
+            },
+          },
+        },
+      });
+      const view = {
+        setBounds: vi.fn(),
+        webContents: {
+          id: 79,
+          debugger: debuggerMock,
+          isDestroyed: () => false,
+          getURL: () => 'https://www.aliyundrive.com/drive',
+          getTitle: () => '阿里云盘',
+          session: {
+            cookies: {
+              get: vi.fn(async () => [
+                { domain: '.aliyundrive.com' },
+                { domain: '.alipan.com' },
+              ]),
+            },
+          },
+          loadURL: vi.fn(async () => undefined),
+          executeJavaScript: vi.fn(async (script: string) => {
+            if (script.includes('sessionStorageSnapshot')) {
+              return {
+                pageUrl: 'https://www.aliyundrive.com/drive',
+                pageTitle: '阿里云盘',
+                localStorageKeys: ['theme', 'lang'],
+                sessionStorageKeys: ['traceId'],
+              };
+            }
+            return null;
+          }),
+        },
+      };
+      mockGetOrCreateTabBySession.mockReturnValueOnce(view);
+
+      const app = new App();
+      const previewWindow = createSigninPreviewWindowMock();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (app as any).signinPreviewWindow = previewWindow;
+
+      await app.start();
+
+      const handler = handlers.get(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE);
+      expect(handler).toBeDefined();
+
+      const responsePromise = handler!({}, { taskId: 'task-signin-1' });
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 2000);
+      const response = await responsePromise;
+
+      expect(response).toMatchObject({
+        success: true,
+        data: {
+          refreshToken: null,
+          timedOut: true,
+          captureDiagnostics: {
+            pageUrl: 'https://www.aliyundrive.com/drive',
+            pageTitle: '阿里云盘',
+            localStorageKeys: ['theme', 'lang'],
+            sessionStorageKeys: ['traceId'],
+            cookieDomains: ['.aliyundrive.com', '.alipan.com'],
+            networkResponseCount: 1,
+            tokenHintResponseUrls: [],
+          },
+        },
+      });
+      expect(mockGetOrCreateTabBySession).toHaveBeenCalledWith(
+        'persist:session_signin_1',
+        'about:blank',
+      );
+      expect(mockLogWarn).toHaveBeenCalledWith(
+        'main',
+        'signin login capture timed out',
+        expect.objectContaining({
+          taskId: 'task-signin-1',
+          pageUrl: 'https://www.aliyundrive.com/drive',
+          networkResponseCount: 1,
+        }),
+      );
     } finally {
       vi.useRealTimers();
     }

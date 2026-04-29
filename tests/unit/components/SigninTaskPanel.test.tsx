@@ -288,4 +288,62 @@ describe('SigninTaskPanel', () => {
     expect(screen.getByText('localStorage 已采集 2 项')).toBeDefined();
     expect(screen.getByText('token, shareToken')).toBeDefined();
   });
+
+  it('renders capture diagnostics when login capture fails without a token', async () => {
+    const onCaptureLogin = vi.fn().mockResolvedValue({
+      taskId: 'task-signin-1',
+      refreshToken: null,
+      captureDiagnostics: {
+        pageUrl: 'https://www.aliyundrive.com/drive',
+        pageTitle: '阿里云盘',
+        localStorageKeys: ['theme', 'lang'],
+        sessionStorageKeys: ['traceId'],
+        cookieDomains: ['.aliyundrive.com', '.alipan.com'],
+        networkResponseCount: 3,
+        tokenHintResponseUrls: ['https://passport.aliyundrive.com/newlogin/login.do?appName=aliyun'],
+      },
+    });
+
+    render(
+      <SigninTaskPanel
+        taskId="task-signin-1"
+        sessions={[]}
+        onSubmit={vi.fn()}
+        onCaptureLogin={onCaptureLogin}
+        initialTaskName="阿里云盘签到"
+        initialValue={{
+          entryUrl: 'https://www.aliyundrive.com/',
+          sessionId: null,
+          enabled: true,
+          signin: {
+            site: 'aliyundrive',
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
+            refreshToken: null,
+            maxRetryPerDay: 1,
+            manualInterventionEnabled: true,
+          },
+        }}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '打开登录页采集 Token' }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('最近一次采集诊断')).toBeDefined();
+    });
+    expect(screen.getByText('页面地址：https://www.aliyundrive.com/drive')).toBeDefined();
+    expect(screen.getByText('页面标题：阿里云盘')).toBeDefined();
+    expect(screen.getByText('LocalStorage Keys：theme, lang')).toBeDefined();
+    expect(screen.getByText('SessionStorage Keys：traceId')).toBeDefined();
+    expect(screen.getByText('Cookie 域：.aliyundrive.com, .alipan.com')).toBeDefined();
+    expect(screen.getByText('网络响应数：3')).toBeDefined();
+    expect(
+      screen.getByText(
+        '含 Token 线索的响应：https://passport.aliyundrive.com/newlogin/login.do?appName=aliyun',
+      ),
+    ).toBeDefined();
+  });
 });

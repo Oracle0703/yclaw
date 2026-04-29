@@ -19,6 +19,16 @@ export type SigninRunStatus =
   | 'success'
   | 'failed';
 
+export interface SigninCaptureDiagnostics {
+  pageUrl?: string | null;
+  pageTitle?: string | null;
+  localStorageKeys?: string[];
+  sessionStorageKeys?: string[];
+  cookieDomains?: string[];
+  networkResponseCount?: number;
+  tokenHintResponseUrls?: string[];
+}
+
 export interface SigninLoginSnapshot {
   refreshToken?: string | null;
   accessToken?: string | null;
@@ -29,6 +39,7 @@ export interface SigninLoginSnapshot {
   tokenType?: string | null;
   tokenPayload?: Record<string, unknown> | null;
   localStorageSnapshot?: Record<string, string> | null;
+  captureDiagnostics?: SigninCaptureDiagnostics | null;
 }
 
 export interface SigninTaskConfig extends SigninLoginSnapshot {

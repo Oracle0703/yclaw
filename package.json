@@ -4,7 +4,7 @@
   "description": "可扩展、模块化、插件驱动的跨平台桌面工作台容器",
   "main": "dist/main/main/index.js",
   "scripts": {
-    "predev": "node scripts/ensure-dev-runtime.cjs",
+    "predev": "node scripts/restore-electron-native-deps.cjs && node scripts/ensure-dev-runtime.cjs",
     "dev": "tsx scripts/dev.ts",
     "build": "npm run build:core && npm run build:features && npm run build:main",
     "build:renderer": "npm run build:core",
@@ -20,6 +20,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\"",
     "pretest": "node scripts/ensure-node-native-deps.cjs",
     "test": "vitest run",
+    "posttest": "node scripts/restore-electron-native-deps.cjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
@@ -78,7 +79,7 @@
     "zustand": "^5.0.2"
   },
   "engines": {
-    "node": ">=20.19.0 <23"
+    "node": ">=22.0.0 <23"
   },
   "author": "",
   "license": "MIT"

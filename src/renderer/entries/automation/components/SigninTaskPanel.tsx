@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Button, Space, Tag, Typography } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
-import type { BrowserSession, SigninLoginSnapshot, SigninTaskConfig } from '@shared/types';
+import type {
+  BrowserSession,
+  SigninCaptureDiagnostics,
+  SigninLoginSnapshot,
+  SigninTaskConfig,
+} from '@shared/types';
 
 interface SigninTaskPanelValue {
   entryUrl?: string;
@@ -62,6 +67,7 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
   const canCaptureLogin = typeof onCaptureLogin === 'function';
   const resolvedTaskName = taskName.trim() || initialTaskName?.trim() || '阿里云盘签到';
   const localStorageKeys = Object.keys(loginSnapshot.localStorageSnapshot ?? {});
+  const captureDiagnostics = loginSnapshot.captureDiagnostics ?? null;
   const hasCapturedSnapshot =
     refreshToken.trim().length > 0 ||
     Boolean(loginSnapshot.userName) ||
@@ -182,12 +188,14 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
                 setCapturing(true);
                 try {
                   const captured = await onCaptureLogin(buildSubmitPayload());
-                  if (captured?.refreshToken) {
-                    setRefreshToken(captured.refreshToken);
+                  if (captured) {
                     setLoginSnapshot((prev) => ({
                       ...prev,
                       ...captured,
                     }));
+                  }
+                  if (captured?.refreshToken) {
+                    setRefreshToken(captured.refreshToken);
                     setFallbackApiEnabled(true);
                   }
                 } finally {
@@ -202,6 +210,39 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
             ) : null}
             <Typography.Text type="secondary">检测到登录态后会自动保存并关闭预览窗口</Typography.Text>
           </Space>
+        ) : null}
+
+        {captureDiagnostics ? (
+          <div aria-label="最近一次采集诊断" style={{ border: '1px solid #f0f0f0', padding: 12 }}>
+            <Typography.Text>最近一次采集诊断</Typography.Text>
+            <div style={{ marginTop: 8 }}>页面地址：{captureDiagnostics.pageUrl ?? '-'}</div>
+            <div>页面标题：{captureDiagnostics.pageTitle ?? '-'}</div>
+            <div>
+              LocalStorage Keys：
+              {captureDiagnostics.localStorageKeys?.length
+                ? captureDiagnostics.localStorageKeys.join(', ')
+                : '-'}
+            </div>
+            <div>
+              SessionStorage Keys：
+              {captureDiagnostics.sessionStorageKeys?.length
+                ? captureDiagnostics.sessionStorageKeys.join(', ')
+                : '-'}
+            </div>
+            <div>
+              Cookie 域：
+              {captureDiagnostics.cookieDomains?.length
+                ? captureDiagnostics.cookieDomains.join(', ')
+                : '-'}
+            </div>
+            <div>网络响应数：{captureDiagnostics.networkResponseCount ?? 0}</div>
+            <div>
+              含 Token 线索的响应：
+              {captureDiagnostics.tokenHintResponseUrls?.length
+                ? captureDiagnostics.tokenHintResponseUrls.join(', ')
+                : '-'}
+            </div>
+          </div>
         ) : null}
 
         {hasCapturedSnapshot ? (
@@ -308,6 +349,7 @@ function pickLoginSnapshot(signin?: SigninTaskConfig | null): SigninLoginSnapsho
     tokenType: signin?.tokenType ?? null,
     tokenPayload: normalizeObjectSnapshot(signin?.tokenPayload),
     localStorageSnapshot: normalizeLocalStorageSnapshot(signin?.localStorageSnapshot),
+    captureDiagnostics: normalizeCaptureDiagnostics(signin?.captureDiagnostics),
   };
 }
 
@@ -322,6 +364,7 @@ function normalizeLoginSnapshot(snapshot: SigninLoginSnapshot): SigninLoginSnaps
     tokenType: normalizeOptionalToken(snapshot.tokenType),
     tokenPayload: normalizeObjectSnapshot(snapshot.tokenPayload),
     localStorageSnapshot: normalizeLocalStorageSnapshot(snapshot.localStorageSnapshot),
+    captureDiagnostics: normalizeCaptureDiagnostics(snapshot.captureDiagnostics),
   };
 }
 
@@ -353,6 +396,37 @@ function normalizeLocalStorageSnapshot(
     return key.trim().length > 0 && typeof itemValue === 'string';
   });
   return entries.length > 0 ? Object.fromEntries(entries) : null;
+}
+
+function normalizeCaptureDiagnostics(
+  value?: SigninCaptureDiagnostics | null,
+): SigninCaptureDiagnostics | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return {
+    pageUrl: normalizeOptionalToken(value.pageUrl),
+    pageTitle: normalizeOptionalToken(value.pageTitle),
+    localStorageKeys: normalizeStringArray(value.localStorageKeys),
+    sessionStorageKeys: normalizeStringArray(value.sessionStorageKeys),
+    cookieDomains: normalizeStringArray(value.cookieDomains),
+    networkResponseCount:
+      typeof value.networkResponseCount === 'number' && Number.isFinite(value.networkResponseCount)
+        ? value.networkResponseCount
+        : 0,
+    tokenHintResponseUrls: normalizeStringArray(value.tokenHintResponseUrls),
+  };
+}
+
+function normalizeStringArray(value?: string[] | null): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
 }
 
 function formatJson(value: Record<string, unknown> | Record<string, string> | null | undefined): string {

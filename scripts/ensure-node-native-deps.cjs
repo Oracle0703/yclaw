@@ -2,38 +2,43 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+const {
+  isNativeAbiOrBindingError,
+  buildNodeRebuildPlan,
+  writeRuntimeMarker,
+} = require('./ensure-node-native-deps-utils.js');
+
 function ensureNodeNativeDeps() {
+  const rootDir = path.resolve(__dirname, '..');
+
   try {
     const Database = require('better-sqlite3');
     const db = new Database(':memory:');
     db.close();
+    // 加载成功说明当前 .node 已经是 Node ABI。
+    writeRuntimeMarker(rootDir, 'node');
+    return;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const needsRebuild =
-      message.includes('NODE_MODULE_VERSION') ||
-      message.includes('Could not locate the bindings file') ||
-      message.includes('better_sqlite3.node');
-
-    if (!needsRebuild) {
+    if (!isNativeAbiOrBindingError(message)) {
       throw error;
     }
 
-    const cacheRoot = path.resolve(__dirname, '..', '.cache');
-    const npmCacheDir = path.join(cacheRoot, 'npm');
-    const nodeGypDir = path.join(cacheRoot, 'node-gyp');
-    fs.mkdirSync(npmCacheDir, { recursive: true });
-    fs.mkdirSync(nodeGypDir, { recursive: true });
+    const plan = buildNodeRebuildPlan({ cacheRoot: path.join(rootDir, '.cache') });
+    for (const dir of plan.directories) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
 
     console.log('[pretest] Rebuilding better-sqlite3 for the current Node runtime');
-    execSync('npm rebuild better-sqlite3', {
+    execSync(plan.command, {
       stdio: 'inherit',
       env: {
         ...process.env,
-        npm_config_cache: npmCacheDir,
-        npm_config_devdir: nodeGypDir,
-        npm_config_runtime: 'node',
+        ...plan.env,
       },
     });
+
+    writeRuntimeMarker(rootDir, 'node');
   }
 }
 

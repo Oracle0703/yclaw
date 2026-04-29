@@ -338,7 +338,7 @@ export class App {
       provider: new AliyunDriveSigninProvider({
         browser: {
           openSessionPage: async ({ sessionPartition, url }) => {
-            const view = this.tabManager.getOrCreateTabBySession(sessionPartition, url);
+            const view = this.tabManager.getOrCreateTabBySession(sessionPartition, 'about:blank');
             // 关键：把 WebContentsView 挂到一个真实可见的 BrowserWindow，否则
             // chromium 认为 viewport 0x0 / visibilityState=hidden，阿里云盘等
             // 依赖懒加载/IntersectionObserver 的活动区根本不会渲染，签到 JS
@@ -561,6 +561,7 @@ export class App {
       taskService: this.taskService as never,
       signinTaskService: this.signinTaskService as never,
       notificationService: this.notificationService as never,
+      logService: this.logService as never,
     });
     this.ipcController.handle(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, (payload: unknown) => {
       const { taskId } = (payload as { taskId?: string }) ?? {};
@@ -1247,6 +1248,15 @@ export class App {
     tokenType?: string | null;
     tokenPayload?: Record<string, unknown> | null;
     localStorageSnapshot?: Record<string, string> | null;
+    captureDiagnostics?: {
+      pageUrl?: string | null;
+      pageTitle?: string | null;
+      localStorageKeys?: string[];
+      sessionStorageKeys?: string[];
+      cookieDomains?: string[];
+      networkResponseCount?: number;
+      tokenHintResponseUrls?: string[];
+    } | null;
     timedOut: boolean;
   }> {
     const task = this.taskService.getTaskDetail(taskId);
@@ -1258,16 +1268,29 @@ export class App {
       this.sessionRegistry.listSessions().find((session) => session.id === task.sessionId)
         ?.partition ?? 'default';
     const loginUrl = 'https://www.aliyundrive.com/sign/in';
-    const view = this.tabManager.getOrCreateTabBySession(sessionPartition, loginUrl);
-    this.attachToSigninPreviewWindow(view);
-    const detachNetworkCapture = await this.attachAliyunDriveLoginNetworkCapture(view.webContents);
-    await view.webContents.loadURL(loginUrl);
+    const captureContext = {
+      taskId,
+      taskName: task.name,
+      sessionId: task.sessionId ?? null,
+      sessionPartition,
+      loginUrl,
+      hasRefreshTokenBeforeCapture:
+        typeof task.signin.refreshToken === 'string' && task.signin.refreshToken.length > 0,
+    };
 
-    const POLL_INTERVAL_MS = 1500;
-    const TIMEOUT_MS = 5 * 60 * 1000;
-    const deadline = Date.now() + TIMEOUT_MS;
+    this.logService.info('main', 'signin login capture started', captureContext);
 
-    const probeScript = `
+    try {
+      const view = this.tabManager.getOrCreateTabBySession(sessionPartition, 'about:blank');
+      this.attachToSigninPreviewWindow(view);
+      const detachNetworkCapture = await this.attachAliyunDriveLoginNetworkCapture(view.webContents);
+      await view.webContents.loadURL(loginUrl);
+
+      const POLL_INTERVAL_MS = 1500;
+      const TIMEOUT_MS = 5 * 60 * 1000;
+      const deadline = Date.now() + TIMEOUT_MS;
+
+      const probeScript = `
       (() => {
         try {
           const localStorageSnapshot = {};
@@ -1358,56 +1381,86 @@ export class App {
       })();
     `;
 
-    type ProbeResult = {
-      refreshToken: string;
-      accessToken: string | null;
-      userName: string | null;
-      userId: string | null;
-      defaultDriveId: string | null;
-      expiresAt: string | null;
-      tokenType: string | null;
-      tokenPayload: Record<string, unknown> | null;
-      localStorageSnapshot: Record<string, string> | null;
-    };
+      type ProbeResult = {
+        refreshToken: string;
+        accessToken: string | null;
+        userName: string | null;
+        userId: string | null;
+        defaultDriveId: string | null;
+        expiresAt: string | null;
+        tokenType: string | null;
+        tokenPayload: Record<string, unknown> | null;
+        localStorageSnapshot: Record<string, string> | null;
+      };
 
-    let captured: ProbeResult | null = null;
+      let captured: ProbeResult | null = null;
+      let captureSource: 'network' | 'storage' | null = null;
 
-    try {
-      while (Date.now() < deadline) {
-        if (view.webContents.isDestroyed()) break;
+      try {
+        while (Date.now() < deadline) {
+          if (view.webContents.isDestroyed()) break;
 
-        const networkResult = detachNetworkCapture.getCaptured();
-        if (networkResult?.refreshToken) {
-          captured = networkResult;
-          break;
-        }
-
-        try {
-          const result = (await view.webContents.executeJavaScript(
-            probeScript,
-          )) as ProbeResult | null;
-          const normalizedResult = this.normalizeAliyunDriveTokenPayload(result);
-          if (normalizedResult?.refreshToken) {
-            captured = {
-              ...normalizedResult,
-              localStorageSnapshot: result?.localStorageSnapshot ?? null,
-            };
+          const networkResult = detachNetworkCapture.getCaptured();
+          if (networkResult?.refreshToken) {
+            captured = networkResult;
+            captureSource = 'network';
             break;
           }
-        } catch {
-          /* 页面跳转/卸载瞬间 executeJavaScript 会抛错，忽略并继续轮询 */
-        }
-        await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-      }
-    } finally {
-      await detachNetworkCapture.dispose();
-    }
 
-    if (captured) {
-      this.taskService.updateTaskFlow(taskId, {
-        entryUrl: task.entryUrl,
-        signin: {
-          ...task.signin,
+          try {
+            const result = (await view.webContents.executeJavaScript(
+              probeScript,
+            )) as ProbeResult | null;
+            const normalizedResult = this.normalizeAliyunDriveTokenPayload(result);
+            if (normalizedResult?.refreshToken) {
+              captured = {
+                ...normalizedResult,
+                localStorageSnapshot: result?.localStorageSnapshot ?? null,
+              };
+              captureSource = 'storage';
+              break;
+            }
+          } catch {
+            /* 页面跳转/卸载瞬间 executeJavaScript 会抛错，忽略并继续轮询 */
+          }
+          await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        }
+      } finally {
+        await detachNetworkCapture.dispose();
+      }
+
+      if (captured) {
+        this.taskService.updateTaskFlow(taskId, {
+          entryUrl: task.entryUrl,
+          signin: {
+            ...task.signin,
+            refreshToken: captured.refreshToken,
+            accessToken: captured.accessToken,
+            userName: captured.userName,
+            userId: captured.userId,
+            defaultDriveId: captured.defaultDriveId,
+            expiresAt: captured.expiresAt,
+            tokenType: captured.tokenType,
+            tokenPayload: captured.tokenPayload,
+            localStorageSnapshot: captured.localStorageSnapshot,
+          },
+        });
+
+        this.logService.info('main', 'signin login capture succeeded', {
+          ...captureContext,
+          source: captureSource ?? 'storage',
+          userName: captured.userName,
+          userId: captured.userId,
+          localStorageKeyCount: Object.keys(captured.localStorageSnapshot ?? {}).length,
+        });
+
+        // 完成后关闭预览窗口（用户诉求："拿到我的信息后关闭窗口"）
+        const previewWindow = this.signinPreviewWindow;
+        if (previewWindow && !previewWindow.isDestroyed()) {
+          previewWindow.close();
+        }
+
+        return {
           refreshToken: captured.refreshToken,
           accessToken: captured.accessToken,
           userName: captured.userName,
@@ -1417,33 +1470,26 @@ export class App {
           tokenType: captured.tokenType,
           tokenPayload: captured.tokenPayload,
           localStorageSnapshot: captured.localStorageSnapshot,
-        },
-      });
-
-      // 完成后关闭预览窗口（用户诉求："拿到我的信息后关闭窗口"）
-      const previewWindow = this.signinPreviewWindow;
-      if (previewWindow && !previewWindow.isDestroyed()) {
-        previewWindow.close();
+          timedOut: false,
+        };
       }
 
       return {
-        refreshToken: captured.refreshToken,
-        accessToken: captured.accessToken,
-        userName: captured.userName,
-        userId: captured.userId,
-        defaultDriveId: captured.defaultDriveId,
-        expiresAt: captured.expiresAt,
-        tokenType: captured.tokenType,
-        tokenPayload: captured.tokenPayload,
-        localStorageSnapshot: captured.localStorageSnapshot,
-        timedOut: false,
+        refreshToken: null,
+        captureDiagnostics: await this.collectAliyunDriveCaptureDiagnostics(
+          view.webContents,
+          detachNetworkCapture.getDiagnostics(),
+          captureContext,
+        ),
+        timedOut: true,
       };
+    } catch (error) {
+      this.logService.error('main', 'signin login capture failed', {
+        ...captureContext,
+        error: this.serializeErrorForLog(error),
+      });
+      throw error;
     }
-
-    return {
-      refreshToken: null,
-      timedOut: true,
-    };
   }
 
   private async attachAliyunDriveLoginNetworkCapture(webContents: WebContents): Promise<{
@@ -1458,6 +1504,10 @@ export class App {
       tokenPayload: Record<string, unknown> | null;
       localStorageSnapshot: Record<string, string> | null;
     } | null;
+    getDiagnostics: () => {
+      networkResponseCount: number;
+      tokenHintResponseUrls: string[];
+    };
     dispose: () => Promise<void>;
   }> {
     let captured: {
@@ -1475,31 +1525,40 @@ export class App {
     if (!debuggerApi) {
       return {
         getCaptured: () => null,
+        getDiagnostics: () => ({
+          networkResponseCount: 0,
+          tokenHintResponseUrls: [],
+        }),
         dispose: async () => undefined,
       };
     }
 
     let attachedHere = false;
+    let networkResponseCount = 0;
+    const tokenHintResponseUrls = new Set<string>();
     const listener = async (
       _event: unknown,
       method: string,
       params: { requestId?: string; response?: { url?: string } },
     ) => {
-      if (captured || method !== 'Network.responseReceived') {
+      if (method !== 'Network.responseReceived') {
         return;
       }
 
       const requestId = params?.requestId;
       const responseUrl = params?.response?.url;
+      networkResponseCount += 1;
       if (
-        typeof requestId !== 'string' ||
         typeof responseUrl !== 'string' ||
-        !this.isAliyunDriveLoginResponseUrl(responseUrl)
+        !this.isAliyunDriveCandidateResponseUrl(responseUrl)
       ) {
         return;
       }
 
       try {
+        if (typeof requestId !== 'string') {
+          return;
+        }
         const response = await debuggerApi.sendCommand('Network.getResponseBody', { requestId }) as {
           body?: string;
           base64Encoded?: boolean;
@@ -1507,6 +1566,12 @@ export class App {
         const bodyText = response.base64Encoded
           ? Buffer.from(response.body ?? '', 'base64').toString('utf8')
           : (response.body ?? '');
+        if (bodyText.includes('refresh_token') || bodyText.includes('refreshToken')) {
+          tokenHintResponseUrls.add(responseUrl);
+        }
+        if (captured) {
+          return;
+        }
         const normalized = this.normalizeAliyunDriveTokenPayload(bodyText);
         if (normalized?.refreshToken) {
           captured = {
@@ -1529,12 +1594,20 @@ export class App {
     } catch {
       return {
         getCaptured: () => null,
+        getDiagnostics: () => ({
+          networkResponseCount,
+          tokenHintResponseUrls: Array.from(tokenHintResponseUrls),
+        }),
         dispose: async () => undefined,
       };
     }
 
     return {
       getCaptured: () => captured,
+      getDiagnostics: () => ({
+        networkResponseCount,
+        tokenHintResponseUrls: Array.from(tokenHintResponseUrls),
+      }),
       dispose: async () => {
         try {
           if (typeof debuggerApi.off === 'function') {
@@ -1562,8 +1635,135 @@ export class App {
     };
   }
 
-  private isAliyunDriveLoginResponseUrl(url: string): boolean {
-    return url.includes('login.do?appName=aliyun');
+  private isAliyunDriveCandidateResponseUrl(url: string): boolean {
+    return (
+      url.includes('login.do?appName=aliyun') ||
+      url.includes('passport.aliyundrive.com') ||
+      url.includes('auth.aliyundrive.com') ||
+      url.includes('auth.alipan.com') ||
+      url.includes('api.aliyundrive.com')
+    );
+  }
+
+  private async collectAliyunDriveCaptureDiagnostics(
+    webContents: WebContents,
+    networkDiagnostics: {
+      networkResponseCount: number;
+      tokenHintResponseUrls: string[];
+    },
+    context?: {
+      taskId: string;
+      taskName: string;
+      sessionId: string | null;
+      sessionPartition: string;
+      loginUrl: string;
+      hasRefreshTokenBeforeCapture: boolean;
+    },
+  ): Promise<{
+    pageUrl?: string | null;
+    pageTitle?: string | null;
+    localStorageKeys?: string[];
+    sessionStorageKeys?: string[];
+    cookieDomains?: string[];
+    networkResponseCount?: number;
+    tokenHintResponseUrls?: string[];
+  }> {
+    let pageUrl: string | null = null;
+    let pageTitle: string | null = null;
+    let localStorageKeys: string[] = [];
+    let sessionStorageKeys: string[] = [];
+
+    try {
+      const result = await webContents.executeJavaScript(`
+        (() => {
+          try {
+            const localStorageSnapshot = {};
+            const sessionStorageSnapshot = {};
+            for (let index = 0; index < window.localStorage.length; index += 1) {
+              const key = window.localStorage.key(index);
+              if (!key) continue;
+              const value = window.localStorage.getItem(key);
+              if (typeof value === 'string') {
+                localStorageSnapshot[key] = value;
+              }
+            }
+            for (let index = 0; index < window.sessionStorage.length; index += 1) {
+              const key = window.sessionStorage.key(index);
+              if (!key) continue;
+              const value = window.sessionStorage.getItem(key);
+              if (typeof value === 'string') {
+                sessionStorageSnapshot[key] = value;
+              }
+            }
+            return {
+              pageUrl: window.location.href,
+              pageTitle: document.title,
+              localStorageKeys: Object.keys(localStorageSnapshot),
+              sessionStorageKeys: Object.keys(sessionStorageSnapshot),
+            };
+          } catch (_error) {
+            return null;
+          }
+        })();
+      `) as {
+        pageUrl?: string;
+        pageTitle?: string;
+        localStorageKeys?: string[];
+        sessionStorageKeys?: string[];
+      } | null;
+      pageUrl = result?.pageUrl ?? webContents.getURL?.() ?? null;
+      pageTitle = result?.pageTitle ?? webContents.getTitle?.() ?? null;
+      localStorageKeys = Array.isArray(result?.localStorageKeys) ? result.localStorageKeys : [];
+      sessionStorageKeys = Array.isArray(result?.sessionStorageKeys) ? result.sessionStorageKeys : [];
+    } catch {
+      pageUrl = webContents.getURL?.() ?? null;
+      pageTitle = webContents.getTitle?.() ?? null;
+    }
+
+    let cookieDomains: string[] = [];
+    try {
+      const cookies = await webContents.session.cookies.get({});
+      cookieDomains = Array.from(
+        new Set(
+          cookies
+            .map((cookie) => cookie.domain)
+            .filter((domain): domain is string => typeof domain === 'string' && domain.length > 0),
+        ),
+      );
+    } catch {
+      cookieDomains = [];
+    }
+
+    const diagnostics = {
+      pageUrl,
+      pageTitle,
+      localStorageKeys,
+      sessionStorageKeys,
+      cookieDomains,
+      networkResponseCount: networkDiagnostics.networkResponseCount,
+      tokenHintResponseUrls: networkDiagnostics.tokenHintResponseUrls,
+    };
+    this.logService.warn('main', 'signin login capture timed out', {
+      ...context,
+      ...diagnostics,
+    });
+    return diagnostics;
+  }
+
+  private serializeErrorForLog(error: unknown): {
+    message: string;
+    stack?: string;
+  } {
+    if (error instanceof Error) {
+      return {
+        message: error.message,
+        stack: error.stack,
+      };
+    }
+
+    return {
+      message: String(error),
+    };
   }
 
   private normalizeAliyunDriveTokenPayload(
