@@ -10,6 +10,7 @@ export interface SigninExecutionContext {
   sessionPartition: string;
   entryUrl: string;
   refreshToken?: string | null;
+  browserFallbackEnabled?: boolean;
   maxRetryPerDay: number;
 }
 

@@ -12,7 +12,22 @@ const { invokeMock, confirmOptionsRef } = vi.hoisted(() => ({
   },
 }));
 
+const { messageSuccessMock, messageErrorMock, messageWarningMock } = vi.hoisted(() => ({
+  messageSuccessMock: vi.fn(),
+  messageErrorMock: vi.fn(),
+  messageWarningMock: vi.fn(),
+}));
+
 vi.mock('antd', () => ({
+  App: {
+    useApp: () => ({
+      message: {
+        error: messageErrorMock,
+        success: messageSuccessMock,
+        warning: messageWarningMock,
+      },
+    }),
+  },
   Button: ({
     children,
     onClick,
@@ -43,8 +58,9 @@ vi.mock('antd', () => ({
   Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   message: {
-    error: vi.fn(),
-    success: vi.fn(),
+    error: messageErrorMock,
+    success: messageSuccessMock,
+    warning: messageWarningMock,
   },
 }));
 
@@ -113,10 +129,25 @@ vi.mock('@renderer/entries/automation/components/WorkspaceSwitcher', () => ({
 vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
   SigninTaskPanel: ({
     initialTaskName,
+    initialValue,
     onSubmit,
     taskId,
+    onCaptureLogin,
   }: {
     initialTaskName?: string;
+    initialValue?: {
+      entryUrl?: string;
+      sessionId?: string | null;
+      enabled?: boolean;
+      signin?: {
+        site: 'aliyundrive';
+        mode: 'browser-first-api-fallback' | 'api-first-browser-fallback';
+        fallbackApiEnabled: boolean;
+        refreshToken: string | null;
+        maxRetryPerDay: number;
+        manualInterventionEnabled: true;
+      } | null;
+    } | null;
     taskId?: string | null;
     onSubmit: (payload: {
       taskId: string | null;
@@ -133,9 +164,48 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
         manualInterventionEnabled: true;
       };
     }) => void | Promise<void>;
+    onCaptureLogin?: (payload: {
+      taskId: string | null;
+      name: string;
+      entryUrl: string;
+      sessionId: string | null;
+      enabled: boolean;
+      signin: {
+        site: 'aliyundrive';
+        mode: 'browser-first-api-fallback' | 'api-first-browser-fallback';
+        fallbackApiEnabled: boolean;
+        refreshToken: string | null;
+        maxRetryPerDay: number;
+        manualInterventionEnabled: true;
+      };
+    }) => Promise<unknown>;
   }) => (
     <div>
       <span>SigninTaskPanel:{initialTaskName}</span>
+      {typeof onCaptureLogin === 'function' ? (
+        <button
+          type="button"
+          onClick={() =>
+            void onCaptureLogin({
+              taskId: taskId ?? null,
+              name: initialTaskName ?? '阿里云盘签到',
+              entryUrl: initialValue?.entryUrl ?? 'https://www.aliyundrive.com/',
+              sessionId: initialValue?.sessionId ?? null,
+              enabled: initialValue?.enabled ?? true,
+              signin: {
+                site: 'aliyundrive',
+                mode: initialValue?.signin?.mode ?? 'api-first-browser-fallback',
+                fallbackApiEnabled: initialValue?.signin?.fallbackApiEnabled ?? true,
+                refreshToken: initialValue?.signin?.refreshToken ?? null,
+                maxRetryPerDay: initialValue?.signin?.maxRetryPerDay ?? 1,
+                manualInterventionEnabled: true,
+              },
+            })
+          }
+        >
+          采集登录态
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={() =>
@@ -199,6 +269,9 @@ import SigninApp from '@renderer/entries/signin/App';
 describe('SigninApp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    messageSuccessMock.mockReset();
+    messageErrorMock.mockReset();
+    messageWarningMock.mockReset();
     confirmOptionsRef.current = null;
     invokeMock.mockImplementation((channel: string, payload?: { taskId?: string }) => {
       if (channel === IPC_CHANNELS.SESSION_LIST) {
@@ -290,6 +363,15 @@ describe('SigninApp', () => {
           updatedAt: '2026-04-28T00:00:00.000Z',
         });
       }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE) {
+        return Promise.resolve({
+          refreshToken: 'rt-captured',
+          userName: '测试账号',
+          userId: 'uid-1',
+          expiresAt: '2026-05-01T00:00:00.000Z',
+          timedOut: false,
+        });
+      }
       if (channel === IPC_CHANNELS.SIGNIN_TASK_RUN_NOW) {
         return Promise.resolve({
           taskId: payload?.taskId ?? 'task-signin-1',
@@ -318,6 +400,22 @@ describe('SigninApp', () => {
       fireEvent.click(screen.getByRole('button', { name: '新建签到任务' }));
     });
     expect(screen.getByText('SigninTaskPanel:阿里云盘签到')).toBeDefined();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '采集登录态' }));
+    });
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_SAVE, expect.objectContaining({
+        taskId: null,
+        name: '阿里云盘签到',
+      }));
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, {
+        taskId: 'task-signin-new',
+      });
+    });
+    await waitFor(() => {
+      expect(messageSuccessMock).toHaveBeenCalledWith(expect.stringContaining('已获取登录态'));
+      expect(messageSuccessMock).toHaveBeenCalledWith(expect.stringContaining('已自动关闭窗口'));
+    });
 
     await act(async () => {
       fireEvent.click(screen.getAllByRole('button', { name: '编辑' })[0]);
@@ -326,6 +424,17 @@ describe('SigninApp', () => {
       expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_GET, {
         taskId: 'task-signin-1',
       });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '采集登录态' }));
+    });
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, {
+        taskId: 'task-signin-1',
+      });
+    });
+    await waitFor(() => {
+      expect(messageSuccessMock).toHaveBeenCalledWith(expect.stringContaining('已获取登录态'));
     });
 
     await act(async () => {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Space, Tag, message } from 'antd';
+import { App as AntdApp, Button, Input, Space, Tag } from 'antd';
 import { PlusOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
 import { EVENTS, IPC_CHANNELS } from '@shared/constants';
@@ -8,6 +8,7 @@ import { useIpc, useIpcEvent } from '../../shared/hooks';
 import type {
   BrowserSession,
   OperationsAcceptanceMetric,
+  SigninLoginSnapshot,
   SigninRunSummary,
   TaskFlow,
   TaskStep,
@@ -36,6 +37,7 @@ interface SelectedTaskSummary {
 
 export default function App() {
   const { invoke, taskOperations } = useIpc();
+  const { message } = AntdApp.useApp();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedTaskSummary, setSelectedTaskSummary] = useState<SelectedTaskSummary | null>(null);
   const [selectedTaskKind, setSelectedTaskKind] = useState<TaskFlow['kind']>('generic');
@@ -151,6 +153,38 @@ export default function App() {
     }
   };
 
+  const persistSigninTask = async (
+    payload: {
+      taskId: string | null;
+      name: string;
+      entryUrl: string;
+      sessionId: string | null;
+      enabled: boolean;
+      signin: NonNullable<TaskFlow['signin']>;
+    },
+  ) => {
+    const normalizedPayload = {
+      ...payload,
+      name: payload.name.trim() || '阿里云盘签到',
+    };
+    const saved = await invoke<TaskFlow>(IPC_CHANNELS.SIGNIN_TASK_SAVE, normalizedPayload);
+    setSelectedTaskId(saved.id);
+    setSelectedTaskKind('aliyundrive-signin');
+    setTaskName(saved.name);
+    setSelectedTaskSummary({
+      id: saved.id,
+      stepsCount: saved.steps.length,
+    });
+    setSigninFlow({
+      entryUrl: saved.entryUrl,
+      sessionId: saved.sessionId,
+      enabled: saved.enabled,
+      signin: saved.signin ?? null,
+    });
+    await refreshSigninRunData(saved.id);
+    return saved;
+  };
+
   const handleSaveSigninTask = async (payload: {
     taskId: string | null;
     name: string;
@@ -160,21 +194,7 @@ export default function App() {
     signin: NonNullable<TaskFlow['signin']>;
   }) => {
     try {
-      const saved = await invoke<TaskFlow>(IPC_CHANNELS.SIGNIN_TASK_SAVE, payload);
-      setSelectedTaskId(saved.id);
-      setSelectedTaskKind('aliyundrive-signin');
-      setTaskName(saved.name);
-      setSelectedTaskSummary({
-        id: saved.id,
-        stepsCount: saved.steps.length,
-      });
-      setSigninFlow({
-        entryUrl: saved.entryUrl,
-        sessionId: saved.sessionId,
-        enabled: saved.enabled,
-        signin: saved.signin ?? null,
-      });
-      await refreshSigninRunData(saved.id);
+      await persistSigninTask(payload);
     } catch (err) {
       message.error(err instanceof Error ? err.message : '保存签到任务失败');
     }
@@ -200,6 +220,60 @@ export default function App() {
     }
   };
 
+  const handleCaptureSigninLogin = async (payload: {
+    taskId: string | null;
+    name: string;
+    entryUrl: string;
+    sessionId: string | null;
+    enabled: boolean;
+    signin: NonNullable<TaskFlow['signin']>;
+  }) => {
+    try {
+      const saved = await persistSigninTask(payload);
+      const captured = await invoke<SigninLoginSnapshot & {
+        refreshToken: string | null;
+        timedOut: boolean;
+      }>(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, { taskId: saved.id });
+
+      if (captured?.refreshToken) {
+        message.success(buildSigninCaptureSuccessMessage(captured));
+        // 同步到本地表单状态：localStorage 已写入服务端任务，刷新本地视图
+        setSigninFlow((prev) =>
+          prev?.signin
+            ? {
+                ...prev,
+                signin: {
+                  ...prev.signin,
+                  refreshToken: captured.refreshToken,
+                  accessToken: captured.accessToken ?? null,
+                  userName: captured.userName ?? null,
+                  userId: captured.userId ?? null,
+                  defaultDriveId: captured.defaultDriveId ?? null,
+                  expiresAt: captured.expiresAt ?? null,
+                  tokenType: captured.tokenType ?? null,
+                  tokenPayload: captured.tokenPayload ?? null,
+                  localStorageSnapshot: captured.localStorageSnapshot ?? null,
+                },
+              }
+            : prev,
+        );
+      } else if (captured?.timedOut) {
+        message.warning('5 分钟内未检测到登录态，已取消采集');
+      } else {
+        message.warning('未采集到 refresh_token');
+      }
+      return captured
+        ? {
+            taskId: saved.id,
+            ...captured,
+          }
+        : null;
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '打开登录页采集失败');
+      return null;
+    }
+  };
+
   const refreshSigninRunData = async (taskId: string) => {
     const [latestStatus, history] = await Promise.all([
       invoke<SigninRunSummary | null>(IPC_CHANNELS.SIGNIN_TASK_STATUS, { taskId }),
@@ -220,7 +294,9 @@ export default function App() {
     void taskOperations
       .getAcceptanceMetrics({ taskId: selectedTaskId })
       .then((metrics) => {
-        setAcceptanceMetrics(Array.isArray(metrics) ? metrics as OperationsAcceptanceMetric[] : []);
+        setAcceptanceMetrics(
+          Array.isArray(metrics) ? (metrics as OperationsAcceptanceMetric[]) : [],
+        );
       })
       .catch(() => setAcceptanceMetrics([]));
   }, [selectedTaskId, taskOperations]);
@@ -306,8 +382,8 @@ export default function App() {
                 enabled: true,
                 signin: {
                   site: 'aliyundrive',
-                  mode: 'browser-first-api-fallback',
-                  fallbackApiEnabled: false,
+                  mode: 'api-first-browser-fallback',
+                  fallbackApiEnabled: true,
                   refreshToken: null,
                   maxRetryPerDay: 1,
                   manualInterventionEnabled: true,
@@ -367,6 +443,7 @@ export default function App() {
                 initialValue={signinFlow}
                 sessions={sessions}
                 onSubmit={handleSaveSigninTask}
+                onCaptureLogin={handleCaptureSigninLogin}
               />
               <SigninRunStatusCard
                 taskId={selectedTaskId}
@@ -387,7 +464,9 @@ export default function App() {
                 <StepEditor steps={steps} onChange={setSteps} />
               </ProCard>
 
-              {selectedTemplateId && <Tag color="processing">当前已选择模板：{selectedTemplateId}</Tag>}
+              {selectedTemplateId && (
+                <Tag color="processing">当前已选择模板：{selectedTemplateId}</Tag>
+              )}
 
               <BatchList taskId={selectedTaskId} onSelectBatch={setSelectedBatchId} />
 
@@ -429,4 +508,41 @@ export default function App() {
       </div>
     </PageShell>
   );
+}
+
+function buildSigninCaptureSuccessMessage(captured: SigninLoginSnapshot & {
+  refreshToken: string | null;
+  timedOut: boolean;
+}): string {
+  const accountLabel = captured.userName ? `（${captured.userName}）` : '';
+  const savedFieldCount = countCapturedFields(captured);
+  const localStorageCount = Object.keys(captured.localStorageSnapshot ?? {}).length;
+  const localStorageSummary =
+    localStorageCount > 0 ? `，localStorage ${localStorageCount} 项` : '';
+  return `已获取登录态${accountLabel}，已自动关闭窗口并保存 ${savedFieldCount} 项字段${localStorageSummary}`;
+}
+
+function countCapturedFields(captured: SigninLoginSnapshot): number {
+  let count = 0;
+  const scalarFields = [
+    captured.refreshToken,
+    captured.accessToken,
+    captured.userName,
+    captured.userId,
+    captured.defaultDriveId,
+    captured.expiresAt,
+    captured.tokenType,
+  ];
+  for (const field of scalarFields) {
+    if (typeof field === 'string' && field.trim().length > 0) {
+      count += 1;
+    }
+  }
+  if (captured.tokenPayload && Object.keys(captured.tokenPayload).length > 0) {
+    count += 1;
+  }
+  if (captured.localStorageSnapshot && Object.keys(captured.localStorageSnapshot).length > 0) {
+    count += 1;
+  }
+  return count;
 }

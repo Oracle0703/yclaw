@@ -93,6 +93,7 @@ export class SigninTaskService {
       sessionPartition: this.resolveSessionPartition(task.sessionId),
       entryUrl: task.entryUrl ?? 'https://www.aliyundrive.com/',
       refreshToken: task.signin.refreshToken ?? null,
+      browserFallbackEnabled: task.signin.fallbackApiEnabled,
       maxRetryPerDay: task.signin.maxRetryPerDay,
     });
 

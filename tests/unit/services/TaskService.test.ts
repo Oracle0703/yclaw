@@ -427,6 +427,20 @@ describe('TaskService', () => {
         mode: 'browser-first-api-fallback',
         fallbackApiEnabled: true,
         refreshToken: 'rt-demo',
+        accessToken: 'at-demo',
+        userName: '测试账号',
+        userId: 'uid-demo',
+        defaultDriveId: 'drive-demo',
+        expiresAt: '2026-05-01T00:00:00.000Z',
+        tokenType: 'Bearer',
+        tokenPayload: {
+          refresh_token: 'rt-demo',
+          access_token: 'at-demo',
+        },
+        localStorageSnapshot: {
+          token: '{"refresh_token":"rt-demo"}',
+          shareToken: 'share-demo',
+        },
         maxRetryPerDay: 2,
         manualInterventionEnabled: true,
       },
@@ -436,6 +450,14 @@ describe('TaskService', () => {
         mode: 'browser-first-api-fallback';
         fallbackApiEnabled: boolean;
         refreshToken: string;
+        accessToken: string;
+        userName: string;
+        userId: string;
+        defaultDriveId: string;
+        expiresAt: string;
+        tokenType: string;
+        tokenPayload: Record<string, unknown>;
+        localStorageSnapshot: Record<string, string>;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
       };
@@ -452,10 +474,47 @@ describe('TaskService', () => {
             mode: 'browser-first-api-fallback',
             fallbackApiEnabled: true,
             refreshToken: 'rt-demo',
+            accessToken: 'at-demo',
+            userName: '测试账号',
+            userId: 'uid-demo',
+            defaultDriveId: 'drive-demo',
+            expiresAt: '2026-05-01T00:00:00.000Z',
+            tokenType: 'Bearer',
+            tokenPayload: {
+              refresh_token: 'rt-demo',
+              access_token: 'at-demo',
+            },
+            localStorageSnapshot: {
+              token: '{"refresh_token":"rt-demo"}',
+              shareToken: 'share-demo',
+            },
             maxRetryPerDay: 2,
             manualInterventionEnabled: true,
           },
         }),
+      }),
+    );
+  });
+
+  it('falls back to default task name when creating a sign-in task with blank name', () => {
+    service.createTask({
+      name: '   ',
+      entryUrl: 'https://www.aliyundrive.com/',
+      sessionId: 'session-1',
+      enabled: true,
+      signin: {
+        site: 'aliyundrive',
+        mode: 'api-first-browser-fallback',
+        fallbackApiEnabled: true,
+        refreshToken: null,
+        maxRetryPerDay: 1,
+        manualInterventionEnabled: true,
+      },
+    });
+
+    expect(mockTaskRepository.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: '未命名任务',
       }),
     );
   });
@@ -469,6 +528,20 @@ describe('TaskService', () => {
         mode: 'browser-first-api-fallback',
         fallbackApiEnabled: true,
         refreshToken: 'rt-demo',
+        accessToken: 'at-demo',
+        userName: '测试账号',
+        userId: 'uid-demo',
+        defaultDriveId: 'drive-demo',
+        expiresAt: '2026-05-01T00:00:00.000Z',
+        tokenType: 'Bearer',
+        tokenPayload: {
+          refresh_token: 'rt-demo',
+          access_token: 'at-demo',
+        },
+        localStorageSnapshot: {
+          token: '{"refresh_token":"rt-demo"}',
+          shareToken: 'share-demo',
+        },
         maxRetryPerDay: 2,
         manualInterventionEnabled: true,
       },
@@ -479,6 +552,14 @@ describe('TaskService', () => {
         mode: 'browser-first-api-fallback';
         fallbackApiEnabled: boolean;
         refreshToken: string;
+        accessToken: string;
+        userName: string;
+        userId: string;
+        defaultDriveId: string;
+        expiresAt: string;
+        tokenType: string;
+        tokenPayload: Record<string, unknown>;
+        localStorageSnapshot: Record<string, string>;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
       };

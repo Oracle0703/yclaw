@@ -54,6 +54,7 @@ export const IPC_CHANNELS = {
   SIGNIN_TASK_INTERVENTION_RETRY: 'signin:task:interventionRetry',
   SIGNIN_TASK_STATUS: 'signin:task:status',
   SIGNIN_TASK_HISTORY: 'signin:task:history',
+  SIGNIN_TASK_LOGIN_CAPTURE: 'signin:task:loginCapture',
   SIGNIN_NOTIFICATION_TEST_EMAIL: 'signin:notification:testEmail',
 
   // 任务运营中台：工作区 / 协作

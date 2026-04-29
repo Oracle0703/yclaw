@@ -21,23 +21,169 @@ const mockDbAll = vi.fn();
 const mockDbGet = vi.fn();
 const mockDbRun = vi.fn();
 const mockDbTransaction = vi.fn((fn: () => unknown) => fn());
-const mockDbGetTasks = vi.fn(() => []);
-const mockDbGetTaskFlow = vi.fn((taskId: string) => ({
-  id: taskId,
-  name: '采集任务',
-  steps: [
-    {
-      id: 'step-1',
-      name: '打开页面',
-      action: { type: 'click', selector: '#open' },
+function buildGenericTaskFlow(taskId: string) {
+  return {
+    id: taskId,
+    name: '采集任务',
+    steps: [
+      {
+        id: 'step-1',
+        name: '打开页面',
+        action: { type: 'click', selector: '#open' },
+      },
+    ],
+    createdAt: '2026-04-16T00:00:00.000Z',
+    updatedAt: '2026-04-16T00:00:00.000Z',
+  };
+}
+
+function buildSigninTaskFlow(taskId: string) {
+  return {
+    id: taskId,
+    name: '阿里云盘签到',
+    kind: 'aliyundrive-signin' as const,
+    steps: [],
+    entryUrl: 'https://www.aliyundrive.com/',
+    sessionId: 'session-signin-1',
+    signin: {
+      site: 'aliyundrive' as const,
+      mode: 'api-first-browser-fallback' as const,
+      fallbackApiEnabled: true,
+      refreshToken: null,
+      maxRetryPerDay: 1,
+      manualInterventionEnabled: true as const,
     },
-  ],
-  createdAt: '2026-04-16T00:00:00.000Z',
-  updatedAt: '2026-04-16T00:00:00.000Z',
-}));
+    createdAt: '2026-04-28T00:00:00.000Z',
+    updatedAt: '2026-04-28T00:00:00.000Z',
+  };
+}
+
+function createWebStorage(source: Record<string, string>) {
+  const entries = Object.entries(source);
+  return {
+    get length() {
+      return entries.length;
+    },
+    key(index: number) {
+      return entries[index]?.[0] ?? null;
+    },
+    getItem(key: string) {
+      return source[key] ?? null;
+    },
+  };
+}
+
+function runProbeScript(
+  script: string,
+  snapshots: {
+    localStorage?: Record<string, string>;
+    sessionStorage?: Record<string, string>;
+  },
+) {
+  const evaluator = new Function(
+    'window',
+    `return ${script.trim()};`,
+  ) as (window: {
+    localStorage: ReturnType<typeof createWebStorage>;
+    sessionStorage: ReturnType<typeof createWebStorage>;
+  }) => unknown;
+
+  return evaluator({
+    localStorage: createWebStorage(snapshots.localStorage ?? {}),
+    sessionStorage: createWebStorage(snapshots.sessionStorage ?? {}),
+  });
+}
+
+function createSigninPreviewWindowMock() {
+  const children: unknown[] = [];
+  return {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    focus: vi.fn(),
+    show: vi.fn(),
+    close: vi.fn(),
+    getContentBounds: () => ({ width: 1280, height: 860 }),
+    removeAllListeners: vi.fn(),
+    on: vi.fn(),
+    contentView: {
+      children,
+      addChildView: vi.fn((view: unknown) => {
+        children.push(view);
+      }),
+      removeChildView: vi.fn((view: unknown) => {
+        const index = children.indexOf(view);
+        if (index >= 0) {
+          children.splice(index, 1);
+        }
+      }),
+    },
+  };
+}
+
+function createDebuggerMock(options: {
+  responseUrl: string;
+  responseBody: unknown;
+}) {
+  const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+  const emit = (event: string, ...args: unknown[]) => {
+    for (const listener of listeners.get(event) ?? []) {
+      listener(...args);
+    }
+  };
+
+  return {
+    isAttached: vi.fn(() => false),
+    attach: vi.fn(),
+    detach: vi.fn(),
+    on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+      const current = listeners.get(event) ?? [];
+      current.push(listener);
+      listeners.set(event, current);
+    }),
+    off: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
+      const current = listeners.get(event) ?? [];
+      listeners.set(
+        event,
+        current.filter((item) => item !== listener),
+      );
+    }),
+    sendCommand: vi.fn(async (method: string) => {
+      if (method === 'Network.enable') {
+        queueMicrotask(() => {
+          emit(
+            'message',
+            {},
+            'Network.responseReceived',
+            {
+              requestId: 'request-1',
+              response: {
+                url: options.responseUrl,
+              },
+            },
+          );
+        });
+        return {};
+      }
+
+      if (method === 'Network.getResponseBody') {
+        return {
+          base64Encoded: false,
+          body: JSON.stringify(options.responseBody),
+        };
+      }
+
+      return {};
+    }),
+  };
+}
+
+const mockDbGetTasks = vi.fn(() => []);
+const mockDbGetTaskFlow = vi.fn((taskId: string) => buildGenericTaskFlow(taskId));
 const mockDbSaveTaskFlow = vi.fn((flow) => flow);
 const mockDbUpdateTaskStatus = vi.fn();
 const mockLogInfo = vi.fn();
+const mockLogWarn = vi.fn();
+const mockLogError = vi.fn();
 const mockLogWrite = vi.fn();
 const mockLogExport = vi.fn(() => 'debug-package');
 const mockLogQueryMcpAudit = vi.fn(() => [
@@ -55,6 +201,7 @@ const mockTrayDestroy = vi.fn();
 const mockCheckForUpdates = vi.fn();
 const mockShowOpenDialog = vi.hoisted(() => vi.fn());
 const mockCreateTab = vi.fn(() => ({ webContents: { id: 1 } }));
+const mockGetOrCreateTabBySession = vi.fn();
 const mockCloseTab = vi.fn();
 const mockNavigate = vi.fn();
 const mockGoBack = vi.fn();
@@ -267,6 +414,8 @@ vi.mock('@main/services/ConfigService', () => ({
 vi.mock('@main/services/LogService', () => ({
   LogService: vi.fn().mockImplementation(() => ({
     info: mockLogInfo,
+    warn: mockLogWarn,
+    error: mockLogError,
     write: mockLogWrite,
     exportDebugPackage: mockLogExport,
     queryMcpAudit: mockLogQueryMcpAudit,
@@ -299,6 +448,7 @@ vi.mock('@main/services/FeaturePackageService', () => ({
 vi.mock('@main/browser/TabManager', () => ({
   TabManager: vi.fn().mockImplementation(() => ({
     createTab: mockCreateTab,
+    getOrCreateTabBySession: mockGetOrCreateTabBySession,
     closeTab: mockCloseTab,
     navigate: mockNavigate,
     goBack: mockGoBack,
@@ -459,9 +609,15 @@ describe('App IPC integration', () => {
         id: flow.id,
         name: flow.name,
         description: flow.description ?? null,
-        flowJson: JSON.stringify({ steps: flow.steps }),
+        flowJson: JSON.stringify({
+          steps: flow.steps,
+          entryUrl: flow.entryUrl,
+          kind: flow.kind,
+          signin: flow.signin ?? null,
+        }),
         createdAt: flow.createdAt,
         updatedAt: flow.updatedAt,
+        sessionId: flow.sessionId ?? null,
       };
     });
 
@@ -1212,5 +1368,175 @@ describe('App IPC integration', () => {
         name: '未命名任务',
       },
     });
+  });
+
+  it('captures signin token from sessionStorage fallback entries and closes the preview window', async () => {
+    mockSessionList.mockReturnValueOnce([
+      {
+        id: 'session-signin-1',
+        name: '阿里云盘账号',
+        domain: 'aliyundrive.com',
+        partition: 'persist:session_signin_1',
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+      },
+    ]);
+    mockDbGetTaskFlow.mockImplementation((taskId: string) =>
+      taskId === 'task-signin-1' ? buildSigninTaskFlow(taskId) : buildGenericTaskFlow(taskId),
+    );
+
+    const view = {
+      setBounds: vi.fn(),
+      webContents: {
+        id: 77,
+        isDestroyed: () => false,
+        loadURL: vi.fn(async () => undefined),
+        executeJavaScript: vi.fn(async (script: string) =>
+          runProbeScript(script, {
+            localStorage: {
+              theme: 'light',
+            },
+            sessionStorage: {
+              authSnapshot: JSON.stringify({
+                refresh_token: 'rt-session-storage',
+                access_token: 'at-session-storage',
+                user_name: '测试账号',
+                user_id: 'uid-session',
+                default_drive_id: 'drive-session',
+                expire_time: '2026-05-01T00:00:00.000Z',
+                token_type: 'Bearer',
+              }),
+            },
+          }),
+        ),
+      },
+    };
+    mockGetOrCreateTabBySession.mockReturnValueOnce(view);
+
+    const app = new App();
+    const previewWindow = createSigninPreviewWindowMock();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (app as any).signinPreviewWindow = previewWindow;
+
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, { taskId: 'task-signin-1' });
+
+    expect(mockGetOrCreateTabBySession).toHaveBeenCalledWith(
+      'persist:session_signin_1',
+      'https://www.aliyundrive.com/sign/in',
+    );
+    expect(view.webContents.loadURL).toHaveBeenCalledWith('https://www.aliyundrive.com/sign/in');
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        refreshToken: 'rt-session-storage',
+        accessToken: 'at-session-storage',
+        userName: '测试账号',
+        userId: 'uid-session',
+        defaultDriveId: 'drive-session',
+        tokenType: 'Bearer',
+        timedOut: false,
+      },
+    });
+    expect(previewWindow.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures signin token from auth response body when storage does not expose it', async () => {
+    vi.useFakeTimers();
+    try {
+      mockSessionList.mockReturnValueOnce([
+        {
+          id: 'session-signin-1',
+          name: '阿里云盘账号',
+          domain: 'aliyundrive.com',
+          partition: 'persist:session_signin_1',
+          createdAt: '2026-04-28T00:00:00.000Z',
+          updatedAt: '2026-04-28T00:00:00.000Z',
+        },
+      ]);
+      mockDbGetTaskFlow.mockImplementation((taskId: string) =>
+        taskId === 'task-signin-1' ? buildSigninTaskFlow(taskId) : buildGenericTaskFlow(taskId),
+      );
+
+      const debuggerMock = createDebuggerMock({
+        responseUrl: 'https://passport.aliyundrive.com/newlogin/login.do?appName=aliyun',
+        responseBody: {
+          content: {
+            data: {
+              bizExt: JSON.stringify({
+                pds_login_result: {
+                  refreshToken: 'rt-network',
+                  accessToken: 'at-network',
+                  userName: '网络账号',
+                  userId: 'uid-network',
+                  defaultDriveId: 'drive-network',
+                  tokenType: 'Bearer',
+                },
+              }),
+            },
+          },
+        },
+      });
+      const view = {
+        setBounds: vi.fn(),
+        webContents: {
+          id: 78,
+          debugger: debuggerMock,
+          isDestroyed: () => false,
+          loadURL: vi.fn(async () => undefined),
+          executeJavaScript: vi.fn(async () => null),
+        },
+      };
+      mockGetOrCreateTabBySession.mockReturnValueOnce(view);
+
+      const app = new App();
+      const previewWindow = createSigninPreviewWindowMock();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (app as any).signinPreviewWindow = previewWindow;
+
+      await app.start();
+
+      const handler = handlers.get(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE);
+      expect(handler).toBeDefined();
+
+      const responsePromise = handler!({}, { taskId: 'task-signin-1' });
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 2000);
+      const response = await responsePromise;
+
+      expect(response).toMatchObject({
+        success: true,
+        data: {
+          refreshToken: 'rt-network',
+          accessToken: 'at-network',
+          userName: '网络账号',
+          userId: 'uid-network',
+          defaultDriveId: 'drive-network',
+          tokenType: 'Bearer',
+          timedOut: false,
+        },
+      });
+      expect(previewWindow.close).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('closes signin preview window during shutdown', () => {
+    const app = new App();
+    const close = vi.fn();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (app as any).signinPreviewWindow = {
+      isDestroyed: () => false,
+      close,
+    };
+
+    app.shutdown();
+
+    expect(close).toHaveBeenCalledTimes(1);
   });
 });

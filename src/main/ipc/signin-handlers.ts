@@ -56,7 +56,7 @@ export function registerSigninHandlers(options: {
       ? body.taskId
       : null;
     const nextPayload = {
-      name: assertString(body.name, 'name'),
+      name: normalizeTaskName(body.name),
       entryUrl: typeof body.entryUrl === 'string' ? body.entryUrl : undefined,
       sessionId: typeof body.sessionId === 'string' ? body.sessionId : null,
       enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
@@ -112,4 +112,13 @@ function assertString(value: unknown, field: string): string {
     throw new Error(`${field} is required`);
   }
   return value;
+}
+
+function normalizeTaskName(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '阿里云盘签到';
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : '阿里云盘签到';
 }

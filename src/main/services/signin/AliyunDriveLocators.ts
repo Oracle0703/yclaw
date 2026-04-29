@@ -230,6 +230,19 @@ export function buildAliyunDriveSigninScript(): string {
         return buildFailure('session_expired', '检测到登录入口，当前会话可能已失效');
       }
 
+      // 阿里云盘未登录会被服务端 302 到登录域名（或同域 /sign/in）。
+      // 仅靠登录元素判断容易漏判（登录域名页面结构与 SDK 不同），所以再做一次 URL 兜底。
+      if (
+        /(?:^|\\.)(?:auth|passport)\\.aliyundrive\\.com$/.test(window.location.hostname) ||
+        /(?:^|\\.)passport\\.alipan\\.com$/.test(window.location.hostname) ||
+        /\\/(?:sign\\/in|login|passport)/i.test(window.location.pathname)
+      ) {
+        return buildFailure(
+          'session_expired',
+          '页面已重定向到登录页：' + window.location.href,
+        );
+      }
+
       const directRewardResult = await resolveRewardButtonFlow();
       if (directRewardResult) {
         return directRewardResult;

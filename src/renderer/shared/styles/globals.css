@@ -1441,3 +1441,41 @@ canvas {
 .yclaw-admin-shell .ant-layout .ant-layout-header {
   margin-top: 0;
 }
+
+/* ----------------------------------------------------------------------
+ * Reserve titlebar space for overlay surfaces (Drawer / Modal / Notice).
+ * Rationale: the top 38px is a dedicated -webkit-app-region: drag area.
+ * Any interactive UI placed there is unclickable. Following the modern
+ * Electron convention (VS Code / Discord / Slack), no business surface
+ * is allowed to enter the drag region — it stays exclusively for window
+ * dragging and the system action buttons.
+ * --------------------------------------------------------------------*/
+:root {
+  --yclaw-titlebar-height: 38px;
+}
+
+/* Drawer: shift mask + content + push button below the titlebar.
+ * Applies to right/left/bottom placements; top placement is rare and
+ * would visually conflict with the titlebar anyway. */
+.ant-drawer:not(.ant-drawer-top) > .ant-drawer-mask,
+.ant-drawer:not(.ant-drawer-top) > .ant-drawer-content-wrapper {
+  top: var(--yclaw-titlebar-height) !important;
+  height: calc(100% - var(--yclaw-titlebar-height)) !important;
+}
+
+/* Modal: keep wrap below the titlebar so its close icon is reachable. */
+.ant-modal-wrap,
+.ant-modal-mask {
+  top: var(--yclaw-titlebar-height) !important;
+  height: calc(100% - var(--yclaw-titlebar-height)) !important;
+}
+
+/* Notifications / messages: nudge them down so they don't pop into the
+ * drag strip (avoids the user accidentally dragging the window when
+ * trying to dismiss a toast). */
+.ant-notification-topRight,
+.ant-notification-topLeft,
+.ant-notification-top,
+.ant-message {
+  margin-top: var(--yclaw-titlebar-height) !important;
+}

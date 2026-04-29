@@ -172,6 +172,7 @@ export class App {
   private hotReportService: HotReportService;
   private notificationService: NotificationService;
   private signinTaskService: SigninTaskService;
+  private signinPreviewWindow: BrowserWindow | null = null;
   private dataCenterService: DataCenterService;
   private dataQualityService: DataQualityService;
   private dataExportService: DataExportService;
@@ -338,13 +339,20 @@ export class App {
         browser: {
           openSessionPage: async ({ sessionPartition, url }) => {
             const view = this.tabManager.getOrCreateTabBySession(sessionPartition, url);
+            // 关键：把 WebContentsView 挂到一个真实可见的 BrowserWindow，否则
+            // chromium 认为 viewport 0x0 / visibilityState=hidden，阿里云盘等
+            // 依赖懒加载/IntersectionObserver 的活动区根本不会渲染，签到 JS
+            // 会找不到 "精选活动" DOM 节点（failureReason: activity_not_found）。
+            // 同时这也满足 "立即执行能看到具体页面" 的诉求。
+            this.attachToSigninPreviewWindow(view);
             await view.webContents.loadURL(url);
             return {
               tabId: view.webContents.id,
               webContentsId: view.webContents.id,
             };
           },
-          executeJavaScript: async (script, tabId) => this.tabManager.executeJavaScript(script, tabId),
+          executeJavaScript: async (script, tabId) =>
+            this.tabManager.executeJavaScript(script, tabId),
           captureDebugContext: async (tabId) => this.captureSigninDebugContext(tabId),
         },
         fallback: new AliyunDriveApiFallback(),
@@ -553,6 +561,13 @@ export class App {
       taskService: this.taskService as never,
       signinTaskService: this.signinTaskService as never,
       notificationService: this.notificationService as never,
+    });
+    this.ipcController.handle(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, (payload: unknown) => {
+      const { taskId } = (payload as { taskId?: string }) ?? {};
+      if (typeof taskId !== 'string' || taskId.length === 0) {
+        throw new Error('taskId is required');
+      }
+      return this.captureAliyunDriveLoginToken(taskId);
     });
     registerDataCenterHandlers({
       ipcController: this.ipcController,
@@ -1157,6 +1172,466 @@ export class App {
     return this.taskService.startTask(taskId, webContents);
   }
 
+  /**
+   * 把签到任务用到的 WebContentsView 挂到一个真实可见的 BrowserWindow 上。
+   * 仅复用单一窗口（不存在或已销毁则新建）。这样：
+   * 1. chromium 给页面分配真实 viewport / visibilityState=visible，
+   *    避免阿里云盘等懒加载页面渲染不出 "精选活动" 区，导致
+   *    failureReason: activity_not_found。
+   * 2. 用户能直接在窗口里看到签到执行过程，便于人工介入和定位。
+   */
+  private attachToSigninPreviewWindow(view: import('electron').WebContentsView): void {
+    let win = this.signinPreviewWindow;
+    if (!win || win.isDestroyed()) {
+      win = new BrowserWindow({
+        width: 1280,
+        height: 860,
+        title: '签到执行预览',
+        autoHideMenuBar: true,
+      });
+      win.on('closed', () => {
+        this.signinPreviewWindow = null;
+      });
+      this.signinPreviewWindow = win;
+    }
+
+    const previewWindow = win;
+    const children = previewWindow.contentView.children ?? [];
+    for (const existing of children) {
+      if (existing !== view) {
+        try {
+          previewWindow.contentView.removeChildView(existing);
+        } catch {
+          /* noop */
+        }
+      }
+    }
+    if (!children.includes(view)) {
+      previewWindow.contentView.addChildView(view);
+    }
+
+    const applyBounds = () => {
+      const bounds = previewWindow.getContentBounds();
+      view.setBounds({ x: 0, y: 0, width: bounds.width, height: bounds.height });
+    };
+    applyBounds();
+    previewWindow.removeAllListeners('resize');
+    previewWindow.on('resize', applyBounds);
+
+    if (!previewWindow.isVisible()) {
+      previewWindow.show();
+    } else {
+      previewWindow.focus();
+    }
+  }
+
+  /**
+   * 打开阿里云盘登录页让用户手动登录，登录完成后从 localStorage `token`
+   * 抽取登录态并写回任务配置，随后关闭预览窗口。
+   *
+   * 阿里云盘登录成功后会把整个 token 对象（含 access_token / refresh_token /
+   * user_name / user_id / default_drive_id 等）以 JSON 字符串形式存入
+   * `localStorage.token`。这里把 refresh_token 以及后续可能复用的账户字段一并持久化，
+   * 避免未来扩展签到能力时仍然每月维护脚本或重复采集。
+   *
+   * @param taskId - 必须是 kind=aliyundrive-signin 的任务
+   * @returns 采集结果。`refreshToken` 为 null 表示超时未拿到。
+   */
+  private async captureAliyunDriveLoginToken(taskId: string): Promise<{
+    refreshToken: string | null;
+    accessToken?: string | null;
+    userName?: string | null;
+    userId?: string | null;
+    defaultDriveId?: string | null;
+    expiresAt?: string | null;
+    tokenType?: string | null;
+    tokenPayload?: Record<string, unknown> | null;
+    localStorageSnapshot?: Record<string, string> | null;
+    timedOut: boolean;
+  }> {
+    const task = this.taskService.getTaskDetail(taskId);
+    if (!task || task.kind !== 'aliyundrive-signin' || !task.signin) {
+      throw new Error(`Sign-in task "${taskId}" not found`);
+    }
+
+    const sessionPartition =
+      this.sessionRegistry.listSessions().find((session) => session.id === task.sessionId)
+        ?.partition ?? 'default';
+    const loginUrl = 'https://www.aliyundrive.com/sign/in';
+    const view = this.tabManager.getOrCreateTabBySession(sessionPartition, loginUrl);
+    this.attachToSigninPreviewWindow(view);
+    const detachNetworkCapture = await this.attachAliyunDriveLoginNetworkCapture(view.webContents);
+    await view.webContents.loadURL(loginUrl);
+
+    const POLL_INTERVAL_MS = 1500;
+    const TIMEOUT_MS = 5 * 60 * 1000;
+    const deadline = Date.now() + TIMEOUT_MS;
+
+    const probeScript = `
+      (() => {
+        try {
+          const localStorageSnapshot = {};
+          const storageEntries = [];
+          const collectStorageEntries = (storage, areaName) => {
+            if (!storage) return;
+            for (let index = 0; index < storage.length; index += 1) {
+              const key = storage.key(index);
+              if (!key) continue;
+              const value = storage.getItem(key);
+              if (typeof value !== 'string') continue;
+              if (areaName === 'localStorage') {
+                localStorageSnapshot[key] = value;
+              }
+              storageEntries.push({
+                areaName,
+                key,
+                value,
+              });
+            }
+          };
+          const findTokenPayload = (value, visited = new WeakSet()) => {
+            if (!value || typeof value !== 'object') return null;
+            if (visited.has(value)) return null;
+            visited.add(value);
+            const refreshToken =
+              typeof value.refresh_token === 'string' && value.refresh_token.length > 0
+                ? value.refresh_token
+                : typeof value.refreshToken === 'string' && value.refreshToken.length > 0
+                  ? value.refreshToken
+                  : null;
+            if (refreshToken) {
+              return value;
+            }
+
+            const candidates = Array.isArray(value)
+              ? value
+              : Object.values(value);
+            for (const candidate of candidates) {
+              if (typeof candidate === 'string') {
+                try {
+                  const parsedCandidate = JSON.parse(candidate);
+                  const nested = findTokenPayload(parsedCandidate, visited);
+                  if (nested) return nested;
+                } catch {
+                  /* noop */
+                }
+                continue;
+              }
+              const nested = findTokenPayload(candidate, visited);
+              if (nested) return nested;
+            }
+            return null;
+          };
+
+          collectStorageEntries(window.localStorage, 'localStorage');
+          collectStorageEntries(window.sessionStorage, 'sessionStorage');
+
+          let parsed = null;
+          for (const entry of storageEntries) {
+            try {
+              const candidate = JSON.parse(entry.value);
+              const matched = findTokenPayload(candidate);
+              if (matched) {
+                parsed = matched;
+                break;
+              }
+            } catch {
+              /* noop */
+            }
+          }
+
+          if (!parsed) return null;
+          return {
+            refreshToken: parsed.refresh_token,
+            accessToken: typeof parsed.access_token === 'string' ? parsed.access_token : null,
+            userName: typeof parsed.user_name === 'string' ? parsed.user_name : null,
+            userId: typeof parsed.user_id === 'string' ? parsed.user_id : null,
+            defaultDriveId: typeof parsed.default_drive_id === 'string' ? parsed.default_drive_id : null,
+            expiresAt: typeof parsed.expire_time === 'string' ? parsed.expire_time : null,
+            tokenType: typeof parsed.token_type === 'string' ? parsed.token_type : null,
+            tokenPayload: parsed,
+            localStorageSnapshot,
+          };
+        } catch (_e) {
+          return null;
+        }
+      })();
+    `;
+
+    type ProbeResult = {
+      refreshToken: string;
+      accessToken: string | null;
+      userName: string | null;
+      userId: string | null;
+      defaultDriveId: string | null;
+      expiresAt: string | null;
+      tokenType: string | null;
+      tokenPayload: Record<string, unknown> | null;
+      localStorageSnapshot: Record<string, string> | null;
+    };
+
+    let captured: ProbeResult | null = null;
+
+    try {
+      while (Date.now() < deadline) {
+        if (view.webContents.isDestroyed()) break;
+
+        const networkResult = detachNetworkCapture.getCaptured();
+        if (networkResult?.refreshToken) {
+          captured = networkResult;
+          break;
+        }
+
+        try {
+          const result = (await view.webContents.executeJavaScript(
+            probeScript,
+          )) as ProbeResult | null;
+          const normalizedResult = this.normalizeAliyunDriveTokenPayload(result);
+          if (normalizedResult?.refreshToken) {
+            captured = {
+              ...normalizedResult,
+              localStorageSnapshot: result?.localStorageSnapshot ?? null,
+            };
+            break;
+          }
+        } catch {
+          /* 页面跳转/卸载瞬间 executeJavaScript 会抛错，忽略并继续轮询 */
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      }
+    } finally {
+      await detachNetworkCapture.dispose();
+    }
+
+    if (captured) {
+      this.taskService.updateTaskFlow(taskId, {
+        entryUrl: task.entryUrl,
+        signin: {
+          ...task.signin,
+          refreshToken: captured.refreshToken,
+          accessToken: captured.accessToken,
+          userName: captured.userName,
+          userId: captured.userId,
+          defaultDriveId: captured.defaultDriveId,
+          expiresAt: captured.expiresAt,
+          tokenType: captured.tokenType,
+          tokenPayload: captured.tokenPayload,
+          localStorageSnapshot: captured.localStorageSnapshot,
+        },
+      });
+
+      // 完成后关闭预览窗口（用户诉求："拿到我的信息后关闭窗口"）
+      const previewWindow = this.signinPreviewWindow;
+      if (previewWindow && !previewWindow.isDestroyed()) {
+        previewWindow.close();
+      }
+
+      return {
+        refreshToken: captured.refreshToken,
+        accessToken: captured.accessToken,
+        userName: captured.userName,
+        userId: captured.userId,
+        defaultDriveId: captured.defaultDriveId,
+        expiresAt: captured.expiresAt,
+        tokenType: captured.tokenType,
+        tokenPayload: captured.tokenPayload,
+        localStorageSnapshot: captured.localStorageSnapshot,
+        timedOut: false,
+      };
+    }
+
+    return {
+      refreshToken: null,
+      timedOut: true,
+    };
+  }
+
+  private async attachAliyunDriveLoginNetworkCapture(webContents: WebContents): Promise<{
+    getCaptured: () => {
+      refreshToken: string;
+      accessToken: string | null;
+      userName: string | null;
+      userId: string | null;
+      defaultDriveId: string | null;
+      expiresAt: string | null;
+      tokenType: string | null;
+      tokenPayload: Record<string, unknown> | null;
+      localStorageSnapshot: Record<string, string> | null;
+    } | null;
+    dispose: () => Promise<void>;
+  }> {
+    let captured: {
+      refreshToken: string;
+      accessToken: string | null;
+      userName: string | null;
+      userId: string | null;
+      defaultDriveId: string | null;
+      expiresAt: string | null;
+      tokenType: string | null;
+      tokenPayload: Record<string, unknown> | null;
+      localStorageSnapshot: Record<string, string> | null;
+    } | null = null;
+    const debuggerApi = webContents.debugger;
+    if (!debuggerApi) {
+      return {
+        getCaptured: () => null,
+        dispose: async () => undefined,
+      };
+    }
+
+    let attachedHere = false;
+    const listener = async (
+      _event: unknown,
+      method: string,
+      params: { requestId?: string; response?: { url?: string } },
+    ) => {
+      if (captured || method !== 'Network.responseReceived') {
+        return;
+      }
+
+      const requestId = params?.requestId;
+      const responseUrl = params?.response?.url;
+      if (
+        typeof requestId !== 'string' ||
+        typeof responseUrl !== 'string' ||
+        !this.isAliyunDriveLoginResponseUrl(responseUrl)
+      ) {
+        return;
+      }
+
+      try {
+        const response = await debuggerApi.sendCommand('Network.getResponseBody', { requestId }) as {
+          body?: string;
+          base64Encoded?: boolean;
+        };
+        const bodyText = response.base64Encoded
+          ? Buffer.from(response.body ?? '', 'base64').toString('utf8')
+          : (response.body ?? '');
+        const normalized = this.normalizeAliyunDriveTokenPayload(bodyText);
+        if (normalized?.refreshToken) {
+          captured = {
+            ...normalized,
+            localStorageSnapshot: null,
+          };
+        }
+      } catch {
+        /* noop */
+      }
+    };
+
+    try {
+      if (!debuggerApi.isAttached()) {
+        debuggerApi.attach('1.3');
+        attachedHere = true;
+      }
+      debuggerApi.on('message', listener);
+      await debuggerApi.sendCommand('Network.enable');
+    } catch {
+      return {
+        getCaptured: () => null,
+        dispose: async () => undefined,
+      };
+    }
+
+    return {
+      getCaptured: () => captured,
+      dispose: async () => {
+        try {
+          if (typeof debuggerApi.off === 'function') {
+            debuggerApi.off('message', listener);
+          }
+        } catch {
+          /* noop */
+        }
+
+        if (attachedHere) {
+          try {
+            await debuggerApi.sendCommand('Network.disable');
+          } catch {
+            /* noop */
+          }
+          try {
+            if (debuggerApi.isAttached()) {
+              debuggerApi.detach();
+            }
+          } catch {
+            /* noop */
+          }
+        }
+      },
+    };
+  }
+
+  private isAliyunDriveLoginResponseUrl(url: string): boolean {
+    return url.includes('login.do?appName=aliyun');
+  }
+
+  private normalizeAliyunDriveTokenPayload(
+    value: unknown,
+    visited = new WeakSet<object>(),
+  ): {
+    refreshToken: string;
+    accessToken: string | null;
+    userName: string | null;
+    userId: string | null;
+    defaultDriveId: string | null;
+    expiresAt: string | null;
+    tokenType: string | null;
+    tokenPayload: Record<string, unknown> | null;
+  } | null {
+    if (typeof value === 'string') {
+      try {
+        return this.normalizeAliyunDriveTokenPayload(JSON.parse(value), visited);
+      } catch {
+        return null;
+      }
+    }
+
+    if (!value || typeof value !== 'object') {
+      return null;
+    }
+
+    if (visited.has(value)) {
+      return null;
+    }
+    visited.add(value);
+
+    const record = value as Record<string, unknown>;
+    const refreshToken = this.pickString(record, ['refresh_token', 'refreshToken']);
+    if (refreshToken) {
+      return {
+        refreshToken,
+        accessToken: this.pickString(record, ['access_token', 'accessToken']),
+        userName: this.pickString(record, ['user_name', 'userName']),
+        userId: this.pickString(record, ['user_id', 'userId']),
+        defaultDriveId: this.pickString(record, ['default_drive_id', 'defaultDriveId']),
+        expiresAt: this.pickString(record, ['expire_time', 'expireTime', 'expiresAt']),
+        tokenType: this.pickString(record, ['token_type', 'tokenType']),
+        tokenPayload: record,
+      };
+    }
+
+    const candidates = Array.isArray(value) ? value : Object.values(record);
+    for (const candidate of candidates) {
+      const nested = this.normalizeAliyunDriveTokenPayload(candidate, visited);
+      if (nested) {
+        return nested;
+      }
+    }
+
+    return null;
+  }
+
+  private pickString(source: Record<string, unknown>, keys: string[]): string | null {
+    for (const key of keys) {
+      const value = source[key];
+      if (typeof value === 'string' && value.length > 0) {
+        return value;
+      }
+    }
+    return null;
+  }
+
   private async captureSigninDebugContext(tabId: number): Promise<SigninDebugSnapshot | undefined> {
     const view = this.tabManager.getView(tabId);
     if (!view) {
@@ -1245,6 +1720,15 @@ export class App {
     void this.mcpClientManager.close().catch((err) => {
       this.logService.error('main', 'external mcp client shutdown failed', err as Error);
     });
+    const previewWindow = this.signinPreviewWindow;
+    if (previewWindow && !previewWindow.isDestroyed()) {
+      try {
+        previewWindow.close();
+      } catch {
+        /* noop */
+      }
+    }
+    this.signinPreviewWindow = null;
     this.ipcController.dispose();
     this.dataSourceManager.closeAll();
     this.databaseService.close();

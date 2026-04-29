@@ -30,6 +30,36 @@ export class AliyunDriveSigninProvider {
   }
 
   async run(context: SigninExecutionContext): Promise<SigninProviderResult> {
+    if (context.refreshToken) {
+      const fallbackResult = await this.fallback.run({ refreshToken: context.refreshToken });
+      if (fallbackResult.status === 'success') {
+        return fallbackResult;
+      }
+
+      if (context.browserFallbackEnabled === false) {
+        return {
+          status: 'needs_intervention',
+          strategyUsed: fallbackResult.strategyUsed,
+          failureReason: fallbackResult.failureReason ?? 'unknown',
+          detail: fallbackResult.detail ?? 'API 未成功，且未启用页面补充',
+        };
+      }
+
+      const browserFailure = await this.runBrowserFlow(context);
+      if (browserFailure.status === 'success') {
+        return browserFailure;
+      }
+
+      return {
+        ...browserFailure,
+        detail: browserFailure.detail ?? fallbackResult.detail ?? 'API 与页面均未成功',
+      };
+    }
+
+    return this.runBrowserFlow(context);
+  }
+
+  private async runBrowserFlow(context: SigninExecutionContext): Promise<SigninProviderResult> {
     const view = await this.browser.openSessionPage({
       sessionPartition: context.sessionPartition,
       url: context.entryUrl,
@@ -50,25 +80,6 @@ export class AliyunDriveSigninProvider {
 
     const debug = await this.captureDebugContext(view.tabId);
     const mergedDebug = mergeDebugSnapshot(browserResult?.debug, debug);
-
-    if (context.refreshToken) {
-      const fallbackResult = await this.fallback.run({ refreshToken: context.refreshToken });
-      if (fallbackResult.status === 'success') {
-        return {
-          ...fallbackResult,
-          failureReason: browserResult?.failureReason,
-          debug: mergedDebug,
-        };
-      }
-
-      return {
-        status: 'needs_intervention',
-        strategyUsed: fallbackResult.strategyUsed,
-        failureReason: fallbackResult.failureReason ?? browserResult?.failureReason ?? 'unknown',
-        detail: fallbackResult.detail ?? browserResult?.detail ?? '页面与 API 均未成功',
-        debug: mergedDebug,
-      };
-    }
 
     return {
       status: 'needs_intervention',

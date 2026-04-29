@@ -255,6 +255,20 @@ describe('TaskRepository', () => {
         mode: 'browser-first-api-fallback',
         fallbackApiEnabled: true,
         refreshToken: 'rt-demo',
+        accessToken: 'at-demo',
+        userName: '测试账号',
+        userId: 'uid-demo',
+        defaultDriveId: 'drive-demo',
+        expiresAt: '2026-05-01T00:00:00.000Z',
+        tokenType: 'Bearer',
+        tokenPayload: {
+          refresh_token: 'rt-demo',
+          access_token: 'at-demo',
+        },
+        localStorageSnapshot: {
+          token: '{"refresh_token":"rt-demo"}',
+          shareToken: 'share-demo',
+        },
         maxRetryPerDay: 2,
         manualInterventionEnabled: true,
       },
@@ -265,6 +279,14 @@ describe('TaskRepository', () => {
         mode: 'browser-first-api-fallback';
         fallbackApiEnabled: boolean;
         refreshToken: string;
+        accessToken: string;
+        userName: string;
+        userId: string;
+        defaultDriveId: string;
+        expiresAt: string;
+        tokenType: string;
+        tokenPayload: Record<string, unknown>;
+        localStorageSnapshot: Record<string, string>;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
       };
@@ -317,6 +339,20 @@ describe('TaskRepository', () => {
         site: 'aliyundrive',
         fallbackApiEnabled: true,
         refreshToken: 'rt-demo',
+        accessToken: 'at-demo',
+        userName: '测试账号',
+        userId: 'uid-demo',
+        defaultDriveId: 'drive-demo',
+        expiresAt: '2026-05-01T00:00:00.000Z',
+        tokenType: 'Bearer',
+        tokenPayload: {
+          refresh_token: 'rt-demo',
+          access_token: 'at-demo',
+        },
+        localStorageSnapshot: {
+          token: '{"refresh_token":"rt-demo"}',
+          shareToken: 'share-demo',
+        },
         maxRetryPerDay: 2,
       },
     });

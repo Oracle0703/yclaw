@@ -33,6 +33,7 @@ export type {
   SigninTaskKind,
   SigninFailureReason,
   SigninRunStatus,
+  SigninLoginSnapshot,
   SigninTaskConfig,
   SigninDebugSnapshot,
   SigninRunSummary,

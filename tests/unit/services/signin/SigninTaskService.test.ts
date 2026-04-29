@@ -21,7 +21,7 @@ describe('SigninTaskService', () => {
     sessionId: 'session-1',
     signin: {
       site: 'aliyundrive',
-      mode: 'browser-first-api-fallback',
+      mode: 'api-first-browser-fallback',
       fallbackApiEnabled: true,
       refreshToken: 'rt-demo',
       maxRetryPerDay: 2,
@@ -73,6 +73,7 @@ describe('SigninTaskService', () => {
       sessionPartition: 'persist:session_1',
       entryUrl: 'https://www.aliyundrive.com/',
       refreshToken: 'rt-demo',
+      browserFallbackEnabled: true,
       maxRetryPerDay: 2,
     });
     expect(result).toMatchObject({

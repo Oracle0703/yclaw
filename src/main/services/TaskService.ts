@@ -269,9 +269,10 @@ export class TaskService {
   }): TaskFlow {
     const id = randomUUID();
     const now = new Date().toISOString();
+    const resolvedName = payload.name.trim() || '未命名任务';
     const flow: TaskFlow = {
       id,
-      name: payload.name,
+      name: resolvedName,
       kind: payload.signin ? 'aliyundrive-signin' : (payload.kind ?? 'generic'),
       description: payload.description,
       steps: (payload.steps ?? []) as TaskFlow['steps'],
@@ -287,7 +288,7 @@ export class TaskService {
     };
     this.taskRepository.createTask({
       id,
-      name: payload.name,
+      name: resolvedName,
       description: payload.description,
       flowJson: JSON.stringify({
         steps: flow.steps,

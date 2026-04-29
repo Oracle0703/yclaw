@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Button, Drawer, Modal, Space, Tag, message } from 'antd';
+import { App as AntdApp, Button, Drawer, Modal, Space, Tag } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { ProTable } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc } from '../../shared/hooks';
-import type { BrowserSession, SigninRunSummary, TaskFlow } from '@shared/types';
+import type { BrowserSession, SigninLoginSnapshot, SigninRunSummary, TaskFlow } from '@shared/types';
 import { SigninRunStatusCard } from '../automation/components/SigninRunStatusCard';
 import { SigninTaskPanel } from '../automation/components/SigninTaskPanel';
 import { WorkspaceSwitcher } from '../automation/components/WorkspaceSwitcher';
@@ -34,8 +34,8 @@ function createDefaultSigninFlow(): {
       enabled: true,
       signin: {
         site: 'aliyundrive',
-        mode: 'browser-first-api-fallback',
-        fallbackApiEnabled: false,
+        mode: 'api-first-browser-fallback',
+        fallbackApiEnabled: true,
         refreshToken: null,
         maxRetryPerDay: 1,
         manualInterventionEnabled: true,
@@ -46,6 +46,7 @@ function createDefaultSigninFlow(): {
 
 export default function App() {
   const { invoke } = useIpc();
+  const { message } = AntdApp.useApp();
   const defaultState = createDefaultSigninFlow();
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -151,6 +152,44 @@ export default function App() {
     setDrawerOpen(true);
   };
 
+  const persistSigninTask = async (
+    payload: {
+      taskId: string | null;
+      name: string;
+      entryUrl: string;
+      sessionId: string | null;
+      enabled: boolean;
+      signin: NonNullable<TaskFlow['signin']>;
+    },
+    options?: {
+      closeDrawer?: boolean;
+      refreshList?: boolean;
+    },
+  ) => {
+    const normalizedPayload = {
+      ...payload,
+      name: payload.name.trim() || '阿里云盘签到',
+    };
+    const saved = await invoke<TaskFlow>(IPC_CHANNELS.SIGNIN_TASK_SAVE, normalizedPayload);
+    setSelectedTaskId(saved.id);
+    setDraftTaskId(saved.id);
+    setDraftTaskName(saved.name);
+    setDraftSigninFlow({
+      entryUrl: saved.entryUrl,
+      sessionId: saved.sessionId,
+      enabled: saved.enabled,
+      signin: saved.signin ?? null,
+    });
+    await refreshSigninRunData(saved.id);
+    if (options?.refreshList !== false) {
+      await fetchTasks(saved.id);
+    }
+    if (options?.closeDrawer) {
+      setDrawerOpen(false);
+    }
+    return saved;
+  };
+
   const handleSaveSigninTask = async (payload: {
     taskId: string | null;
     name: string;
@@ -160,21 +199,74 @@ export default function App() {
     signin: NonNullable<TaskFlow['signin']>;
   }) => {
     try {
-      const saved = await invoke<TaskFlow>(IPC_CHANNELS.SIGNIN_TASK_SAVE, payload);
-      setSelectedTaskId(saved.id);
-      setDraftTaskId(saved.id);
-      setDraftTaskName(saved.name);
-      setDraftSigninFlow({
-        entryUrl: saved.entryUrl,
-        sessionId: saved.sessionId,
-        enabled: saved.enabled,
-        signin: saved.signin ?? null,
+      await persistSigninTask(payload, {
+        closeDrawer: true,
+        refreshList: true,
       });
-      await refreshSigninRunData(saved.id);
-      await fetchTasks(saved.id);
-      setDrawerOpen(false);
     } catch (err) {
       message.error(err instanceof Error ? err.message : '保存签到任务失败');
+    }
+  };
+
+  const handleCaptureSigninLogin = async (payload: {
+    taskId: string | null;
+    name: string;
+    entryUrl: string;
+    sessionId: string | null;
+    enabled: boolean;
+    signin: NonNullable<TaskFlow['signin']>;
+  }) => {
+    try {
+      const saved =
+        payload.taskId != null
+          ? await persistSigninTask(payload, {
+              closeDrawer: false,
+              refreshList: true,
+            })
+          : await persistSigninTask(payload, {
+              closeDrawer: false,
+              refreshList: true,
+            });
+      const captured = await invoke<SigninLoginSnapshot & {
+        refreshToken: string | null;
+        timedOut: boolean;
+      }>(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, { taskId: saved.id });
+
+      if (captured?.refreshToken) {
+        message.success(buildSigninCaptureSuccessMessage(captured));
+        setDraftSigninFlow((prev) =>
+          prev?.signin
+            ? {
+                ...prev,
+                signin: {
+                  ...prev.signin,
+                  refreshToken: captured.refreshToken,
+                  accessToken: captured.accessToken ?? null,
+                  userName: captured.userName ?? null,
+                  userId: captured.userId ?? null,
+                  defaultDriveId: captured.defaultDriveId ?? null,
+                  expiresAt: captured.expiresAt ?? null,
+                  tokenType: captured.tokenType ?? null,
+                  tokenPayload: captured.tokenPayload ?? null,
+                  localStorageSnapshot: captured.localStorageSnapshot ?? null,
+                },
+              }
+            : prev,
+        );
+      } else if (captured?.timedOut) {
+        message.warning('5 分钟内未检测到登录态，已取消采集');
+      } else {
+        message.warning('未采集到 refresh_token');
+      }
+      return captured
+        ? {
+            taskId: saved.id,
+            ...captured,
+          }
+        : null;
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '打开登录页采集失败');
+      return null;
     }
   };
 
@@ -362,10 +454,48 @@ export default function App() {
           initialValue={draftSigninFlow}
           sessions={sessions}
           onSubmit={handleSaveSigninTask}
+          onCaptureLogin={handleCaptureSigninLogin}
         />
       </Drawer>
     </PageShell>
   );
+}
+
+function buildSigninCaptureSuccessMessage(captured: SigninLoginSnapshot & {
+  refreshToken: string | null;
+  timedOut: boolean;
+}): string {
+  const accountLabel = captured.userName ? `（${captured.userName}）` : '';
+  const savedFieldCount = countCapturedFields(captured);
+  const localStorageCount = Object.keys(captured.localStorageSnapshot ?? {}).length;
+  const localStorageSummary =
+    localStorageCount > 0 ? `，localStorage ${localStorageCount} 项` : '';
+  return `已获取登录态${accountLabel}，已自动关闭窗口并保存 ${savedFieldCount} 项字段${localStorageSummary}`;
+}
+
+function countCapturedFields(captured: SigninLoginSnapshot): number {
+  let count = 0;
+  const scalarFields = [
+    captured.refreshToken,
+    captured.accessToken,
+    captured.userName,
+    captured.userId,
+    captured.defaultDriveId,
+    captured.expiresAt,
+    captured.tokenType,
+  ];
+  for (const field of scalarFields) {
+    if (typeof field === 'string' && field.trim().length > 0) {
+      count += 1;
+    }
+  }
+  if (captured.tokenPayload && Object.keys(captured.tokenPayload).length > 0) {
+    count += 1;
+  }
+  if (captured.localStorageSnapshot && Object.keys(captured.localStorageSnapshot).length > 0) {
+    count += 1;
+  }
+  return count;
 }
 
 function resolveSiteLabel(task: SigninTaskSummary): string {

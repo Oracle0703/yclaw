@@ -5,11 +5,63 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     labels:
       - dependencies
     commit-message:
       prefix: deps
+    # 分组：把同类小升级合并到一个 PR，减少噪音
+    groups:
+      types:
+        patterns:
+          - '@types/*'
+      eslint:
+        patterns:
+          - 'eslint'
+          - 'eslint-*'
+          - '@typescript-eslint/*'
+      vitest:
+        patterns:
+          - 'vitest'
+          - '@vitest/*'
+      playwright:
+        patterns:
+          - 'playwright'
+          - '@playwright/*'
+      electron-tooling:
+        patterns:
+          - 'electron'
+          - 'electron-builder'
+          - 'electron-rebuild'
+          - '@electron/*'
+      vite:
+        patterns:
+          - 'vite'
+          - '@vitejs/*'
+      antd:
+        patterns:
+          - 'antd'
+          - '@ant-design/*'
+      react:
+        patterns:
+          - 'react'
+          - 'react-dom'
+          - '@types/react'
+          - '@types/react-dom'
+      minor-and-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+    # 主版本升级风险大，先 ignore，由人工评估升级
+    ignore:
+      - dependency-name: 'electron'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'antd'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
@@ -21,4 +73,3 @@ updates:
       - ci
     commit-message:
       prefix: ci
-

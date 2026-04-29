@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button, Space, Tag, Typography } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
-import type { BrowserSession, SigninTaskConfig } from '@shared/types';
+import type { BrowserSession, SigninLoginSnapshot, SigninTaskConfig } from '@shared/types';
 
 interface SigninTaskPanelValue {
   entryUrl?: string;
@@ -25,12 +25,27 @@ interface SigninTaskPanelProps {
   initialValue?: SigninTaskPanelValue | null;
   sessions: BrowserSession[];
   onSubmit: (payload: SigninTaskPanelSubmitPayload) => void | Promise<void>;
+  /**
+   * 打开阿里云盘登录页采集登录态。返回值由调用方负责持久化与提示，
+   * 此处只负责拿到结果后把登录态回填到表单。
+   */
+  onCaptureLogin?: (payload: SigninTaskPanelSubmitPayload) => Promise<(SigninLoginSnapshot & {
+    taskId: string;
+    refreshToken: string | null;
+  }) | null>;
 }
 
 const DEFAULT_ENTRY_URL = 'https://www.aliyundrive.com/';
 
 export function SigninTaskPanel(props: SigninTaskPanelProps) {
-  const { taskId = null, initialTaskName, initialValue, sessions, onSubmit } = props;
+  const {
+    taskId = null,
+    initialTaskName,
+    initialValue,
+    sessions,
+    onSubmit,
+    onCaptureLogin,
+  } = props;
   const [taskName, setTaskName] = useState(initialTaskName ?? '');
   const [entryUrl, setEntryUrl] = useState(initialValue?.entryUrl ?? DEFAULT_ENTRY_URL);
   const [sessionId, setSessionId] = useState(initialValue?.sessionId ?? null);
@@ -39,7 +54,42 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
     initialValue?.signin?.fallbackApiEnabled ?? false,
   );
   const [refreshToken, setRefreshToken] = useState(initialValue?.signin?.refreshToken ?? '');
+  const [loginSnapshot, setLoginSnapshot] = useState<SigninLoginSnapshot>(
+    pickLoginSnapshot(initialValue?.signin),
+  );
   const [maxRetryPerDay, setMaxRetryPerDay] = useState(initialValue?.signin?.maxRetryPerDay ?? 1);
+  const [capturing, setCapturing] = useState(false);
+  const canCaptureLogin = typeof onCaptureLogin === 'function';
+  const resolvedTaskName = taskName.trim() || initialTaskName?.trim() || '阿里云盘签到';
+  const localStorageKeys = Object.keys(loginSnapshot.localStorageSnapshot ?? {});
+  const hasCapturedSnapshot =
+    refreshToken.trim().length > 0 ||
+    Boolean(loginSnapshot.userName) ||
+    Boolean(loginSnapshot.userId) ||
+    Boolean(loginSnapshot.defaultDriveId) ||
+    Boolean(loginSnapshot.expiresAt) ||
+    Boolean(loginSnapshot.tokenType) ||
+    Boolean(loginSnapshot.accessToken) ||
+    Boolean(loginSnapshot.tokenPayload) ||
+    localStorageKeys.length > 0;
+  const buildSubmitPayload = (): SigninTaskPanelSubmitPayload => ({
+    taskId,
+    name: resolvedTaskName,
+    entryUrl: entryUrl.trim(),
+    sessionId,
+    enabled,
+    signin: {
+      site: 'aliyundrive',
+      mode: 'api-first-browser-fallback',
+      fallbackApiEnabled,
+      ...normalizeLoginSnapshot({
+        ...loginSnapshot,
+        refreshToken,
+      }),
+      maxRetryPerDay,
+      manualInterventionEnabled: true,
+    },
+  });
 
   useEffect(() => {
     setTaskName(initialTaskName ?? '');
@@ -48,10 +98,11 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
     setEnabled(initialValue?.enabled ?? true);
     setFallbackApiEnabled(initialValue?.signin?.fallbackApiEnabled ?? false);
     setRefreshToken(initialValue?.signin?.refreshToken ?? '');
+    setLoginSnapshot(pickLoginSnapshot(initialValue?.signin));
     setMaxRetryPerDay(initialValue?.signin?.maxRetryPerDay ?? 1);
   }, [initialTaskName, initialValue, taskId]);
 
-  const canSubmit = taskName.trim().length > 0 && entryUrl.trim().length > 0;
+  const canSubmit = resolvedTaskName.length > 0 && entryUrl.trim().length > 0;
 
   return (
     <ProCard className="yclaw-panel-card" title="阿里云盘签到配置">
@@ -59,8 +110,9 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
         <Space wrap>
           <Tag color="processing">AliyunDrive</Tag>
           <Tag color={fallbackApiEnabled ? 'warning' : 'default'}>
-            {fallbackApiEnabled ? '页面优先 + API 兜底' : '仅页面签到'}
+            {fallbackApiEnabled ? 'API 优先 + 页面补充' : '仅 API 签到'}
           </Tag>
+          {hasCapturedSnapshot ? <Tag color="success">已采集</Tag> : null}
         </Space>
 
         <label>
@@ -107,12 +159,96 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
           <textarea
             aria-label="Refresh Token"
             value={refreshToken}
-            onChange={(event) => setRefreshToken(event.target.value)}
-            placeholder="可选。页面签到失败时使用 API 兜底"
+            onChange={(event) => {
+              const nextRefreshToken = event.target.value;
+              setRefreshToken(nextRefreshToken);
+              setLoginSnapshot((prev) => ({
+                ...prev,
+                refreshToken: nextRefreshToken,
+              }));
+            }}
+            placeholder="推荐配置。默认先走 API，失败后再回落页面校验"
             rows={3}
             style={{ display: 'block', width: '100%', marginTop: 6 }}
           />
         </label>
+
+        {canCaptureLogin ? (
+          <Space>
+            <Button
+              disabled={!canSubmit || capturing}
+              loading={capturing}
+              onClick={async () => {
+                setCapturing(true);
+                try {
+                  const captured = await onCaptureLogin(buildSubmitPayload());
+                  if (captured?.refreshToken) {
+                    setRefreshToken(captured.refreshToken);
+                    setLoginSnapshot((prev) => ({
+                      ...prev,
+                      ...captured,
+                    }));
+                    setFallbackApiEnabled(true);
+                  }
+                } finally {
+                  setCapturing(false);
+                }
+              }}
+            >
+              打开登录页采集 Token
+            </Button>
+            {!taskId && canSubmit ? (
+              <Typography.Text type="secondary">将先自动保存当前草稿，再采集登录态</Typography.Text>
+            ) : null}
+            <Typography.Text type="secondary">检测到登录态后会自动保存并关闭预览窗口</Typography.Text>
+          </Space>
+        ) : null}
+
+        {hasCapturedSnapshot ? (
+          <div aria-label="已采集登录态" style={{ border: '1px solid #f0f0f0', padding: 12 }}>
+            <Typography.Text>已采集登录态</Typography.Text>
+            <div style={{ marginTop: 8 }}>状态：已采集</div>
+            <div>登录态已获取，预览窗口会自动关闭</div>
+            <div style={{ marginTop: 8 }}>账号昵称：{loginSnapshot.userName ?? '-'}</div>
+            <div>用户 ID：{loginSnapshot.userId ?? '-'}</div>
+            <div>默认网盘 ID：{loginSnapshot.defaultDriveId ?? '-'}</div>
+            <div>Token 类型：{loginSnapshot.tokenType ?? '-'}</div>
+            <div>过期时间：{loginSnapshot.expiresAt ?? '-'}</div>
+            <div>Access Token：{loginSnapshot.accessToken ?? '-'}</div>
+            {localStorageKeys.length > 0 ? (
+              <>
+                <div style={{ marginTop: 8 }}>
+                  localStorage 已采集 {localStorageKeys.length} 项
+                </div>
+                <div>{localStorageKeys.join(', ')}</div>
+              </>
+            ) : null}
+            {loginSnapshot.tokenPayload ? (
+              <label style={{ display: 'block', marginTop: 8 }}>
+                <Typography.Text>Token 解析结果</Typography.Text>
+                <textarea
+                  aria-label="Token 解析结果"
+                  readOnly
+                  rows={6}
+                  value={formatJson(loginSnapshot.tokenPayload)}
+                  style={{ display: 'block', width: '100%', marginTop: 6 }}
+                />
+              </label>
+            ) : null}
+            {localStorageKeys.length > 0 ? (
+              <label style={{ display: 'block', marginTop: 8 }}>
+                <Typography.Text>LocalStorage 快照</Typography.Text>
+                <textarea
+                  aria-label="LocalStorage 快照"
+                  readOnly
+                  rows={8}
+                  value={formatJson(loginSnapshot.localStorageSnapshot)}
+                  style={{ display: 'block', width: '100%', marginTop: 6 }}
+                />
+              </label>
+            ) : null}
+          </div>
+        ) : null}
 
         <label>
           <Typography.Text>失败重试次数</Typography.Text>
@@ -131,12 +267,12 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
 
         <label>
           <input
-            aria-label="启用 API 兜底"
+            aria-label="启用页面补充"
             type="checkbox"
             checked={fallbackApiEnabled}
             onChange={(event) => setFallbackApiEnabled(event.target.checked)}
           />
-          <span style={{ marginLeft: 8 }}>启用 API 兜底</span>
+          <span style={{ marginLeft: 8 }}>启用页面补充</span>
         </label>
 
         <label>
@@ -152,27 +288,76 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
         <Button
           type="primary"
           disabled={!canSubmit}
-          onClick={() =>
-            void onSubmit({
-              taskId,
-              name: taskName.trim(),
-              entryUrl: entryUrl.trim(),
-              sessionId,
-              enabled,
-              signin: {
-                site: 'aliyundrive',
-                mode: 'browser-first-api-fallback',
-                fallbackApiEnabled,
-                refreshToken: refreshToken.trim() || null,
-                maxRetryPerDay,
-                manualInterventionEnabled: true,
-              },
-            })
-          }
+          onClick={() => void onSubmit(buildSubmitPayload())}
         >
           保存签到任务
         </Button>
       </Space>
     </ProCard>
   );
+}
+
+function pickLoginSnapshot(signin?: SigninTaskConfig | null): SigninLoginSnapshot {
+  return {
+    refreshToken: signin?.refreshToken ?? null,
+    accessToken: signin?.accessToken ?? null,
+    userName: signin?.userName ?? null,
+    userId: signin?.userId ?? null,
+    defaultDriveId: signin?.defaultDriveId ?? null,
+    expiresAt: signin?.expiresAt ?? null,
+    tokenType: signin?.tokenType ?? null,
+    tokenPayload: normalizeObjectSnapshot(signin?.tokenPayload),
+    localStorageSnapshot: normalizeLocalStorageSnapshot(signin?.localStorageSnapshot),
+  };
+}
+
+function normalizeLoginSnapshot(snapshot: SigninLoginSnapshot): SigninLoginSnapshot {
+  return {
+    refreshToken: normalizeOptionalToken(snapshot.refreshToken),
+    accessToken: normalizeOptionalToken(snapshot.accessToken),
+    userName: normalizeOptionalToken(snapshot.userName),
+    userId: normalizeOptionalToken(snapshot.userId),
+    defaultDriveId: normalizeOptionalToken(snapshot.defaultDriveId),
+    expiresAt: normalizeOptionalToken(snapshot.expiresAt),
+    tokenType: normalizeOptionalToken(snapshot.tokenType),
+    tokenPayload: normalizeObjectSnapshot(snapshot.tokenPayload),
+    localStorageSnapshot: normalizeLocalStorageSnapshot(snapshot.localStorageSnapshot),
+  };
+}
+
+function normalizeOptionalToken(value?: string | null): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeObjectSnapshot(
+  value?: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return { ...value };
+}
+
+function normalizeLocalStorageSnapshot(
+  value?: Record<string, string> | null,
+): Record<string, string> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const entries = Object.entries(value).filter((entry): entry is [string, string] => {
+    const [key, itemValue] = entry;
+    return key.trim().length > 0 && typeof itemValue === 'string';
+  });
+  return entries.length > 0 ? Object.fromEntries(entries) : null;
+}
+
+function formatJson(value: Record<string, unknown> | Record<string, string> | null | undefined): string {
+  if (!value) {
+    return '';
+  }
+  return JSON.stringify(value, null, 2);
 }

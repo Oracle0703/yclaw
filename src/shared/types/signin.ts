@@ -19,11 +19,22 @@ export type SigninRunStatus =
   | 'success'
   | 'failed';
 
-export interface SigninTaskConfig {
-  site: 'aliyundrive';
-  mode: 'browser-first-api-fallback';
-  fallbackApiEnabled: boolean;
+export interface SigninLoginSnapshot {
   refreshToken?: string | null;
+  accessToken?: string | null;
+  userName?: string | null;
+  userId?: string | null;
+  defaultDriveId?: string | null;
+  expiresAt?: string | null;
+  tokenType?: string | null;
+  tokenPayload?: Record<string, unknown> | null;
+  localStorageSnapshot?: Record<string, string> | null;
+}
+
+export interface SigninTaskConfig extends SigninLoginSnapshot {
+  site: 'aliyundrive';
+  mode: 'api-first-browser-fallback' | 'browser-first-api-fallback';
+  fallbackApiEnabled: boolean;
   maxRetryPerDay: number;
   manualInterventionEnabled: true;
 }
