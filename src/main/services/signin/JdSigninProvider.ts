@@ -28,13 +28,22 @@ interface JdApiSnapshot {
   recentSigninRewardToday: boolean;
 }
 
+interface JdSignTaskInfo {
+  eaId: string;
+  itemId: string;
+  completionFlag: boolean;
+  // 錔缩今日是否出现在 signList（YYYY-MM-DD_x.x）中，是比
+  // completionFlag 更可靠的“今日已签到”信号。
+  signedToday: boolean;
+  continueSignDay?: number;
+}
+
 const DEFAULT_JD_SIGNIN_URL = 'https://interact.jd.com/';
-const JD_SIGNIN_EXECUTE_BODY = {
-  type: 5,
-  eaId: '4KpUNjgQZtanUeeqbhMYjT47b9Fo',
-  itemId: '1',
-  extraType: 'sign',
-};
+const JD_SIGNIN_TASK_NAME = 'PC签到领京豆';
+// 录制确认的稳定回退值；当 pc_interact_sign_query 不可用时使用。
+// 文档警告：京东可能改动 eaId，因此优先使用 query 接口动态获取。
+const JD_SIGNIN_FALLBACK_EAID = '4KpUNjgQZtanUeeqbhMYjT47b9Fo';
+const JD_SIGNIN_FALLBACK_ITEM_ID = '1';
 
 export class JdSigninProvider {
   private readonly browser: BrowserSigninGateway;
@@ -46,8 +55,34 @@ export class JdSigninProvider {
   }
 
   async run(context: SigninExecutionContext): Promise<SigninProviderResult> {
-    const apiSnapshot = await this.tryReadApiSnapshot(context);
-    if (apiSnapshot?.recentSigninRewardToday) {
+    // 錔以 sign_query 作为权威信号。BEAN_DETAILS_NOCNT 的 "活动奖励京豆"
+    // 是京东多个活动的通用文案（抽奖/任务等），存在误判可能，
+    // 不能单独作为“今日已签到”的短路依据。
+    const [apiSnapshot, signTaskInfo] = await Promise.all([
+      this.tryReadApiSnapshot(context),
+      this.tryReadSignTaskInfo(context),
+    ]);
+
+    if (signTaskInfo && (signTaskInfo.signedToday || signTaskInfo.completionFlag)) {
+      const balance = apiSnapshot?.balance?.balance ?? 0;
+      const continueText = typeof signTaskInfo.continueSignDay === 'number' && signTaskInfo.continueSignDay > 0
+        ? `，已连续签到 ${signTaskInfo.continueSignDay} 天`
+        : '';
+      return {
+        status: 'success',
+        strategyUsed: 'api-fallback',
+        detail: `京东今日已签到，当前余额 ${balance} 京豆${continueText}`,
+        reward: {
+          earnedBeans: 0,
+          balance,
+          balanceStr: apiSnapshot?.balance?.balanceStr,
+          detailText: apiSnapshot?.latestDetail?.detailText,
+        },
+      };
+    }
+
+    // 只有在 sign_query 不可用（返回 null）时，才退而依靠 BEAN_DETAILS 启发式判定。
+    if (!signTaskInfo && apiSnapshot?.recentSigninRewardToday) {
       const balance = apiSnapshot.balance?.balance ?? 0;
       return {
         status: 'success',
@@ -62,7 +97,7 @@ export class JdSigninProvider {
       };
     }
 
-    const apiResult = await this.tryExecuteApiSignin(context, apiSnapshot);
+    const apiResult = await this.tryExecuteApiSignin(context, apiSnapshot, signTaskInfo);
     if (apiResult) {
       return apiResult;
     }
@@ -167,9 +202,67 @@ export class JdSigninProvider {
     }
   }
 
+  private async tryReadSignTaskInfo(
+    context: SigninExecutionContext,
+  ): Promise<JdSignTaskInfo | null> {
+    if (!this.browser.fetchWithSession) {
+      return null;
+    }
+    try {
+      const payload = await this.postJdApi(
+        context,
+        'pc_interact_sign_query',
+        { type: 1 },
+        {
+          appid: 'pc_interact_center',
+          origin: 'https://interact.jd.com',
+          referer: 'https://interact.jd.com/',
+        },
+      );
+      const list = payload?.data?.assignmentInfoList;
+      if (!Array.isArray(list)) {
+        return null;
+      }
+      // 文档警告：必须严格匹配 PC签到领京豆 (extraType=sign, signType=1)，
+      // 不能把 type:0 的抽奖任务当成签到。
+      const task = list.find((item: unknown) => {
+        if (!item || typeof item !== 'object') return false;
+        const it = item as Record<string, unknown>;
+        return it.name === JD_SIGNIN_TASK_NAME &&
+          it.extraType === 'sign' &&
+          (it.signType === 1 || it.signType === '1');
+      }) as Record<string, any> | undefined;
+      if (!task || typeof task.id !== 'string') {
+        return null;
+      }
+      const signDetail = task.signDetail && typeof task.signDetail === 'object'
+        ? task.signDetail as Record<string, unknown>
+        : null;
+      const itemId = typeof signDetail?.itemId === 'string'
+        ? signDetail.itemId
+        : JD_SIGNIN_FALLBACK_ITEM_ID;
+      const signList = Array.isArray(signDetail?.signList) ? signDetail!.signList as unknown[] : [];
+      const todayPrefix = formatYyyyMmDd(new Date());
+      const signedToday = signList.some((entry) => typeof entry === 'string' && entry.startsWith(todayPrefix));
+      const continueSignDay = typeof signDetail?.continueSignDay === 'number'
+        ? signDetail.continueSignDay
+        : undefined;
+      return {
+        eaId: task.id,
+        itemId,
+        completionFlag: task.completionFlag === true,
+        signedToday,
+        continueSignDay,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   private async tryExecuteApiSignin(
     context: SigninExecutionContext,
     beforeSnapshot: JdApiSnapshot | null,
+    signTaskInfo: JdSignTaskInfo | null,
   ): Promise<SigninProviderResult | null> {
     if (!this.browser.fetchWithSession) {
       return null;
@@ -178,13 +271,20 @@ export class JdSigninProvider {
     this.logService?.info('main', 'jd signin api flow started', {
       taskId: context.taskId,
       sessionPartition: context.sessionPartition,
+      resolvedEaId: signTaskInfo?.eaId ?? null,
     });
 
     try {
+      const executeBody = {
+        type: 5,
+        eaId: signTaskInfo?.eaId ?? JD_SIGNIN_FALLBACK_EAID,
+        itemId: signTaskInfo?.itemId ?? JD_SIGNIN_FALLBACK_ITEM_ID,
+        extraType: 'sign',
+      };
       const executePayload = await this.postJdApi(
         context,
         'pc_interact_sign_execute',
-        JD_SIGNIN_EXECUTE_BODY,
+        executeBody,
         {
           appid: 'pc_interact_center',
           origin: 'https://interact.jd.com',
@@ -219,6 +319,25 @@ export class JdSigninProvider {
       const rewardEarned = extractRewardBeans(executePayload);
       const earnedBeans = detailEarned ?? balanceDelta ?? rewardEarned ?? 0;
       const balance = afterBalance ?? beforeBalance ?? 0;
+
+      // 文档警告：errCode:302 "任务已完成" 可能来自非签到任务的误判，
+      // 必须用今日明细或 query.completionFlag 二次验证。无证据时降级到浏览器兜底。
+      if (success === false && alreadyCompleted) {
+        const verifiedSigned = afterSnapshot?.recentSigninRewardToday === true ||
+          (typeof balanceDelta === 'number' && balanceDelta > 0);
+        if (!verifiedSigned) {
+          const recheck = await this.tryReadSignTaskInfo(context);
+          if (!recheck?.completionFlag) {
+            this.logService?.info('main', 'jd signin api flow ambiguous, falling back to browser', {
+              taskId: context.taskId,
+              executeErrCode: executePayload?.errCode,
+              executeErrMessage: executePayload?.errMessage,
+            });
+            return null;
+          }
+        }
+      }
+
       const detail = alreadyCompleted || earnedBeans <= 0
         ? `京东今日已签到，当前余额 ${balance} 京豆`
         : `京东签到成功，本次获得 ${earnedBeans} 京豆，当前余额 ${balance} 京豆`;
@@ -468,4 +587,11 @@ function isToday(timestamp: number | undefined): boolean {
   return value.getFullYear() === now.getFullYear() &&
     value.getMonth() === now.getMonth() &&
     value.getDate() === now.getDate();
+}
+
+function formatYyyyMmDd(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }

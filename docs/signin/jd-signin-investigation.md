@@ -20,6 +20,7 @@
 | `yclaw-investigation-jd-1777453030662.json` | 进入互动中心但未点击真正 PC 签到 | 能看到 `PC签到领京豆` 未完成；同时暴露一次误判：`type:0` 的 execute 不是 PC 签到 |
 | `yclaw-investigation-jd-1777454538978.json` | 点击真正“PC签到领京豆” | 抓到真正执行请求体，并确认签到状态变为完成、余额变为 2 |
 | `yclaw-investigation-jd-1777454808208.json` | 从主页进入“我的京豆”查看余额/明细 | 抓到稳定余额接口 `BEAN_BALANCE` 和明细接口 `BEAN_DETAILS_NOCNT` |
+| `yclaw-investigation-jd-1777523993065.json` | 次日复查“今日已签到”场景 | `pc_interact_sign_query` 返回 `completionFlag: true` + `signList: ["2026-04-29_1.0","2026-04-30_1.0"]` + `continueSignDay: 2`；execute 未被调用 |
 
 ## 接口证据
 
@@ -278,3 +279,68 @@ POST https://api.m.jd.com/api?functionId=BEAN_DETAILS_NOCNT&appid=asset-h5
 ## 敏感信息处理
 
 本报告不保存 Cookie、token、pin、h5st、x-api-eid-token 原值。复查时只需要对比接口名、请求体结构、响应字段和数值变化。
+
+## 2026-04-30 补充：新录制 1777523993065 发现
+
+补充录制 `yclaw-investigation-jd-1777523993065.json` 揭示了两个原报告未覆盖的重要字段和一个代码逻辑漏洞。
+
+### 1. 新字段：`signDetail.signList` 与 `continueSignDay`
+
+今日已签到后，`pc_interact_sign_query` 返回：
+
+```json
+{
+  "signDetail": {
+    "status": 2,
+    "itemId": "1",
+    "continueSignDay": 2,
+    "signList": ["2026-04-29_1.0", "2026-04-30_1.0"]
+  },
+  "completionFlag": true,
+  "completionCnt": 1
+}
+```
+
+| 字段 | 含义 | 重要性 |
+|---|---|---|
+| `signList` | 字符串数组，格式 `YYYY-MM-DD_x.x`，记录近几次签到日期 | **“今日是否已签到”的最强信号**；遇到开今日前缀即可认定 |
+| `continueSignDay` | 连续签到天数 | 可以写入 detail，帮助用户识別连续进度 |
+
+### 2. 新字段：`data.newUserGuideTask`
+
+`pc_interact_sign_query` 响应中出现与 `assignmentInfoList` 同级的独立字段：
+
+```json
+{
+  "newUserGuideTask": {
+    "id": "47XrT5DBdtx1vu5f1kAAqQTEqkXx",
+    "name": "新人引导签到",
+    "type": 0
+  }
+}
+```
+
+再次证明“不能用 `type:0` 的 `errCode:302` 结果判定 PC 签到完成”。代码需仅从 `assignmentInfoList` 中按 `name='PC签到领京豆' && extraType='sign' && signType=1` 筛选，不能误取 `newUserGuideTask`。
+
+### 3. 逻辑漏洞：不能用 `BEAN_DETAILS_NOCNT` 首条作为“今日已签到”短路
+
+原实现（修复前）在 `run()` 的第一步就用 `BEAN_DETAILS_NOCNT` 首条 `userVisibleInfo === '活动奖励京豆'` 且 `createDate` 是今天来短路。但 `活动奖励京豆` 是京东多个活动（京豆抽奖、游戏奖励、任务中心等）的通用文案，可能误把非签到京豆认作今日签到证据，从而 **跳过真正的 PC 签到执行**。
+
+修复后的优先级（权威 → 辅助）：
+
+| 次序 | 权威信号 | 依据 |
+|---|---|---|
+| 1 | `pc_interact_sign_query.signDetail.signList` 包含今日 | 最强，京东专为签到集中记录 |
+| 2 | `pc_interact_sign_query.assignmentInfoList[].completionFlag === true` | 次强，但仅是日级布尔 |
+| 3 | `BEAN_DETAILS_NOCNT` 首条今日 + `活动奖励京豆` | **仅在 sign_query 不可用时**作为启发式判定 |
+| 4 | execute 后 `BEAN_BALANCE` 余额差 | 用于执行后量化到账京豆数 |
+
+### 4. 调用形式差异：页面的 query/execute 带 `h5st` 签名
+
+录制中页面发起的 `pc_interact_sign_query` URL 实际为：
+
+```
+GET https://api.m.jd.com/?h5st=20260430123945451%3B...&body=%7B%22type%22%3A1%7D&functionId=pc_interact_sign_query&appid=pc_interact_center
+```
+
+本代码使用 POST `https://api.m.jd.com/api?functionId=pc_interact_sign_query&appid=pc_interact_center` 加 form body，不携带 `h5st`。现阶段可能被风控拒绝，已靠“打开 https://interact.jd.com/ 补领”的浏览器兑底兑住。后续若需提高 API 路径的成功率，可以考虑在浏览器中执行脚本采集一次 `h5st` 生成函数调用上下文。
