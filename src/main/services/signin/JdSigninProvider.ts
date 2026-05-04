@@ -32,7 +32,7 @@ interface JdSignTaskInfo {
   eaId: string;
   itemId: string;
   completionFlag: boolean;
-  // 錔缩今日是否出现在 signList（YYYY-MM-DD_x.x）中，是比
+  // 今日是否出现在 signList（YYYY-MM-DD_x.x）中，是比
   // completionFlag 更可靠的“今日已签到”信号。
   signedToday: boolean;
   continueSignDay?: number;
@@ -55,7 +55,7 @@ export class JdSigninProvider {
   }
 
   async run(context: SigninExecutionContext): Promise<SigninProviderResult> {
-    // 錔以 sign_query 作为权威信号。BEAN_DETAILS_NOCNT 的 "活动奖励京豆"
+    // 以 sign_query 作为权威信号。BEAN_DETAILS_NOCNT 的 "活动奖励京豆"
     // 是京东多个活动的通用文案（抽奖/任务等），存在误判可能，
     // 不能单独作为“今日已签到”的短路依据。
     const [apiSnapshot, signTaskInfo] = await Promise.all([
