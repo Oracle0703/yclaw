@@ -143,7 +143,6 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
         site: 'jd';
         mode: 'browser-first-api-fallback' | 'api-first-browser-fallback';
         fallbackApiEnabled: boolean;
-        refreshToken: string | null;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
       } | null;
@@ -157,9 +156,8 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
       enabled: boolean;
       signin: {
         site: 'jd';
-        mode: 'browser-first-api-fallback';
+        mode: 'api-first-browser-fallback';
         fallbackApiEnabled: boolean;
-        refreshToken: string | null;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
       };
@@ -174,7 +172,6 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
         site: 'jd';
         mode: 'browser-first-api-fallback' | 'api-first-browser-fallback';
         fallbackApiEnabled: boolean;
-        refreshToken: string | null;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
       };
@@ -194,9 +191,8 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
               enabled: initialValue?.enabled ?? true,
               signin: {
                 site: 'jd',
-                mode: initialValue?.signin?.mode ?? 'browser-first-api-fallback',
-                fallbackApiEnabled: initialValue?.signin?.fallbackApiEnabled ?? false,
-                refreshToken: initialValue?.signin?.refreshToken ?? null,
+                mode: initialValue?.signin?.mode ?? 'api-first-browser-fallback',
+                fallbackApiEnabled: initialValue?.signin?.fallbackApiEnabled ?? true,
                 maxRetryPerDay: initialValue?.signin?.maxRetryPerDay ?? 1,
                 manualInterventionEnabled: true,
               },
@@ -217,9 +213,8 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
             enabled: true,
             signin: {
               site: 'jd',
-              mode: 'browser-first-api-fallback',
-              fallbackApiEnabled: false,
-              refreshToken: null,
+              mode: 'api-first-browser-fallback',
+              fallbackApiEnabled: true,
               maxRetryPerDay: 1,
               manualInterventionEnabled: true,
             },
@@ -334,8 +329,8 @@ describe('SigninApp', () => {
           enabled: true,
           signin: {
             site: 'jd',
-            mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: false,
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
             maxRetryPerDay: 1,
             manualInterventionEnabled: true,
           },
@@ -354,8 +349,8 @@ describe('SigninApp', () => {
           enabled: true,
           signin: {
             site: 'jd',
-            mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: false,
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
             maxRetryPerDay: 1,
             manualInterventionEnabled: true,
           },
@@ -365,10 +360,8 @@ describe('SigninApp', () => {
       }
       if (channel === IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE) {
         return Promise.resolve({
-          refreshToken: 'rt-captured',
           userName: '测试账号',
           userId: 'uid-1',
-          expiresAt: '2026-05-01T00:00:00.000Z',
           timedOut: false,
         });
       }

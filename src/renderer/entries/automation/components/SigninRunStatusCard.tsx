@@ -78,17 +78,6 @@ export function SigninRunStatusCard(props: SigninRunStatusCardProps) {
                 {summary.debug.viewport ? (
                   <Typography.Text>视口尺寸：{summary.debug.viewport}</Typography.Text>
                 ) : null}
-                {typeof summary.debug.activityAnchorFound === 'boolean' ? (
-                  <Typography.Text>
-                    活动锚点：{summary.debug.activityAnchorFound ? '已找到' : '未找到'}
-                  </Typography.Text>
-                ) : null}
-                {typeof summary.debug.signBarCount === 'number' ? (
-                  <Typography.Text>签到卡数量：{summary.debug.signBarCount}</Typography.Text>
-                ) : null}
-                {typeof summary.debug.dateCardCandidateCount === 'number' ? (
-                  <Typography.Text>日期卡候选数：{summary.debug.dateCardCandidateCount}</Typography.Text>
-                ) : null}
                 {summary.debug.screenshotDataUrl ? (
                   <img
                     alt="失败截图预览"

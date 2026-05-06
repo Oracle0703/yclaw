@@ -12,7 +12,6 @@ export interface SigninExecutionContext {
   site: SigninSite;
   sessionPartition: string;
   entryUrl: string;
-  refreshToken?: string | null;
   browserFallbackEnabled?: boolean;
   maxRetryPerDay: number;
 }
@@ -47,7 +46,7 @@ export interface BrowserSigninGateway {
 }
 
 export interface SigninFallbackGateway {
-  run(input: { refreshToken: string }): Promise<SigninProviderResult>;
+  run(input: Record<string, never>): Promise<SigninProviderResult>;
 }
 
 export interface SigninTaskDraft {

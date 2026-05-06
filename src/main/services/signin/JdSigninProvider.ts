@@ -102,6 +102,15 @@ export class JdSigninProvider {
       return apiResult;
     }
 
+    if (context.browserFallbackEnabled === false) {
+      return {
+        status: 'needs_intervention',
+        strategyUsed: 'api-fallback',
+        failureReason: 'api_request_failed',
+        detail: '京东签到 API 未能完成，且未启用浏览器补领',
+      };
+    }
+
     this.logService?.info('main', 'jd signin browser flow started', {
       taskId: context.taskId,
       entryUrl: context.entryUrl,
@@ -297,11 +306,20 @@ export class JdSigninProvider {
         (typeof executePayload?.errMessage === 'string' &&
           executePayload.errMessage.includes('已完成'));
       if (!success && !alreadyCompleted) {
+        const detail = extractJdApiErrorMessage(executePayload);
         this.logService?.info('main', 'jd signin api flow failed', {
           taskId: context.taskId,
           failureReason: 'api_request_failed',
-          detail: extractJdApiErrorMessage(executePayload),
+          detail,
         });
+        if (context.browserFallbackEnabled === false) {
+          return {
+            status: 'needs_intervention',
+            strategyUsed: 'api-fallback',
+            failureReason: 'api_request_failed',
+            detail,
+          };
+        }
         return null;
       }
 
@@ -333,6 +351,14 @@ export class JdSigninProvider {
               executeErrCode: executePayload?.errCode,
               executeErrMessage: executePayload?.errMessage,
             });
+            if (context.browserFallbackEnabled === false) {
+              return {
+                status: 'needs_intervention',
+                strategyUsed: 'api-fallback',
+                failureReason: 'api_request_failed',
+                detail: extractJdApiErrorMessage(executePayload),
+              };
+            }
             return null;
           }
         }
@@ -366,6 +392,14 @@ export class JdSigninProvider {
         failureReason: 'api_request_failed',
         detail: error instanceof Error ? error.message : String(error),
       });
+      if (context.browserFallbackEnabled === false) {
+        return {
+          status: 'needs_intervention',
+          strategyUsed: 'api-fallback',
+          failureReason: 'api_request_failed',
+          detail: error instanceof Error ? error.message : String(error),
+        };
+      }
       return null;
     }
   }

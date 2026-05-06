@@ -66,8 +66,8 @@ export class NotificationService {
     }
 
     await this.emailNotifier.send({
-      subject: 'YClaw 测试邮件 - 阿里云盘签到通知',
-      text: '这是一封来自 YClaw 的测试邮件，用于验证阿里云盘签到通知链路。',
+      subject: 'YClaw 测试邮件 - 京东签到通知',
+      text: '这是一封来自 YClaw 的测试邮件，用于验证京东签到通知链路。',
       config: emailConfig,
     });
 

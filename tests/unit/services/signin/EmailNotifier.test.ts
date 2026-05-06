@@ -78,7 +78,7 @@ describe('EmailNotifier', () => {
     const notifier = new EmailNotifier({ connect });
 
     await notifier.send({
-      subject: '阿里云盘签到成功',
+      subject: '京东签到成功',
       text: '今日奖励已领取',
       config: {
         enabled: true,
@@ -107,7 +107,7 @@ describe('EmailNotifier', () => {
     expect(socket.writes[5].trim()).toBe('RCPT TO:<owner@example.com>');
     expect(socket.writes[6].trim()).toBe('RCPT TO:<ops@example.com>');
     expect(socket.writes[7].trim()).toBe('DATA');
-    expect(socket.writes[8]).toContain('Subject: 阿里云盘签到成功');
+    expect(socket.writes[8]).toContain('Subject: 京东签到成功');
     expect(socket.writes.at(-1)?.trim()).toBe('QUIT');
   });
 

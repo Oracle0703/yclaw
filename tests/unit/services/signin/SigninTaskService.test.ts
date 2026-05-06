@@ -14,16 +14,15 @@ describe('SigninTaskService', () => {
 
   const signinTask: TaskFlow = {
     id: 'task-signin-1',
-    name: '阿里云盘签到',
-    kind: 'aliyundrive-signin',
+    name: '京东签到',
+    kind: 'jd-signin',
     steps: [],
-    entryUrl: 'https://www.aliyundrive.com/',
+    entryUrl: 'https://interact.jd.com/',
     sessionId: 'session-1',
     signin: {
-      site: 'aliyundrive',
+      site: 'jd',
       mode: 'api-first-browser-fallback',
       fallbackApiEnabled: true,
-      refreshToken: 'rt-demo',
       maxRetryPerDay: 2,
       manualInterventionEnabled: true,
     },
@@ -37,8 +36,8 @@ describe('SigninTaskService', () => {
     listSessions.mockReturnValue([
       {
         id: 'session-1',
-        name: '阿里云盘默认账号',
-        domain: 'aliyundrive.com',
+        name: '京东默认账号',
+        domain: 'jd.com',
         partition: 'persist:session_1',
         createdAt: '2026-04-28T00:00:00.000Z',
         updatedAt: '2026-04-28T00:00:00.000Z',
@@ -70,10 +69,9 @@ describe('SigninTaskService', () => {
 
     expect(runProvider).toHaveBeenCalledWith({
       taskId: 'task-signin-1',
-      site: 'aliyundrive',
+      site: 'jd',
       sessionPartition: 'persist:session_1',
-      entryUrl: 'https://www.aliyundrive.com/',
-      refreshToken: 'rt-demo',
+      entryUrl: 'https://interact.jd.com/',
       browserFallbackEnabled: true,
       maxRetryPerDay: 2,
     });
@@ -104,7 +102,6 @@ describe('SigninTaskService', () => {
       signin: {
         ...signinTask.signin!,
         site: 'jd',
-        refreshToken: null,
       },
     };
     getTaskDetail.mockReturnValueOnce(jdSigninTask);
@@ -160,23 +157,17 @@ describe('SigninTaskService', () => {
     );
   });
 
-  it('treats legacy tasks with JD entry URL as JD sign-in even when site was saved incorrectly', async () => {
+  it('rejects legacy non-JD sign-in tasks instead of inferring JD from URL', async () => {
     getTaskDetail.mockReturnValueOnce({
       ...signinTask,
-      id: 'task-legacy-jd',
-      kind: 'aliyundrive-signin',
+      id: 'task-legacy-signin',
+      kind: 'legacy-signin',
       entryUrl: 'https://interact.jd.com/',
       signin: {
         ...signinTask.signin!,
-        site: 'aliyundrive',
-        refreshToken: null,
+        site: 'legacy',
       },
-    });
-    runProvider.mockResolvedValueOnce({
-      status: 'success',
-      strategyUsed: 'api-fallback',
-      detail: '京东今日已签到，当前余额 2 京豆',
-    });
+    } as unknown as TaskFlow);
 
     const service = new SigninTaskService({
       taskService: { getTaskDetail },
@@ -191,15 +182,10 @@ describe('SigninTaskService', () => {
       },
     });
 
-    await service.runTask('task-legacy-jd');
-
-    expect(runProvider).toHaveBeenCalledWith(
-      expect.objectContaining({
-        taskId: 'task-legacy-jd',
-        site: 'jd',
-        entryUrl: 'https://interact.jd.com/',
-      }),
+    await expect(service.runTask('task-legacy-signin')).rejects.toThrow(
+      'JD sign-in task "task-legacy-signin" not found',
     );
+    expect(runProvider).not.toHaveBeenCalled();
   });
 
   it('notifies and stores intervention state when provider requests manual handling', async () => {
@@ -265,12 +251,12 @@ describe('SigninTaskService', () => {
   it('preserves debug context in latest run summary', async () => {
     runProvider.mockResolvedValueOnce({
       status: 'needs_intervention',
-      failureReason: 'reward_button_not_found',
-      detail: '页面未找到领取按钮',
+      failureReason: 'activity_not_found',
+      detail: '页面未找到签到区域',
       debug: {
-        pageUrl: 'https://www.aliyundrive.com/drive',
-        pageTitle: '阿里云盘',
-        domSummary: '精选活动 4月28日',
+        pageUrl: 'https://interact.jd.com/',
+        pageTitle: '京东签到',
+        domSummary: '京东签到 4月28日',
         screenshotDataUrl: 'data:image/png;base64,task-debug',
       },
     });
@@ -293,17 +279,17 @@ describe('SigninTaskService', () => {
     expect(result).toMatchObject({
       status: 'needs_intervention',
       debug: {
-        pageUrl: 'https://www.aliyundrive.com/drive',
-        pageTitle: '阿里云盘',
-        domSummary: '精选活动 4月28日',
+        pageUrl: 'https://interact.jd.com/',
+        pageTitle: '京东签到',
+        domSummary: '京东签到 4月28日',
         screenshotDataUrl: 'data:image/png;base64,task-debug',
       },
     });
     expect(service.getLatestRun('task-signin-1')).toMatchObject({
       debug: {
-        pageUrl: 'https://www.aliyundrive.com/drive',
-        pageTitle: '阿里云盘',
-        domSummary: '精选活动 4月28日',
+        pageUrl: 'https://interact.jd.com/',
+        pageTitle: '京东签到',
+        domSummary: '京东签到 4月28日',
         screenshotDataUrl: 'data:image/png;base64,task-debug',
       },
     });

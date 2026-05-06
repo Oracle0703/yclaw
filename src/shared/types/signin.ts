@@ -1,14 +1,10 @@
-export type SigninSite = 'aliyundrive' | 'jd';
+export type SigninSite = 'jd';
 
-export type SigninTaskKind = 'aliyundrive-signin' | 'jd-signin';
+export type SigninTaskKind = 'jd-signin';
 
 export type SigninFailureReason =
   | 'session_expired'
   | 'activity_not_found'
-  | 'date_card_not_found'
-  | 'reward_button_not_found'
-  | 'already_claimed'
-  | 'api_token_invalid'
   | 'api_request_failed'
   | 'unknown';
 
@@ -32,14 +28,8 @@ export interface SigninCaptureDiagnostics {
 }
 
 export interface SigninLoginSnapshot {
-  refreshToken?: string | null;
-  accessToken?: string | null;
   userName?: string | null;
   userId?: string | null;
-  defaultDriveId?: string | null;
-  expiresAt?: string | null;
-  tokenType?: string | null;
-  tokenPayload?: Record<string, unknown> | null;
   localStorageSnapshot?: Record<string, string> | null;
   captureDiagnostics?: SigninCaptureDiagnostics | null;
 }
@@ -59,9 +49,6 @@ export interface SigninDebugSnapshot {
   readyState?: string;
   visibilityState?: string;
   viewport?: string;
-  activityAnchorFound?: boolean;
-  signBarCount?: number;
-  dateCardCandidateCount?: number;
   screenshotDataUrl?: string;
 }
 

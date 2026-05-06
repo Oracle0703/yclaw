@@ -248,44 +248,28 @@ describe('TaskRepository', () => {
     const signinFlow = {
       ...flow,
       id: 'task-signin-1',
-      name: '阿里云盘签到',
-      kind: 'aliyundrive-signin',
+      name: '京东签到',
+      kind: 'jd-signin',
       signin: {
-        site: 'aliyundrive',
+        site: 'jd',
         mode: 'browser-first-api-fallback',
         fallbackApiEnabled: true,
-        refreshToken: 'rt-demo',
-        accessToken: 'at-demo',
         userName: '测试账号',
         userId: 'uid-demo',
-        defaultDriveId: 'drive-demo',
-        expiresAt: '2026-05-01T00:00:00.000Z',
-        tokenType: 'Bearer',
-        tokenPayload: {
-          refresh_token: 'rt-demo',
-          access_token: 'at-demo',
-        },
         localStorageSnapshot: {
-          token: '{"refresh_token":"rt-demo"}',
           shareToken: 'share-demo',
         },
         maxRetryPerDay: 2,
         manualInterventionEnabled: true,
       },
     } as TaskFlow & {
-      kind: 'aliyundrive-signin';
+      kind: 'jd-signin';
       signin: {
-        site: 'aliyundrive';
+        site: 'jd';
         mode: 'browser-first-api-fallback';
         fallbackApiEnabled: boolean;
-        refreshToken: string;
-        accessToken: string;
         userName: string;
         userId: string;
-        defaultDriveId: string;
-        expiresAt: string;
-        tokenType: string;
-        tokenPayload: Record<string, unknown>;
         localStorageSnapshot: Record<string, string>;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
@@ -301,12 +285,12 @@ describe('TaskRepository', () => {
     repository.saveTaskFlow(signinFlow);
 
     expect(executor.run).toHaveBeenNthCalledWith(1, expect.stringContaining('UPDATE tasks'), [
-      '阿里云盘签到',
+      '京东签到',
       '描述',
       JSON.stringify({
         steps: signinFlow.steps,
         entryUrl: signinFlow.entryUrl,
-        kind: 'aliyundrive-signin',
+        kind: 'jd-signin',
         signin: signinFlow.signin,
       }),
       'task-signin-1',
@@ -314,12 +298,12 @@ describe('TaskRepository', () => {
 
     executor.get.mockReturnValueOnce({
       id: 'task-signin-1',
-      name: '阿里云盘签到',
+      name: '京东签到',
       description: '描述',
       flowJson: JSON.stringify({
         steps: signinFlow.steps,
         entryUrl: signinFlow.entryUrl,
-        kind: 'aliyundrive-signin',
+        kind: 'jd-signin',
         signin: signinFlow.signin,
       }),
       scheduleJson: JSON.stringify({ type: 'manual' }),
@@ -333,24 +317,14 @@ describe('TaskRepository', () => {
 
     expect(repository.getTaskFlow('task-signin-1')).toMatchObject({
       id: 'task-signin-1',
-      name: '阿里云盘签到',
-      kind: 'aliyundrive-signin',
+      name: '京东签到',
+      kind: 'jd-signin',
       signin: {
-        site: 'aliyundrive',
+        site: 'jd',
         fallbackApiEnabled: true,
-        refreshToken: 'rt-demo',
-        accessToken: 'at-demo',
         userName: '测试账号',
         userId: 'uid-demo',
-        defaultDriveId: 'drive-demo',
-        expiresAt: '2026-05-01T00:00:00.000Z',
-        tokenType: 'Bearer',
-        tokenPayload: {
-          refresh_token: 'rt-demo',
-          access_token: 'at-demo',
-        },
         localStorageSnapshot: {
-          token: '{"refresh_token":"rt-demo"}',
           shareToken: 'share-demo',
         },
         maxRetryPerDay: 2,

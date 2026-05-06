@@ -270,7 +270,8 @@ export class TaskService {
     const id = randomUUID();
     const now = new Date().toISOString();
     const resolvedName = payload.name.trim() || '未命名任务';
-    const kind = payload.signin ? resolveSigninKind(payload.signin.site) : (payload.kind ?? 'generic');
+    const signin = payload.signin ? assertJdSigninConfig(payload.signin) : null;
+    const kind = signin ? 'jd-signin' : (payload.kind ?? 'generic');
     const flow: TaskFlow = {
       id,
       name: resolvedName,
@@ -279,7 +280,7 @@ export class TaskService {
       steps: (payload.steps ?? []) as TaskFlow['steps'],
       entryUrl: payload.entryUrl,
       schedule: payload.schedule as TaskFlow['schedule'],
-      signin: payload.signin ?? null,
+      signin,
       sessionId: payload.sessionId ?? null,
       templateId: payload.templateId ?? null,
       enabled: payload.enabled ?? true,
@@ -324,15 +325,16 @@ export class TaskService {
   ): TaskFlow | null {
     const existing = this.taskRepository.getTaskFlow(taskId);
     if (!existing) throw new Error(`Task "${taskId}" not found`);
+    const signin = payload.signin ? assertJdSigninConfig(payload.signin) : undefined;
     const flowJson =
       payload.steps || payload.entryUrl !== undefined
         ? JSON.stringify({
             steps: payload.steps ?? existing.steps,
             entryUrl: payload.entryUrl ?? existing.entryUrl,
-            kind: payload.signin
-              ? resolveSigninKind(payload.signin.site)
+            kind: signin
+              ? 'jd-signin'
               : (payload.kind ?? existing.kind ?? 'generic'),
-            signin: payload.signin ?? existing.signin ?? null,
+            signin: signin ?? existing.signin ?? null,
           })
         : undefined;
     const updates: {
@@ -421,6 +423,12 @@ export class TaskService {
   }
 }
 
-function resolveSigninKind(site: NonNullable<TaskFlow['signin']>['site']): NonNullable<TaskFlow['kind']> {
-  return site === 'jd' ? 'jd-signin' : 'aliyundrive-signin';
+function assertJdSigninConfig(signin: NonNullable<TaskFlow['signin']>): NonNullable<TaskFlow['signin']> {
+  if (signin.site !== 'jd') {
+    throw new Error(`Unsupported sign-in site "${String(signin.site)}"`);
+  }
+  return {
+    ...signin,
+    site: 'jd',
+  };
 }

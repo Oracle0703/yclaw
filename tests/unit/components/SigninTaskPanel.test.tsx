@@ -65,9 +65,8 @@ describe('SigninTaskPanel', () => {
         enabled: true,
         signin: expect.objectContaining({
           site: 'jd',
-          mode: 'browser-first-api-fallback',
-          fallbackApiEnabled: false,
-          refreshToken: null,
+          mode: 'api-first-browser-fallback',
+          fallbackApiEnabled: true,
           maxRetryPerDay: 2,
           manualInterventionEnabled: true,
         }),
@@ -99,7 +98,6 @@ describe('SigninTaskPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存签到任务' }));
 
     expect(screen.queryByLabelText('签到站点')).toBeNull();
-    expect(screen.queryByLabelText('Refresh Token')).toBeNull();
     expect(screen.getByText('复用京东浏览器会话 Cookie/localStorage')).toBeDefined();
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -107,9 +105,8 @@ describe('SigninTaskPanel', () => {
         entryUrl: 'https://interact.jd.com/',
         signin: expect.objectContaining({
           site: 'jd',
-          mode: 'browser-first-api-fallback',
-          fallbackApiEnabled: false,
-          refreshToken: null,
+          mode: 'api-first-browser-fallback',
+          fallbackApiEnabled: true,
           manualInterventionEnabled: true,
         }),
       }),
@@ -119,7 +116,6 @@ describe('SigninTaskPanel', () => {
   it('shows login-state capture for JD tasks', async () => {
     const onCaptureLogin = vi.fn().mockResolvedValue({
       taskId: 'task-jd',
-      refreshToken: null,
       userName: '京东账号',
       localStorageSnapshot: {
         area: '22_1930',
@@ -159,7 +155,7 @@ describe('SigninTaskPanel', () => {
   it('captures login for an unsaved draft by passing the current draft payload', async () => {
     const onCaptureLogin = vi.fn().mockResolvedValue({
       taskId: 'task-signin-new',
-      refreshToken: 'rt-captured',
+      userName: '京东账号',
     });
 
     render(
@@ -174,9 +170,8 @@ describe('SigninTaskPanel', () => {
           enabled: true,
           signin: {
             site: 'jd',
-            mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: false,
-            refreshToken: null,
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
             maxRetryPerDay: 1,
             manualInterventionEnabled: true,
           },
@@ -197,9 +192,8 @@ describe('SigninTaskPanel', () => {
         enabled: true,
         signin: expect.objectContaining({
           site: 'jd',
-          mode: 'browser-first-api-fallback',
-          fallbackApiEnabled: false,
-          refreshToken: null,
+          mode: 'api-first-browser-fallback',
+          fallbackApiEnabled: true,
           maxRetryPerDay: 1,
           manualInterventionEnabled: true,
         }),
@@ -209,25 +203,15 @@ describe('SigninTaskPanel', () => {
     expect(screen.getByText('检测到京东 Cookie/localStorage 后会自动保存并关闭窗口')).toBeDefined();
   });
 
-  it('preserves captured login metadata when saving after token capture', async () => {
+  it('preserves captured login metadata when saving after login capture', async () => {
     const onSubmit = vi.fn();
     const onCaptureLogin = vi.fn().mockResolvedValue({
       taskId: 'task-signin-1',
-      refreshToken: 'rt-captured',
-      accessToken: 'at-captured',
       userName: '测试账号',
       userId: 'uid-1',
-      defaultDriveId: 'drive-1',
-      expiresAt: '2026-05-01T00:00:00.000Z',
-      tokenType: 'Bearer',
-      tokenPayload: {
-        refresh_token: 'rt-captured',
-        access_token: 'at-captured',
-        user_name: '测试账号',
-      },
       localStorageSnapshot: {
-        token: '{"refresh_token":"rt-captured"}',
-        shareToken: 'share-demo',
+        area: '22_1930',
+        pin: 'test-pin',
       },
     });
 
@@ -244,9 +228,8 @@ describe('SigninTaskPanel', () => {
           enabled: true,
           signin: {
             site: 'jd',
-            mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: false,
-            refreshToken: null,
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
             maxRetryPerDay: 1,
             manualInterventionEnabled: true,
           },
@@ -280,23 +263,13 @@ describe('SigninTaskPanel', () => {
         enabled: true,
         signin: expect.objectContaining({
           site: 'jd',
-          mode: 'browser-first-api-fallback',
-          fallbackApiEnabled: false,
-          refreshToken: null,
-          accessToken: 'at-captured',
+          mode: 'api-first-browser-fallback',
+          fallbackApiEnabled: true,
           userName: '测试账号',
           userId: 'uid-1',
-          defaultDriveId: 'drive-1',
-          expiresAt: '2026-05-01T00:00:00.000Z',
-          tokenType: 'Bearer',
-          tokenPayload: {
-            refresh_token: 'rt-captured',
-            access_token: 'at-captured',
-            user_name: '测试账号',
-          },
           localStorageSnapshot: {
-            token: '{"refresh_token":"rt-captured"}',
-            shareToken: 'share-demo',
+            area: '22_1930',
+            pin: 'test-pin',
           },
           maxRetryPerDay: 1,
           manualInterventionEnabled: true,
@@ -318,21 +291,13 @@ describe('SigninTaskPanel', () => {
           enabled: true,
           signin: {
             site: 'jd',
-            mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: false,
-            refreshToken: 'rt-captured',
-            accessToken: 'at-captured',
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
             userName: '测试账号',
             userId: 'uid-1',
-            defaultDriveId: 'drive-1',
-            expiresAt: '2026-05-01T00:00:00.000Z',
-            tokenType: 'Bearer',
-            tokenPayload: {
-              refresh_token: 'rt-captured',
-            },
             localStorageSnapshot: {
-              token: '{"refresh_token":"rt-captured"}',
-              shareToken: 'share-demo',
+              area: '22_1930',
+              pin: 'test-pin',
             },
             maxRetryPerDay: 1,
             manualInterventionEnabled: true,
@@ -345,15 +310,13 @@ describe('SigninTaskPanel', () => {
     expect(screen.getByText('登录态已获取，预览窗口会自动关闭')).toBeDefined();
     expect(screen.getByText('账号昵称：测试账号')).toBeDefined();
     expect(screen.getByText('用户 ID：uid-1')).toBeDefined();
-    expect(screen.getByText('Token 类型：Bearer')).toBeDefined();
     expect(screen.getByText('localStorage 已采集 2 项')).toBeDefined();
-    expect(screen.getByText('token, shareToken')).toBeDefined();
+    expect(screen.getByText('area, pin')).toBeDefined();
   });
 
   it('renders capture diagnostics when login capture fails without a token', async () => {
     const onCaptureLogin = vi.fn().mockResolvedValue({
       taskId: 'task-signin-1',
-      refreshToken: null,
       captureDiagnostics: {
         pageUrl: 'https://interact.jd.com/',
         pageTitle: '我的京东-互动中心',
@@ -378,9 +341,8 @@ describe('SigninTaskPanel', () => {
           enabled: true,
           signin: {
             site: 'jd',
-            mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: false,
-            refreshToken: null,
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
             maxRetryPerDay: 1,
             manualInterventionEnabled: true,
           },

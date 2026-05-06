@@ -85,7 +85,7 @@ const modules: ModuleSummary[] = [
   {
     id: 'signin',
     name: '自动签到',
-    description: '统一承接阿里云盘、京东、淘宝等站点的签到编排与运行巡检。',
+    description: '统一承接京东签到编排与运行巡检。',
     tag: 'Signin',
     status: '可扩展',
     icon: <CheckCircleOutlined style={{ fontSize: 22 }} />,

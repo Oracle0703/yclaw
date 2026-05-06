@@ -74,10 +74,15 @@ export function registerSigninHandlers(options: {
       signinPayload && typeof signinPayload === 'object' && 'site' in signinPayload
         ? signinPayload.site
         : null;
-    const refreshTokenValue =
-      signinPayload && typeof signinPayload === 'object' && 'refreshToken' in signinPayload
-        ? signinPayload.refreshToken
-        : null;
+    const hasLoginSnapshot =
+      signinPayload && typeof signinPayload === 'object' &&
+      (
+        ('userName' in signinPayload &&
+          typeof signinPayload.userName === 'string' &&
+          signinPayload.userName.length > 0) ||
+        ('localStorageSnapshot' in signinPayload &&
+          signinPayload.localStorageSnapshot != null)
+      );
     const requestLog = {
       taskId,
       name: nextPayload.name,
@@ -85,7 +90,7 @@ export function registerSigninHandlers(options: {
       sessionId: nextPayload.sessionId ?? null,
       enabled: nextPayload.enabled ?? null,
       signinSite,
-      hasRefreshToken: typeof refreshTokenValue === 'string' && refreshTokenValue.length > 0,
+      hasLoginSnapshot,
     };
     logService?.info('main', 'signin task save requested', requestLog);
 

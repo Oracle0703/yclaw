@@ -36,7 +36,7 @@ interface SigninTaskPanelProps {
    */
   onCaptureLogin?: (payload: SigninTaskPanelSubmitPayload) => Promise<(SigninLoginSnapshot & {
     taskId: string;
-    refreshToken: string | null;
+    timedOut?: boolean;
   }) | null>;
 }
 
@@ -60,7 +60,6 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
   );
   const [sessionId, setSessionId] = useState(initialValue?.sessionId ?? null);
   const [enabled, setEnabled] = useState(initialValue?.enabled ?? true);
-  const [refreshToken, setRefreshToken] = useState(initialValue?.signin?.refreshToken ?? '');
   const [loginSnapshot, setLoginSnapshot] = useState<SigninLoginSnapshot>(
     pickLoginSnapshot(initialValue?.signin),
   );
@@ -72,14 +71,8 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
   const localStorageKeys = Object.keys(loginSnapshot.localStorageSnapshot ?? {});
   const captureDiagnostics = loginSnapshot.captureDiagnostics ?? null;
   const hasCapturedSnapshot =
-    refreshToken.trim().length > 0 ||
     Boolean(loginSnapshot.userName) ||
     Boolean(loginSnapshot.userId) ||
-    Boolean(loginSnapshot.defaultDriveId) ||
-    Boolean(loginSnapshot.expiresAt) ||
-    Boolean(loginSnapshot.tokenType) ||
-    Boolean(loginSnapshot.accessToken) ||
-    Boolean(loginSnapshot.tokenPayload) ||
     localStorageKeys.length > 0;
   const buildSubmitPayload = (): SigninTaskPanelSubmitPayload => ({
     taskId,
@@ -89,12 +82,9 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
     enabled,
     signin: {
       site: 'jd',
-      mode: 'browser-first-api-fallback',
-      fallbackApiEnabled: false,
-      ...normalizeLoginSnapshot({
-        ...loginSnapshot,
-        refreshToken: null,
-      }),
+      mode: 'api-first-browser-fallback',
+      fallbackApiEnabled: true,
+      ...normalizeLoginSnapshot(loginSnapshot),
       maxRetryPerDay,
       manualInterventionEnabled: true,
     },
@@ -109,7 +99,6 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
     );
     setSessionId(initialValue?.sessionId ?? null);
     setEnabled(initialValue?.enabled ?? true);
-    setRefreshToken(initialValue?.signin?.refreshToken ?? '');
     setLoginSnapshot(pickLoginSnapshot(initialValue?.signin));
     setMaxRetryPerDay(initialValue?.signin?.maxRetryPerDay ?? 1);
   }, [initialTaskName, initialValue, taskId]);
@@ -183,7 +172,6 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
                       ...captured,
                     }));
                   }
-                  setRefreshToken(captured?.refreshToken ?? '');
                 } finally {
                   setCapturing(false);
                 }
@@ -238,9 +226,6 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
             <div>登录态已获取，预览窗口会自动关闭</div>
             <div style={{ marginTop: 8 }}>账号昵称：{loginSnapshot.userName ?? '-'}</div>
             <div>用户 ID：{loginSnapshot.userId ?? '-'}</div>
-            <div>Token 类型：{loginSnapshot.tokenType ?? '-'}</div>
-            <div>过期时间：{loginSnapshot.expiresAt ?? '-'}</div>
-            <div>Access Token：{loginSnapshot.accessToken ?? '-'}</div>
             {localStorageKeys.length > 0 ? (
               <>
                 <div style={{ marginTop: 8 }}>
@@ -248,18 +233,6 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
                 </div>
                 <div>{localStorageKeys.join(', ')}</div>
               </>
-            ) : null}
-            {loginSnapshot.tokenPayload ? (
-              <label style={{ display: 'block', marginTop: 8 }}>
-                <Typography.Text>Token 解析结果</Typography.Text>
-                <textarea
-                  aria-label="Token 解析结果"
-                  readOnly
-                  rows={6}
-                  value={formatJson(loginSnapshot.tokenPayload)}
-                  style={{ display: 'block', width: '100%', marginTop: 6 }}
-                />
-              </label>
             ) : null}
             {localStorageKeys.length > 0 ? (
               <label style={{ display: 'block', marginTop: 8 }}>
@@ -315,14 +288,8 @@ export function SigninTaskPanel(props: SigninTaskPanelProps) {
 
 function pickLoginSnapshot(signin?: SigninTaskConfig | null): SigninLoginSnapshot {
   return {
-    refreshToken: signin?.refreshToken ?? null,
-    accessToken: signin?.accessToken ?? null,
     userName: signin?.userName ?? null,
     userId: signin?.userId ?? null,
-    defaultDriveId: signin?.defaultDriveId ?? null,
-    expiresAt: signin?.expiresAt ?? null,
-    tokenType: signin?.tokenType ?? null,
-    tokenPayload: normalizeObjectSnapshot(signin?.tokenPayload),
     localStorageSnapshot: normalizeLocalStorageSnapshot(signin?.localStorageSnapshot),
     captureDiagnostics: normalizeCaptureDiagnostics(signin?.captureDiagnostics),
   };
@@ -330,14 +297,8 @@ function pickLoginSnapshot(signin?: SigninTaskConfig | null): SigninLoginSnapsho
 
 function normalizeLoginSnapshot(snapshot: SigninLoginSnapshot): SigninLoginSnapshot {
   return {
-    refreshToken: normalizeOptionalToken(snapshot.refreshToken),
-    accessToken: normalizeOptionalToken(snapshot.accessToken),
     userName: normalizeOptionalToken(snapshot.userName),
     userId: normalizeOptionalToken(snapshot.userId),
-    defaultDriveId: normalizeOptionalToken(snapshot.defaultDriveId),
-    expiresAt: normalizeOptionalToken(snapshot.expiresAt),
-    tokenType: normalizeOptionalToken(snapshot.tokenType),
-    tokenPayload: normalizeObjectSnapshot(snapshot.tokenPayload),
     localStorageSnapshot: normalizeLocalStorageSnapshot(snapshot.localStorageSnapshot),
     captureDiagnostics: normalizeCaptureDiagnostics(snapshot.captureDiagnostics),
   };
@@ -349,15 +310,6 @@ function normalizeOptionalToken(value?: string | null): string | null {
   }
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
-}
-
-function normalizeObjectSnapshot(
-  value?: Record<string, unknown> | null,
-): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-  return { ...value };
 }
 
 function normalizeLocalStorageSnapshot(

@@ -68,7 +68,7 @@ export default function App() {
       attribute: String(step.action.params?.attribute ?? 'textContent'),
     }));
 
-  const isSigninTask = typeof selectedTaskKind === 'string' && selectedTaskKind.endsWith('-signin');
+  const isSigninTask = selectedTaskKind === 'jd-signin';
 
   useEffect(() => {
     if (!isSigninTask && !signinFlow) {
@@ -104,7 +104,7 @@ export default function App() {
       setTaskName(flow.name);
       setSelectedTaskId(flow.id);
       setSelectedTaskKind(nextKind);
-      if (typeof nextKind === 'string' && nextKind.endsWith('-signin')) {
+      if (nextKind === 'jd-signin') {
         setSigninFlow({
           entryUrl: flow.entryUrl,
           sessionId: flow.sessionId,
@@ -131,7 +131,7 @@ export default function App() {
   };
 
   const handleSaveTask = async () => {
-    if (typeof selectedTaskKind === 'string' && selectedTaskKind.endsWith('-signin')) {
+    if (selectedTaskKind === 'jd-signin') {
       return;
     }
     try {
@@ -231,7 +231,6 @@ export default function App() {
     try {
       const saved = await persistSigninTask(payload);
       const captured = await invoke<SigninLoginSnapshot & {
-        refreshToken: string | null;
         captureDiagnostics?: Record<string, unknown> | null;
         timedOut: boolean;
       }>(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, { taskId: saved.id });
@@ -245,14 +244,8 @@ export default function App() {
                 ...prev,
                 signin: {
                   ...prev.signin,
-                  refreshToken: captured.refreshToken ?? null,
-                  accessToken: captured.accessToken ?? null,
                   userName: captured.userName ?? null,
                   userId: captured.userId ?? null,
-                  defaultDriveId: captured.defaultDriveId ?? null,
-                  expiresAt: captured.expiresAt ?? null,
-                  tokenType: captured.tokenType ?? null,
-                  tokenPayload: captured.tokenPayload ?? null,
                   localStorageSnapshot: captured.localStorageSnapshot ?? null,
                 },
               }
@@ -267,8 +260,8 @@ export default function App() {
       } else {
         message.warning(
           captured?.captureDiagnostics
-            ? '未采集到 refresh_token，已记录诊断信息到日志'
-            : '未采集到 refresh_token',
+            ? '未采集到京东登录态，已记录诊断信息到日志'
+            : '未采集到京东登录态',
         );
       }
       return captured
@@ -391,9 +384,8 @@ export default function App() {
                 enabled: true,
                 signin: {
                   site: 'jd',
-                  mode: 'browser-first-api-fallback',
-                  fallbackApiEnabled: false,
-                  refreshToken: null,
+                  mode: 'api-first-browser-fallback',
+                  fallbackApiEnabled: true,
                   maxRetryPerDay: 1,
                   manualInterventionEnabled: true,
                 },
@@ -519,10 +511,7 @@ export default function App() {
   );
 }
 
-function buildSigninCaptureSuccessMessage(captured: SigninLoginSnapshot & {
-  refreshToken: string | null;
-  timedOut: boolean;
-}): string {
+function buildSigninCaptureSuccessMessage(captured: SigninLoginSnapshot & { timedOut: boolean }): string {
   const accountLabel = captured.userName ? `（${captured.userName}）` : '';
   const savedFieldCount = countCapturedFields(captured);
   const localStorageCount = Object.keys(captured.localStorageSnapshot ?? {}).length;
@@ -533,22 +522,11 @@ function buildSigninCaptureSuccessMessage(captured: SigninLoginSnapshot & {
 
 function countCapturedFields(captured: SigninLoginSnapshot): number {
   let count = 0;
-  const scalarFields = [
-    captured.refreshToken,
-    captured.accessToken,
-    captured.userName,
-    captured.userId,
-    captured.defaultDriveId,
-    captured.expiresAt,
-    captured.tokenType,
-  ];
+  const scalarFields = [captured.userName, captured.userId];
   for (const field of scalarFields) {
     if (typeof field === 'string' && field.trim().length > 0) {
       count += 1;
     }
-  }
-  if (captured.tokenPayload && Object.keys(captured.tokenPayload).length > 0) {
-    count += 1;
   }
   if (captured.localStorageSnapshot && Object.keys(captured.localStorageSnapshot).length > 0) {
     count += 1;

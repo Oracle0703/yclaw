@@ -32,7 +32,7 @@ describe('NotificationService', () => {
 
     await service.notify({
       taskId: 'task-1',
-      taskName: '阿里云盘签到',
+      taskName: '京东签到',
       status: 'needs_intervention',
       failureReason: 'session_expired',
     });
@@ -54,7 +54,7 @@ describe('NotificationService', () => {
 
     await service.notify({
       taskId: 'task-1',
-      taskName: '阿里云盘签到',
+      taskName: '京东签到',
       status: 'failed',
       failureReason: 'api_request_failed',
       detail: '接口异常',
@@ -62,7 +62,7 @@ describe('NotificationService', () => {
 
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
-        subject: expect.stringContaining('阿里云盘签到最终失败'),
+        subject: expect.stringContaining('京东签到最终失败'),
         config: expect.objectContaining({
           host: 'smtp.example.com',
         }),

@@ -116,10 +116,10 @@ describe('TaskList', () => {
             },
             {
               id: 'task-signin-1',
-              name: '阿里云盘签到',
-              kind: 'aliyundrive-signin',
+              name: '京东签到',
+              kind: 'jd-signin',
               status: 'idle',
-              entryUrl: 'https://www.aliyundrive.com/',
+              entryUrl: 'https://interact.jd.com/',
               updatedAt: '2026-04-15 10:00:00',
             },
           ],
@@ -131,7 +131,7 @@ describe('TaskList', () => {
 
     render(<TaskList onSelect={vi.fn()} scope="signin" enableExecutionActions={false} />);
 
-    expect(await screen.findByText('阿里云盘签到')).toBeDefined();
+    expect(await screen.findByText('京东签到')).toBeDefined();
     expect(screen.queryByText('普通采集任务')).toBeNull();
     expect(screen.queryByRole('button', { name: /启动/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /复跑/ })).toBeNull();

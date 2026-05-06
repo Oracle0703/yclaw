@@ -418,27 +418,17 @@ describe('TaskService', () => {
 
   it('creates a sign-in task with kind and signin config', () => {
     service.createTask({
-      name: '阿里云盘签到',
-      entryUrl: 'https://www.aliyundrive.com/',
+      name: '京东签到',
+      entryUrl: 'https://interact.jd.com/',
       sessionId: 'session-1',
       enabled: true,
       signin: {
-        site: 'aliyundrive',
+        site: 'jd',
         mode: 'browser-first-api-fallback',
         fallbackApiEnabled: true,
-        refreshToken: 'rt-demo',
-        accessToken: 'at-demo',
         userName: '测试账号',
         userId: 'uid-demo',
-        defaultDriveId: 'drive-demo',
-        expiresAt: '2026-05-01T00:00:00.000Z',
-        tokenType: 'Bearer',
-        tokenPayload: {
-          refresh_token: 'rt-demo',
-          access_token: 'at-demo',
-        },
         localStorageSnapshot: {
-          token: '{"refresh_token":"rt-demo"}',
           shareToken: 'share-demo',
         },
         maxRetryPerDay: 2,
@@ -446,17 +436,11 @@ describe('TaskService', () => {
       },
     } as Parameters<TaskService['createTask']>[0] & {
       signin: {
-        site: 'aliyundrive';
+        site: 'jd';
         mode: 'browser-first-api-fallback';
         fallbackApiEnabled: boolean;
-        refreshToken: string;
-        accessToken: string;
         userName: string;
         userId: string;
-        defaultDriveId: string;
-        expiresAt: string;
-        tokenType: string;
-        tokenPayload: Record<string, unknown>;
         localStorageSnapshot: Record<string, string>;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
@@ -467,25 +451,15 @@ describe('TaskService', () => {
       expect.objectContaining({
         flowJson: JSON.stringify({
           steps: [],
-          entryUrl: 'https://www.aliyundrive.com/',
-          kind: 'aliyundrive-signin',
+          entryUrl: 'https://interact.jd.com/',
+          kind: 'jd-signin',
           signin: {
-            site: 'aliyundrive',
+            site: 'jd',
             mode: 'browser-first-api-fallback',
             fallbackApiEnabled: true,
-            refreshToken: 'rt-demo',
-            accessToken: 'at-demo',
             userName: '测试账号',
             userId: 'uid-demo',
-            defaultDriveId: 'drive-demo',
-            expiresAt: '2026-05-01T00:00:00.000Z',
-            tokenType: 'Bearer',
-            tokenPayload: {
-              refresh_token: 'rt-demo',
-              access_token: 'at-demo',
-            },
             localStorageSnapshot: {
-              token: '{"refresh_token":"rt-demo"}',
               shareToken: 'share-demo',
             },
             maxRetryPerDay: 2,
@@ -499,14 +473,13 @@ describe('TaskService', () => {
   it('falls back to default task name when creating a sign-in task with blank name', () => {
     service.createTask({
       name: '   ',
-      entryUrl: 'https://www.aliyundrive.com/',
+      entryUrl: 'https://interact.jd.com/',
       sessionId: 'session-1',
       enabled: true,
       signin: {
-        site: 'aliyundrive',
+        site: 'jd',
         mode: 'api-first-browser-fallback',
         fallbackApiEnabled: true,
-        refreshToken: null,
         maxRetryPerDay: 1,
         manualInterventionEnabled: true,
       },
@@ -529,7 +502,6 @@ describe('TaskService', () => {
         site: 'jd',
         mode: 'browser-first-api-fallback',
         fallbackApiEnabled: false,
-        refreshToken: null,
         maxRetryPerDay: 1,
         manualInterventionEnabled: true,
       },
@@ -545,43 +517,27 @@ describe('TaskService', () => {
   it('preserves sign-in metadata when saving task flow updates', () => {
     const signinFlow = {
       ...sampleFlow,
-      kind: 'aliyundrive-signin',
+      kind: 'jd-signin',
       signin: {
-        site: 'aliyundrive',
+        site: 'jd',
         mode: 'browser-first-api-fallback',
         fallbackApiEnabled: true,
-        refreshToken: 'rt-demo',
-        accessToken: 'at-demo',
         userName: '测试账号',
         userId: 'uid-demo',
-        defaultDriveId: 'drive-demo',
-        expiresAt: '2026-05-01T00:00:00.000Z',
-        tokenType: 'Bearer',
-        tokenPayload: {
-          refresh_token: 'rt-demo',
-          access_token: 'at-demo',
-        },
         localStorageSnapshot: {
-          token: '{"refresh_token":"rt-demo"}',
           shareToken: 'share-demo',
         },
         maxRetryPerDay: 2,
         manualInterventionEnabled: true,
       },
     } as TaskFlow & {
-      kind: 'aliyundrive-signin';
+      kind: 'jd-signin';
       signin: {
-        site: 'aliyundrive';
+        site: 'jd';
         mode: 'browser-first-api-fallback';
         fallbackApiEnabled: boolean;
-        refreshToken: string;
-        accessToken: string;
         userName: string;
         userId: string;
-        defaultDriveId: string;
-        expiresAt: string;
-        tokenType: string;
-        tokenPayload: Record<string, unknown>;
         localStorageSnapshot: Record<string, string>;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
@@ -590,16 +546,15 @@ describe('TaskService', () => {
     mockTaskRepository.getTaskFlow.mockReturnValueOnce(signinFlow);
 
     service.saveTaskFlow('task-1', {
-      name: '阿里云盘签到',
+      name: '京东签到',
       steps: signinFlow.steps,
     });
 
     expect(mockTaskRepository.saveTaskFlow).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: 'aliyundrive-signin',
+        kind: 'jd-signin',
         signin: expect.objectContaining({
-          site: 'aliyundrive',
-          refreshToken: 'rt-demo',
+          site: 'jd',
         }),
       }),
     );
@@ -608,23 +563,21 @@ describe('TaskService', () => {
   it('does not include name in repository update payload when updating sign-in metadata without name', () => {
     const signinFlow = {
       ...sampleFlow,
-      kind: 'aliyundrive-signin',
-      entryUrl: 'https://www.aliyundrive.com/',
+      kind: 'jd-signin',
+      entryUrl: 'https://interact.jd.com/',
       signin: {
-        site: 'aliyundrive',
+        site: 'jd',
         mode: 'api-first-browser-fallback',
         fallbackApiEnabled: true,
-        refreshToken: null,
         maxRetryPerDay: 1,
         manualInterventionEnabled: true,
       },
     } as TaskFlow & {
-      kind: 'aliyundrive-signin';
+      kind: 'jd-signin';
       signin: {
-        site: 'aliyundrive';
+        site: 'jd';
         mode: 'api-first-browser-fallback';
         fallbackApiEnabled: boolean;
-        refreshToken: string | null;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
       };
@@ -634,15 +587,13 @@ describe('TaskService', () => {
       ...signinFlow,
       signin: {
         ...signinFlow.signin,
-        refreshToken: 'rt-captured',
       },
     });
 
     service.updateTaskFlow('task-1', {
-      entryUrl: 'https://www.aliyundrive.com/',
+      entryUrl: 'https://interact.jd.com/',
       signin: {
         ...signinFlow.signin,
-        refreshToken: 'rt-captured',
       },
     });
 

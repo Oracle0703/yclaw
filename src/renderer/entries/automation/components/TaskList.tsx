@@ -54,7 +54,7 @@ function getHostnameLabel(url?: string): string | null {
 }
 
 function isSigninTask(record: TaskSummary): boolean {
-  return typeof record.kind === 'string' && record.kind.endsWith('-signin');
+  return record.kind === 'jd-signin';
 }
 
 export function TaskList({

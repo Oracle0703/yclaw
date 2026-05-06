@@ -40,58 +40,21 @@ function buildGenericTaskFlow(taskId: string) {
 function buildSigninTaskFlow(taskId: string) {
   return {
     id: taskId,
-    name: '阿里云盘签到',
-    kind: 'aliyundrive-signin' as const,
+    name: '京东签到',
+    kind: 'jd-signin' as const,
     steps: [],
-    entryUrl: 'https://www.aliyundrive.com/',
+    entryUrl: 'https://interact.jd.com/',
     sessionId: 'session-signin-1',
     signin: {
-      site: 'aliyundrive' as const,
+      site: 'jd' as const,
       mode: 'api-first-browser-fallback' as const,
       fallbackApiEnabled: true,
-      refreshToken: null,
       maxRetryPerDay: 1,
       manualInterventionEnabled: true as const,
     },
     createdAt: '2026-04-28T00:00:00.000Z',
     updatedAt: '2026-04-28T00:00:00.000Z',
   };
-}
-
-function createWebStorage(source: Record<string, string>) {
-  const entries = Object.entries(source);
-  return {
-    get length() {
-      return entries.length;
-    },
-    key(index: number) {
-      return entries[index]?.[0] ?? null;
-    },
-    getItem(key: string) {
-      return source[key] ?? null;
-    },
-  };
-}
-
-function runProbeScript(
-  script: string,
-  snapshots: {
-    localStorage?: Record<string, string>;
-    sessionStorage?: Record<string, string>;
-  },
-) {
-  const evaluator = new Function(
-    'window',
-    `return ${script.trim()};`,
-  ) as (window: {
-    localStorage: ReturnType<typeof createWebStorage>;
-    sessionStorage: ReturnType<typeof createWebStorage>;
-  }) => unknown;
-
-  return evaluator({
-    localStorage: createWebStorage(snapshots.localStorage ?? {}),
-    sessionStorage: createWebStorage(snapshots.sessionStorage ?? {}),
-  });
 }
 
 function createSigninPreviewWindowMock() {
@@ -117,63 +80,6 @@ function createSigninPreviewWindowMock() {
         }
       }),
     },
-  };
-}
-
-function createDebuggerMock(options: {
-  responseUrl: string;
-  responseBody: unknown;
-}) {
-  const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
-  const emit = (event: string, ...args: unknown[]) => {
-    for (const listener of listeners.get(event) ?? []) {
-      listener(...args);
-    }
-  };
-
-  return {
-    isAttached: vi.fn(() => false),
-    attach: vi.fn(),
-    detach: vi.fn(),
-    on: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
-      const current = listeners.get(event) ?? [];
-      current.push(listener);
-      listeners.set(event, current);
-    }),
-    off: vi.fn((event: string, listener: (...args: unknown[]) => void) => {
-      const current = listeners.get(event) ?? [];
-      listeners.set(
-        event,
-        current.filter((item) => item !== listener),
-      );
-    }),
-    sendCommand: vi.fn(async (method: string) => {
-      if (method === 'Network.enable') {
-        queueMicrotask(() => {
-          emit(
-            'message',
-            {},
-            'Network.responseReceived',
-            {
-              requestId: 'request-1',
-              response: {
-                url: options.responseUrl,
-              },
-            },
-          );
-        });
-        return {};
-      }
-
-      if (method === 'Network.getResponseBody') {
-        return {
-          base64Encoded: false,
-          body: JSON.stringify(options.responseBody),
-        };
-      }
-
-      return {};
-    }),
   };
 }
 
@@ -232,7 +138,7 @@ const mockCreateTab = vi.fn(() => ({ setBounds: vi.fn(), webContents: { id: 1 } 
 const mockGetTabInfo = vi.fn((id: number) => ({
   id,
   title: 'Browser Tab',
-  url: 'https://www.jd.com/',
+  url: 'https://interact.jd.com/',
   loading: false,
   canGoBack: false,
   canGoForward: false,
@@ -776,9 +682,9 @@ describe('App IPC integration', () => {
     const handler = handlers.get(IPC_CHANNELS.BROWSER_CREATE_TAB);
     expect(handler).toBeDefined();
 
-    const response = await handler!({}, { url: 'https://www.jd.com/' });
+    const response = await handler!({}, { url: 'https://interact.jd.com/' });
 
-    expect(mockCreateTab).toHaveBeenCalledWith('https://www.jd.com/');
+    expect(mockCreateTab).toHaveBeenCalledWith('https://interact.jd.com/');
     expect(mockBrowserWindowConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
         title: '浏览器录制窗口',
@@ -1500,323 +1406,21 @@ describe('App IPC integration', () => {
     });
   });
 
-  it('captures signin token from sessionStorage fallback entries and closes the preview window', async () => {
-    mockSessionList.mockReturnValueOnce([
-      {
-        id: 'session-signin-1',
-        name: '阿里云盘账号',
-        domain: 'aliyundrive.com',
-        partition: 'persist:session_signin_1',
-        createdAt: '2026-04-28T00:00:00.000Z',
-        updatedAt: '2026-04-28T00:00:00.000Z',
-      },
-    ]);
-    mockDbGetTaskFlow.mockImplementation((taskId: string) =>
-      taskId === 'task-signin-1' ? buildSigninTaskFlow(taskId) : buildGenericTaskFlow(taskId),
-    );
-
-    const view = {
-      setBounds: vi.fn(),
-      webContents: {
-        id: 77,
-        isDestroyed: () => false,
-        loadURL: vi.fn(async () => undefined),
-        executeJavaScript: vi.fn(async (script: string) =>
-          runProbeScript(script, {
-            localStorage: {
-              theme: 'light',
-            },
-            sessionStorage: {
-              authSnapshot: JSON.stringify({
-                refresh_token: 'rt-session-storage',
-                access_token: 'at-session-storage',
-                user_name: '测试账号',
-                user_id: 'uid-session',
-                default_drive_id: 'drive-session',
-                expire_time: '2026-05-01T00:00:00.000Z',
-                token_type: 'Bearer',
-              }),
-            },
-          }),
-        ),
-      },
-    };
-    mockGetOrCreateTabBySession.mockReturnValueOnce(view);
-
-    const app = new App();
-    const previewWindow = createSigninPreviewWindowMock();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (app as any).signinPreviewWindow = previewWindow;
-
-    await app.start();
-
-    const handler = handlers.get(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE);
-    expect(handler).toBeDefined();
-
-    const response = await handler!({}, { taskId: 'task-signin-1' });
-
-    expect(mockGetOrCreateTabBySession).toHaveBeenCalledWith(
-      'persist:session_signin_1',
-      'about:blank',
-    );
-    expect(view.webContents.loadURL).toHaveBeenCalledWith('https://www.aliyundrive.com/sign/in');
-    expect(response).toMatchObject({
-      success: true,
-      data: {
-        refreshToken: 'rt-session-storage',
-        accessToken: 'at-session-storage',
-        userName: '测试账号',
-        userId: 'uid-session',
-        defaultDriveId: 'drive-session',
-        tokenType: 'Bearer',
-        timedOut: false,
-      },
-    });
-    expect(previewWindow.close).toHaveBeenCalledTimes(1);
-    expect(mockLogInfo).toHaveBeenCalledWith(
-      'main',
-      'signin login capture started',
-      expect.objectContaining({
-        taskId: 'task-signin-1',
-        sessionId: 'session-signin-1',
-        sessionPartition: 'persist:session_signin_1',
-      }),
-    );
-    expect(mockLogInfo).toHaveBeenCalledWith(
-      'main',
-      'signin login capture succeeded',
-      expect.objectContaining({
-        taskId: 'task-signin-1',
-        source: 'storage',
-        userId: 'uid-session',
-        localStorageKeyCount: 1,
-      }),
-    );
-  });
-
-  it('captures signin token from auth response body when storage does not expose it', async () => {
-    vi.useFakeTimers();
-    try {
-      mockSessionList.mockReturnValueOnce([
-        {
-          id: 'session-signin-1',
-          name: '阿里云盘账号',
-          domain: 'aliyundrive.com',
-          partition: 'persist:session_signin_1',
-          createdAt: '2026-04-28T00:00:00.000Z',
-          updatedAt: '2026-04-28T00:00:00.000Z',
-        },
-      ]);
-      mockDbGetTaskFlow.mockImplementation((taskId: string) =>
-        taskId === 'task-signin-1' ? buildSigninTaskFlow(taskId) : buildGenericTaskFlow(taskId),
-      );
-
-      const debuggerMock = createDebuggerMock({
-        responseUrl: 'https://passport.aliyundrive.com/newlogin/login.do?appName=aliyun',
-        responseBody: {
-          content: {
-            data: {
-              bizExt: JSON.stringify({
-                pds_login_result: {
-                  refreshToken: 'rt-network',
-                  accessToken: 'at-network',
-                  userName: '网络账号',
-                  userId: 'uid-network',
-                  defaultDriveId: 'drive-network',
-                  tokenType: 'Bearer',
-                },
-              }),
-            },
-          },
-        },
-      });
-      const view = {
-        setBounds: vi.fn(),
-        webContents: {
-          id: 78,
-          debugger: debuggerMock,
-          isDestroyed: () => false,
-          loadURL: vi.fn(async () => undefined),
-          executeJavaScript: vi.fn(async () => null),
-        },
-      };
-      mockGetOrCreateTabBySession.mockReturnValueOnce(view);
-
-      const app = new App();
-      const previewWindow = createSigninPreviewWindowMock();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (app as any).signinPreviewWindow = previewWindow;
-
-      await app.start();
-
-      const handler = handlers.get(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE);
-      expect(handler).toBeDefined();
-
-      const responsePromise = handler!({}, { taskId: 'task-signin-1' });
-      await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 2000);
-      const response = await responsePromise;
-
-      expect(response).toMatchObject({
-        success: true,
-        data: {
-          refreshToken: 'rt-network',
-          accessToken: 'at-network',
-          userName: '网络账号',
-          userId: 'uid-network',
-          defaultDriveId: 'drive-network',
-          tokenType: 'Bearer',
-          timedOut: false,
-        },
-      });
-      expect(mockGetOrCreateTabBySession).toHaveBeenCalledWith(
-        'persist:session_signin_1',
-        'about:blank',
-      );
-      expect(previewWindow.close).toHaveBeenCalledTimes(1);
-      expect(mockLogInfo).toHaveBeenCalledWith(
-        'main',
-        'signin login capture succeeded',
-        expect.objectContaining({
-          taskId: 'task-signin-1',
-          source: 'network',
-          userId: 'uid-network',
-        }),
-      );
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('returns capture diagnostics and writes a warning log when signin token capture times out', async () => {
-    vi.useFakeTimers();
-    try {
-      mockSessionList.mockReturnValueOnce([
-        {
-          id: 'session-signin-1',
-          name: '阿里云盘账号',
-          domain: 'aliyundrive.com',
-          partition: 'persist:session_signin_1',
-          createdAt: '2026-04-28T00:00:00.000Z',
-          updatedAt: '2026-04-28T00:00:00.000Z',
-        },
-      ]);
-      mockDbGetTaskFlow.mockImplementation((taskId: string) =>
-        taskId === 'task-signin-1' ? buildSigninTaskFlow(taskId) : buildGenericTaskFlow(taskId),
-      );
-
-      const debuggerMock = createDebuggerMock({
-        responseUrl: 'https://passport.aliyundrive.com/newlogin/login.do?appName=aliyun',
-        responseBody: {
-          content: {
-            data: {
-              message: 'ok-without-token',
-            },
-          },
-        },
-      });
-      const view = {
-        setBounds: vi.fn(),
-        webContents: {
-          id: 79,
-          debugger: debuggerMock,
-          isDestroyed: () => false,
-          getURL: () => 'https://www.aliyundrive.com/drive',
-          getTitle: () => '阿里云盘',
-          session: {
-            cookies: {
-              get: vi.fn(async () => [
-                { domain: '.aliyundrive.com' },
-                { domain: '.alipan.com' },
-              ]),
-            },
-          },
-          loadURL: vi.fn(async () => undefined),
-          executeJavaScript: vi.fn(async (script: string) => {
-            if (script.includes('sessionStorageSnapshot')) {
-              return {
-                pageUrl: 'https://www.aliyundrive.com/drive',
-                pageTitle: '阿里云盘',
-                localStorageKeys: ['theme', 'lang'],
-                sessionStorageKeys: ['traceId'],
-              };
-            }
-            return null;
-          }),
-        },
-      };
-      mockGetOrCreateTabBySession.mockReturnValueOnce(view);
-
-      const app = new App();
-      const previewWindow = createSigninPreviewWindowMock();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (app as any).signinPreviewWindow = previewWindow;
-
-      await app.start();
-
-      const handler = handlers.get(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE);
-      expect(handler).toBeDefined();
-
-      const responsePromise = handler!({}, { taskId: 'task-signin-1' });
-      await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 2000);
-      const response = await responsePromise;
-
-      expect(response).toMatchObject({
-        success: true,
-        data: {
-          refreshToken: null,
-          timedOut: true,
-          captureDiagnostics: {
-            pageUrl: 'https://www.aliyundrive.com/drive',
-            pageTitle: '阿里云盘',
-            localStorageKeys: ['theme', 'lang'],
-            sessionStorageKeys: ['traceId'],
-            cookieDomains: ['.aliyundrive.com', '.alipan.com'],
-            networkResponseCount: 1,
-            tokenHintResponseUrls: [],
-          },
-        },
-      });
-      expect(mockGetOrCreateTabBySession).toHaveBeenCalledWith(
-        'persist:session_signin_1',
-        'about:blank',
-      );
-      expect(mockLogWarn).toHaveBeenCalledWith(
-        'main',
-        'signin login capture timed out',
-        expect.objectContaining({
-          taskId: 'task-signin-1',
-          pageUrl: 'https://www.aliyundrive.com/drive',
-          networkResponseCount: 1,
-        }),
-      );
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it('waits until signin preview page becomes visible before executing browser signin script', async () => {
     vi.useFakeTimers();
     try {
       mockSessionList.mockReturnValueOnce([
         {
           id: 'session-signin-1',
-          name: '阿里云盘账号',
-          domain: 'aliyundrive.com',
+          name: '京东账号',
+          domain: 'jd.com',
           partition: 'persist:session_signin_1',
           createdAt: '2026-04-28T00:00:00.000Z',
           updatedAt: '2026-04-28T00:00:00.000Z',
         },
       ]);
       mockDbGetTaskFlow.mockImplementation((taskId: string) =>
-        taskId === 'task-signin-1'
-          ? {
-              ...buildSigninTaskFlow(taskId),
-              signin: {
-                ...buildSigninTaskFlow(taskId).signin,
-                refreshToken: null,
-              },
-            }
-          : buildGenericTaskFlow(taskId),
+        taskId === 'task-signin-1' ? buildSigninTaskFlow(taskId) : buildGenericTaskFlow(taskId),
       );
 
       const view = {
@@ -1835,8 +1439,7 @@ describe('App IPC integration', () => {
 
         if (
           script.includes('activity_not_found')
-          || script.includes('reward_button_not_found')
-          || script.includes('精选活动')
+          || script.includes('PC签到领京豆')
         ) {
           return visibilityProbeCount >= 2
             ? {
@@ -1847,14 +1450,11 @@ describe('App IPC integration', () => {
             : {
                 success: false,
                 failureReason: 'activity_not_found',
-                detail: '未找到精选活动区域',
+                detail: '未找到 PC签到领京豆 区域',
                 debug: {
                   readyState: 'complete',
                   visibilityState: 'hidden',
                   viewport: '1266x823',
-                  activityAnchorFound: false,
-                  signBarCount: 0,
-                  dateCardCandidateCount: 0,
                 },
             };
         }
@@ -1870,9 +1470,9 @@ describe('App IPC integration', () => {
 
         if (script.includes('document.body?.innerText')) {
           return {
-            pageUrl: 'https://www.aliyundrive.com/home',
-            pageTitle: '阿里云盘',
-            domSummary: '文件 最近 活动',
+            pageUrl: 'https://interact.jd.com/',
+            pageTitle: '京东签到',
+            domSummary: 'PC签到领京豆',
             readyState: 'complete',
             visibilityState: 'hidden',
             viewport: '1266x823',
@@ -1902,10 +1502,10 @@ describe('App IPC integration', () => {
           taskId: 'task-signin-1',
           status: 'success',
           strategyUsed: 'browser',
-          detail: '今日奖励已领取',
+          detail: '京东今日已签到，当前余额 0 京豆',
         },
       });
-      expect(view.webContents.loadURL).toHaveBeenCalledWith('https://www.aliyundrive.com/');
+      expect(view.webContents.loadURL).toHaveBeenCalledWith('https://interact.jd.com/');
       expect(visibilityProbeCount).toBeGreaterThanOrEqual(2);
     } finally {
       vi.useRealTimers();

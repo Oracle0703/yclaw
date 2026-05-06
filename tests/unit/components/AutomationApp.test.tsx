@@ -197,7 +197,6 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
         site: 'jd';
         mode: 'browser-first-api-fallback' | 'api-first-browser-fallback';
         fallbackApiEnabled: boolean;
-        refreshToken?: string | null;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
       } | null;
@@ -213,7 +212,6 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
         site: 'jd';
         mode: 'browser-first-api-fallback' | 'api-first-browser-fallback';
         fallbackApiEnabled: boolean;
-        refreshToken: string | null;
         maxRetryPerDay: number;
         manualInterventionEnabled: true;
       };
@@ -233,9 +231,8 @@ vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
               enabled: initialValue?.enabled ?? true,
               signin: {
                 site: 'jd',
-                mode: initialValue?.signin?.mode ?? 'browser-first-api-fallback',
-                fallbackApiEnabled: initialValue?.signin?.fallbackApiEnabled ?? false,
-                refreshToken: initialValue?.signin?.refreshToken ?? null,
+                mode: initialValue?.signin?.mode ?? 'api-first-browser-fallback',
+                fallbackApiEnabled: initialValue?.signin?.fallbackApiEnabled ?? true,
                 maxRetryPerDay: initialValue?.signin?.maxRetryPerDay ?? 1,
                 manualInterventionEnabled: true,
               },
@@ -592,8 +589,8 @@ describe('Automation App', () => {
           entryUrl: 'https://interact.jd.com/',
           signin: {
             site: 'jd',
-            mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: false,
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
             maxRetryPerDay: 2,
             manualInterventionEnabled: true,
           },
@@ -629,8 +626,8 @@ describe('Automation App', () => {
           entryUrl: payload?.entryUrl ?? 'https://interact.jd.com/',
           signin: {
             site: 'jd',
-            mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: false,
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
             maxRetryPerDay: 2,
             manualInterventionEnabled: true,
           },
@@ -648,7 +645,6 @@ describe('Automation App', () => {
       }
       if (channel === IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE) {
         return Promise.resolve({
-          refreshToken: null,
           userName: '京东账号',
           localStorageSnapshot: {
             area: '22_1930',
@@ -710,8 +706,8 @@ describe('Automation App', () => {
           entryUrl: payload?.entryUrl ?? 'https://interact.jd.com/',
           signin: {
             site: 'jd',
-            mode: 'browser-first-api-fallback',
-            fallbackApiEnabled: false,
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
             maxRetryPerDay: 1,
             manualInterventionEnabled: true,
           },
@@ -721,7 +717,6 @@ describe('Automation App', () => {
       }
       if (channel === IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE) {
         return Promise.resolve({
-          refreshToken: null,
           userName: '京东账号',
           localStorageSnapshot: {
             area: '22_1930',

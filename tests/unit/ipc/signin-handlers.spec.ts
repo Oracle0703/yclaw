@@ -19,7 +19,6 @@ describe('registerSigninHandlers', () => {
         site: 'jd' as const,
         mode: 'browser-first-api-fallback' as const,
         fallbackApiEnabled: false,
-        refreshToken: null,
         maxRetryPerDay: 2,
         manualInterventionEnabled: true as const,
       },
@@ -82,7 +81,7 @@ describe('registerSigninHandlers', () => {
       expect.objectContaining({
         taskId: null,
         name: '京东签到',
-        hasRefreshToken: false,
+        hasLoginSnapshot: false,
       }),
     );
     expect(logService.info).toHaveBeenCalledWith(

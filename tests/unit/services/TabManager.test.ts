@@ -96,9 +96,9 @@ vi.mock('electron', () => ({
               session: true,
             },
             {
-              name: 'aliyun_cookie',
+              name: 'jd_cookie',
               value: 'ignore',
-              domain: '.aliyundrive.com',
+              domain: '.jd.com',
               path: '/',
               secure: true,
               httpOnly: true,
@@ -172,7 +172,7 @@ describe('TabManager', () => {
     });
 
     it('redirects new window requests into the current tab so recording continues', () => {
-      const view = tabManager.createTab('https://www.jd.com');
+      const view = tabManager.createTab('https://interact.jd.com');
       expect(view.webContents.setWindowOpenHandler).toHaveBeenCalledWith(expect.any(Function));
 
       const handler = vi.mocked(view.webContents.setWindowOpenHandler).mock.calls[0][0] as (
@@ -292,7 +292,7 @@ describe('TabManager', () => {
 
   describe('investigation recorder', () => {
     it('captures filtered network traffic and returns replay candidates', async () => {
-      const view = tabManager.createTab('https://www.jd.com');
+      const view = tabManager.createTab('https://interact.jd.com');
 
       await tabManager.startRecorder(view.webContents.id, {
         mode: 'investigation',
@@ -391,7 +391,7 @@ describe('TabManager', () => {
           }),
         ],
       });
-      expect(JSON.stringify(result)).not.toContain('aliyun_cookie');
+      expect(JSON.stringify(result)).not.toContain('jd_cookie');
     });
   });
 

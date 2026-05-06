@@ -256,6 +256,71 @@ describe('JdSigninProvider', () => {
     });
   });
 
+  it('does not open the browser when API-first execution cannot complete and browser fallback is disabled', async () => {
+    const browser = createBrowserGateway({
+      success: true,
+      alreadySigned: false,
+      earnedBeans: 2,
+      balance: 2,
+      balanceStr: '0.02',
+    });
+    browser.fetchWithSession = vi
+      .fn()
+      .mockResolvedValueOnce(createJsonResponse({
+        code: '0000',
+        data: {
+          balance: 0,
+          balanceStr: '0',
+        },
+      }))
+      .mockResolvedValueOnce(createJsonResponse({
+        code: '0000',
+        data: {
+          list: [],
+        },
+      }))
+      .mockResolvedValueOnce(createJsonResponse({
+        success: true,
+        data: {
+          assignmentInfoList: [
+            {
+              id: 'dynamic-eaid-xyz',
+              name: 'PC签到领京豆',
+              type: 5,
+              extraType: 'sign',
+              signType: 1,
+              completionFlag: false,
+              signDetail: { itemId: '1' },
+            },
+          ],
+        },
+      }))
+      .mockResolvedValueOnce(createJsonResponse({
+        success: false,
+        errCode: '500',
+        errMessage: '活动暂不可用',
+      }));
+    const provider = new JdSigninProvider({ browser });
+
+    const result = await provider.run({
+      taskId: 'task-jd',
+      site: 'jd',
+      sessionPartition: 'default',
+      entryUrl: 'https://interact.jd.com/',
+      browserFallbackEnabled: false,
+      maxRetryPerDay: 1,
+    });
+
+    expect(browser.fetchWithSession).toHaveBeenCalled();
+    expect(browser.openSessionPage).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      status: 'needs_intervention',
+      strategyUsed: 'api-fallback',
+      failureReason: 'api_request_failed',
+      detail: '活动暂不可用',
+    });
+  });
+
   it('requires intervention when the browser execution cannot read the balance', async () => {
     const browser = createBrowserGateway({
       success: false,

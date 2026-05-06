@@ -144,18 +144,15 @@ describe('SigninRunStatusCard', () => {
     const summary: SigninRunSummary = {
       taskId: 'task-signin-1',
       status: 'needs_intervention',
-      failureReason: 'reward_button_not_found',
-      detail: '页面未找到领取按钮',
+      failureReason: 'activity_not_found',
+      detail: '页面未找到签到区域',
       debug: {
-        pageUrl: 'https://www.aliyundrive.com/drive',
-        pageTitle: '阿里云盘',
-        domSummary: '精选活动 4月28日',
+        pageUrl: 'https://interact.jd.com/',
+        pageTitle: '京东',
+        domSummary: 'PC签到领京豆 4月28日',
         readyState: 'complete',
         visibilityState: 'hidden',
         viewport: '0x0',
-        activityAnchorFound: false,
-        signBarCount: 0,
-        dateCardCandidateCount: 0,
         screenshotDataUrl: 'data:image/png;base64,ui-debug',
       },
       runAt: '2026-04-28T08:30:00.000Z',
@@ -177,7 +174,7 @@ describe('SigninRunStatusCard', () => {
           {
             taskId: 'task-signin-1',
             status: 'needs_intervention',
-            failureReason: 'reward_button_not_found',
+            failureReason: 'activity_not_found',
             strategyUsed: 'api-fallback',
             runAt: '2026-04-28T08:30:00.000Z',
             retryCount: 1,
@@ -188,22 +185,19 @@ describe('SigninRunStatusCard', () => {
       />,
     );
 
-    expect(screen.getByText(/页面标题：阿里云盘/)).toBeDefined();
-    expect(screen.getByText(/页面地址：https:\/\/www\.aliyundrive\.com\/drive/)).toBeDefined();
-    expect(screen.getByText(/DOM 摘要：精选活动 4月28日/)).toBeDefined();
+    expect(screen.getByText(/页面标题：京东/)).toBeDefined();
+    expect(screen.getByText(/页面地址：https:\/\/interact\.jd\.com\//)).toBeDefined();
+    expect(screen.getByText(/DOM 摘要：PC签到领京豆 4月28日/)).toBeDefined();
     expect(screen.getByText(/文档状态：complete/)).toBeDefined();
     expect(screen.getByText(/页面可见性：hidden/)).toBeDefined();
     expect(screen.getByText(/视口尺寸：0x0/)).toBeDefined();
-    expect(screen.getByText(/活动锚点：未找到/)).toBeDefined();
-    expect(screen.getByText(/签到卡数量：0/)).toBeDefined();
-    expect(screen.getByText(/日期卡候选数：0/)).toBeDefined();
     expect(screen.getByRole('img', { name: '失败截图预览' }).getAttribute('src')).toBe(
       'data:image/png;base64,ui-debug',
     );
     expect(screen.getByText('最近运行记录')).toBeDefined();
     expect(screen.getByText(/2026-04-28 16:00:00 · success · browser · 重试 0/)).toBeDefined();
     expect(
-      screen.getByText(/2026-04-28 16:30:00 · needs_intervention · api-fallback · reward_button_not_found · 重试 1/),
+      screen.getByText(/2026-04-28 16:30:00 · needs_intervention · api-fallback · activity_not_found · 重试 1/),
     ).toBeDefined();
   });
 });
