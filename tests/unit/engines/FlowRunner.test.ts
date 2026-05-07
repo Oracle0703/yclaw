@@ -149,6 +149,36 @@ describe('FlowRunner', () => {
       );
     });
 
+    it('passes task and batch context to automation engine executions', async () => {
+      const flow = createFlow([
+        {
+          action: {
+            type: 'extract',
+            selector: 'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+            params: { mode: 'api', parserKey: 'newsnow.hot' },
+          },
+        },
+      ]);
+      flow.entryUrl = 'https://newsnow.busiyi.world/api/s?id=zhihu&latest';
+      flow.templateId = 'template-1';
+
+      await runner.run(flow, wc, 0, 'batch-1');
+
+      expect(mockEngine.execute).toHaveBeenCalledWith(
+        wc,
+        expect.objectContaining({
+          type: 'extract',
+          selector: 'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+        }),
+        {
+          taskId: 'flow-1',
+          batchId: 'batch-1',
+          templateId: 'template-1',
+          sourceUrl: 'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+        },
+      );
+    });
+
     it('should start from specified step index', async () => {
       const flow = createFlow([{}, {}, {}]);
       const result = await runner.run(flow, wc, 1);

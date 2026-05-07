@@ -9,7 +9,7 @@ export class HotTaskCompiler {
       schedule: source.schedule ?? { type: 'manual' },
       sessionId: source.sessionId ?? null,
       enabled: source.enabled ?? true,
-      tags: source.tags ?? [],
+      tags: this.buildTags(source),
       steps: source.sourceKind === 'browser'
         ? this.buildBrowserSteps(source)
         : this.buildApiSteps(source),
@@ -48,14 +48,21 @@ export class HotTaskCompiler {
   }
 
   private buildApiSteps(source: HotSourceDraft): TaskStep[] {
+    const isRss = source.sourceKind === 'rss' || source.parserKey === 'rss.feed';
+    const isBatch = source.parserKey === 'newsnow.batch';
     return [
       {
         id: `${source.siteKey}-request`,
-        name: '请求 API 数据',
+        name: isRss ? '请求 RSS 数据' : isBatch ? '请求多平台 API 数据' : '请求 API 数据',
         action: {
           type: 'extract',
           selector: source.entryUrl,
-          params: { parserKey: source.parserKey, mode: 'api' },
+          params: {
+            parserKey: source.parserKey,
+            mode: 'api',
+            ...(isBatch ? { platformIds: source.platformIds ?? [] } : {}),
+            ...(source.filter ? { filter: source.filter } : {}),
+          },
         },
       },
       {
@@ -68,5 +75,16 @@ export class HotTaskCompiler {
         },
       },
     ];
+  }
+
+  private buildTags(source: HotSourceDraft): string[] {
+    const tags = new Set(source.tags ?? []);
+    if (source.sourceKind === 'rss' || source.parserKey === 'rss.feed') {
+      tags.add('hot:rss');
+    }
+    if (source.parserKey === 'newsnow.batch') {
+      tags.add('hot:batch');
+    }
+    return Array.from(tags);
   }
 }

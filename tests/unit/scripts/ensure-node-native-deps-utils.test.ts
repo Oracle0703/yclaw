@@ -14,6 +14,13 @@ const utils = requireFromHere('../../../scripts/ensure-node-native-deps-utils.js
     directories: string[];
   };
   buildElectronRestorePlan: () => { command: string };
+  reapRepoElectronProcesses: (
+    rootDir: string,
+    options?: {
+      platform?: string;
+      spawnSyncImpl?: (...args: unknown[]) => { status?: number; stdout?: string };
+    },
+  ) => number[];
   readRuntimeMarker: (rootDir: string) => 'node' | 'electron' | null;
   writeRuntimeMarker: (rootDir: string, value: 'node' | 'electron') => void;
 };
@@ -85,10 +92,87 @@ describe('buildNodeRebuildPlan', () => {
 });
 
 describe('buildElectronRestorePlan', () => {
-  it('返回 electron-builder install-app-deps 命令', () => {
+  it('返回强制重建 better-sqlite3 的 electron-rebuild 命令', () => {
     expect(utils.buildElectronRestorePlan()).toEqual({
-      command: 'npx --yes electron-builder install-app-deps',
+      command: 'npx --yes electron-rebuild -f -w better-sqlite3',
     });
+  });
+});
+
+describe('reapRepoElectronProcesses', () => {
+  it('在 Windows 上查找并结束当前仓库下的 electron 进程', () => {
+    const calls: Array<{ command: unknown; args: unknown; options: unknown }> = [];
+    const spawnSyncImpl = (
+      command: unknown,
+      args: unknown,
+      options: unknown,
+    ): { status: number; stdout: string } => {
+      calls.push({ command, args, options });
+      if (command === 'powershell') {
+        return { status: 0, stdout: '5948\r\n32956\r\n' };
+      }
+      return { status: 0, stdout: '' };
+    };
+
+    const pids = utils.reapRepoElectronProcesses('E:\\allsite\\yclaw', {
+      platform: 'win32',
+      spawnSyncImpl,
+    });
+
+    expect(pids).toEqual([5948, 32956]);
+    expect(calls[0]?.command).toBe('powershell');
+    expect(calls[1]).toMatchObject({
+      command: 'taskkill',
+      args: ['/pid', '5948', '/T', '/F'],
+    });
+    expect(calls[2]).toMatchObject({
+      command: 'taskkill',
+      args: ['/pid', '32956', '/T', '/F'],
+    });
+  });
+
+  it('传给 PowerShell 的仓库路径保持 Windows 单反斜杠格式', () => {
+    const calls: Array<{ command: unknown; args: unknown; options: unknown }> = [];
+    const spawnSyncImpl = (
+      command: unknown,
+      args: unknown,
+      options: unknown,
+    ): { status: number; stdout: string } => {
+      calls.push({ command, args, options });
+      return { status: 0, stdout: '' };
+    };
+
+    utils.reapRepoElectronProcesses('E:\\allsite\\yclaw', {
+      platform: 'win32',
+      spawnSyncImpl,
+    });
+
+    const powershellArgs = calls[0]?.args as string[] | undefined;
+    expect(powershellArgs?.[2]).toContain(`.Contains('${String.raw`e:\allsite\yclaw`}')`);
+  });
+
+  it('非 Windows 平台直接跳过', () => {
+    const spawnSyncImpl = () => {
+      throw new Error('should not be called');
+    };
+
+    expect(
+      utils.reapRepoElectronProcesses('/repo', {
+        platform: 'linux',
+        spawnSyncImpl,
+      }),
+    ).toEqual([]);
+  });
+
+  it('查询失败时返回空数组', () => {
+    const spawnSyncImpl = () => ({ status: 1, stdout: '' });
+
+    expect(
+      utils.reapRepoElectronProcesses('E:\\allsite\\yclaw', {
+        platform: 'win32',
+        spawnSyncImpl,
+      }),
+    ).toEqual([]);
   });
 });
 

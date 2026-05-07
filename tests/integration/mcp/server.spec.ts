@@ -38,6 +38,21 @@ const results: ExtractionResult[] = [
     status: 'normal',
     createdAt: '2026-04-20T10:12:05.000Z',
   },
+  {
+    id: 'result-hot-1',
+    taskId: 'task-1',
+    batchId: 'batch-1',
+    data: {
+      title: 'AI 芯片投资升温',
+      url: 'https://example.com/ai-chip',
+      rank: 1,
+      sourceId: 'zhihu',
+      keywordGroups: ['AI'],
+      isNew: true,
+    },
+    status: 'normal',
+    createdAt: '2026-04-20T10:13:05.000Z',
+  },
 ];
 
 const taskSummaries = [
@@ -102,7 +117,16 @@ describe('mcp server integration', () => {
     const resources = await client.listResources();
 
     expect(tools.tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining(['task.list', 'task.get', 'batch.get', 'batch.logs', 'results.query']),
+      expect.arrayContaining([
+        'task.list',
+        'task.get',
+        'batch.get',
+        'batch.logs',
+        'results.query',
+        'hot.latest',
+        'hot.trends',
+        'hot.summary',
+      ]),
     );
     expect(resources.resources.map((resource) => resource.uri)).toEqual(
       expect.arrayContaining([
@@ -112,6 +136,51 @@ describe('mcp server integration', () => {
         'yclaw://results/task-1?limit=20',
       ]),
     );
+  });
+
+  it('supports P8 hot query tools over MCP', async () => {
+    const server = createMcpServer({
+      taskService: {
+        listTasks: () => taskSummaries,
+        getTaskDetail: () => taskFlow,
+        getBatch: () => batch,
+      },
+      resultService: {
+        listResults: () => results,
+      },
+      executionLogService: {
+        query: () => [],
+      },
+    });
+
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'yclaw-test-client', version: '1.0.0' });
+
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    const latest = await client.callTool({
+      name: 'hot.latest',
+      arguments: { keyword: 'AI', limit: 5 },
+    });
+    const trends = await client.callTool({
+      name: 'hot.trends',
+      arguments: { limit: 5 },
+    });
+    const summary = await client.callTool({
+      name: 'hot.summary',
+      arguments: { keyword: 'AI', limit: 5 },
+    });
+
+    expect(JSON.parse(readTextBlock(latest))).toMatchObject({
+      total: 1,
+      items: [expect.objectContaining({ id: 'result-hot-1' })],
+    });
+    expect(JSON.parse(readTextBlock(trends))).toMatchObject({
+      keywordGroups: [{ name: 'AI', count: 1 }],
+      sources: [{ name: 'zhihu', count: 1 }],
+    });
+    expect(readTextBlock(summary)).toContain('AI 芯片投资升温');
   });
 
   it('supports tools/call and resources/read for read-only capabilities', async () => {

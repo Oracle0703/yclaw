@@ -14,6 +14,9 @@ export function HotRunPanel(props: HotRunPanelProps) {
     <section className="browser-workspace-section">
       <div className="browser-workspace-section-title">最近运行</div>
       <div className="browser-workspace-list">
+        {props.runs.length === 0 ? (
+          <div className="browser-workspace-action-description">暂无运行记录</div>
+        ) : null}
         {props.runs.map((run) => (
           <div
             key={run.batchId}

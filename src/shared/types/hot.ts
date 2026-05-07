@@ -1,8 +1,38 @@
 import type { ScheduleConfig, StepResult, TaskBreakpoint } from './task';
 
-export type HotSourceKind = 'api' | 'browser';
-export type HotReportFormat = 'md' | 'docx';
+export type HotSourceKind = 'api' | 'browser' | 'rss';
+export type HotReportFormat = 'md' | 'html' | 'docx';
 export type HotWorkspaceMode = 'browser-session' | 'hot-workspace';
+export type HotTimelinePreset = 'all-day' | 'morning-evening' | 'workday' | 'custom';
+
+export interface HotKeywordGroup {
+  name: string;
+  include: string[];
+  exclude?: string[];
+}
+
+export interface HotFilterConfig {
+  keywordGroups?: HotKeywordGroup[];
+  includeKeywords?: string[];
+  excludeKeywords?: string[];
+  seenUrls?: string[];
+}
+
+export interface HotTimelineWindow {
+  start: string;
+  end: string;
+  daysOfWeek?: number[];
+}
+
+export interface HotTimelineConfig {
+  preset: HotTimelinePreset;
+  windows: HotTimelineWindow[];
+}
+
+export interface HotTimelinePresetOption extends HotTimelineConfig {
+  label: string;
+  schedule: ScheduleConfig;
+}
 
 export interface HotSource {
   id: string;
@@ -12,8 +42,11 @@ export interface HotSource {
   siteKey: string;
   entryUrl: string;
   parserKey: string;
+  platformIds?: string[];
   sessionId?: string | null;
   schedule?: ScheduleConfig | null;
+  filter?: HotFilterConfig | null;
+  timeline?: HotTimelineConfig | null;
   enabled: boolean;
   tags: string[];
   createdAt: string;
@@ -26,8 +59,11 @@ export interface HotSourceDraft {
   siteKey: string;
   entryUrl: string;
   parserKey: string;
+  platformIds?: string[];
   sessionId?: string | null;
   schedule?: ScheduleConfig | null;
+  filter?: HotFilterConfig | null;
+  timeline?: HotTimelineConfig | null;
   enabled?: boolean;
   tags?: string[];
 }
@@ -58,5 +94,6 @@ export interface HotReportSummary {
   title: string;
   format: HotReportFormat;
   filePath: string;
+  content?: string;
   createdAt: string;
 }

@@ -13,6 +13,7 @@ import Settings from './pages/Settings';
 const StockPage = lazy(() => import('../stock/App'));
 const AutomationPage = lazy(() => import('../automation/App'));
 const DataCenterPage = lazy(() => import('../data-center/App'));
+const HotMonitorPage = lazy(() => import('../hot-monitor/App'));
 const PluginCenterPage = lazy(() => import('../plugin-center/App'));
 const BrowserPage = lazy(() => import('../browser/App'));
 const SigninPage = lazy(() => import('../signin/App'));
@@ -29,6 +30,7 @@ const MODULE_ROUTE_MAP: Record<string, string> = {
   stock: '/stock',
   automation: '/automation',
   'data-center': '/data-center',
+  'hot-monitor': '/hot-monitor',
   'plugin-center': '/plugin-center',
   browser: '/browser',
   signin: '/signin',
@@ -84,6 +86,7 @@ export default function App() {
               <Route path="/automation" element={<AutomationPage />} />
               <Route path="/signin" element={<SigninPage />} />
               <Route path="/data-center" element={<DataCenterPage />} />
+              <Route path="/hot-monitor" element={<HotMonitorPage />} />
               <Route path="/browser" element={<BrowserPage />} />
               <Route path="/plugin-center" element={<PluginCenterPage />} />
             </Routes>

@@ -138,4 +138,26 @@ describe('HotRunProjectionService', () => {
       }),
     );
   });
+
+  it('starts a hot source without requiring callers to resolve a browser tab first', () => {
+    const startTask = vi.fn();
+    const service = new HotRunProjectionService({
+      sourceRepository: sourceRepository as never,
+      batchService: batchService as never,
+      resultService: resultService as never,
+      reportRepository: reportRepository as never,
+      startTask,
+    });
+
+    expect(service.startRun('source-1')).toEqual({
+      sourceId: 'source-1',
+      taskId: 'task-1',
+      started: true,
+    });
+    expect(startTask).toHaveBeenCalledWith({
+      id: 'source-1',
+      taskId: 'task-1',
+      name: '抖音热榜',
+    });
+  });
 });

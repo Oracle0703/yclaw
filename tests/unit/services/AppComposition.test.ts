@@ -47,6 +47,10 @@ const leaseReconcilerInstance = {
 const runnerDispatchInstance = {
   tick: vi.fn(),
 };
+const resultServiceInstance = {
+  saveResult: vi.fn(),
+  listResults: vi.fn(() => []),
+};
 
 vi.mock('electron', () => ({
   app: {
@@ -167,7 +171,20 @@ vi.mock('@main/services/AlertService', () => ({
 }));
 
 vi.mock('@main/services/ResultService', () => ({
-  ResultService: vi.fn().mockImplementation(() => ({})),
+  ResultService: vi.fn().mockImplementation(() => resultServiceInstance),
+}));
+
+vi.mock('@engines/automation/AutomationEngine', () => ({
+  AutomationEngine: vi.fn().mockImplementation((options) => ({
+    options,
+    execute: vi.fn(),
+  })),
+}));
+
+vi.mock('@engines/automation/FlowRunner', () => ({
+  FlowRunner: vi.fn().mockImplementation((options) => ({
+    options,
+  })),
 }));
 
 vi.mock('@engines/analytics/DataSourceManager', () => ({
@@ -209,6 +226,8 @@ vi.mock('@main/services/runner-scheduler', () => ({
 }));
 
 import { App } from '@main/app';
+import { AutomationEngine } from '@engines/automation/AutomationEngine';
+import { FlowRunner } from '@engines/automation/FlowRunner';
 
 describe('App composition', () => {
   beforeEach(() => {
@@ -226,6 +245,22 @@ describe('App composition', () => {
         taskRepository: expect.any(Object),
       }),
     );
+  });
+
+  it('injects ResultService into AutomationEngine runners so hot extract results are persisted', () => {
+    new App();
+
+    const taskServiceOptions = (TaskService as unknown as Mock).mock.calls[0][0] as {
+      createRunner: () => unknown;
+    };
+    taskServiceOptions.createRunner();
+
+    expect(AutomationEngine).toHaveBeenCalledWith(expect.objectContaining({
+      resultService: resultServiceInstance,
+    }));
+    expect(FlowRunner).toHaveBeenCalledWith(expect.objectContaining({
+      engine: expect.any(Object),
+    }));
   });
 
   it('injects explicit task service when constructing SchedulerService', () => {
@@ -329,6 +364,17 @@ describe('App composition', () => {
       expect.objectContaining({
         eventBus: expect.any(Object),
       }),
+    );
+  });
+
+  it('writes hot html reports to the project output directory', () => {
+    const app = new App();
+    const hotReportService = (app as unknown as {
+      hotReportService: { outputDir: string };
+    }).hotReportService;
+
+    expect(hotReportService.outputDir.replace(/\\/g, '/')).toBe(
+      `${process.cwd().replace(/\\/g, '/')}/output`,
     );
   });
 

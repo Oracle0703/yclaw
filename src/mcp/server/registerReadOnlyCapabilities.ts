@@ -4,6 +4,9 @@ import type { CallToolResult, ReadResourceResult } from '@modelcontextprotocol/s
 import {
   batchGetInputSchema,
   batchLogsInputSchema,
+  hotLatestInputSchema,
+  hotSummaryInputSchema,
+  hotTrendsInputSchema,
   resultsQueryInputSchema,
   taskGetInputSchema,
   taskListInputSchema,
@@ -176,6 +179,81 @@ export function registerReadOnlyCapabilities(
     },
   );
 
+  server.registerTool(
+    'hot.latest',
+    {
+      title: '查询最新热点',
+      description: '按来源或关键词查询最新热点结果。',
+      inputSchema: hotLatestInputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+      },
+    },
+    async ({ sourceId, keyword, limit }) => {
+      const items = trimToLimit(
+        listHotResults(options)
+          .filter((result) => {
+            if (sourceId && result.data.sourceId !== sourceId) {
+              return false;
+            }
+            if (keyword && !JSON.stringify(result.data).toLowerCase().includes(String(keyword).toLowerCase())) {
+              return false;
+            }
+            return true;
+          })
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        limit ?? 50,
+      );
+      return createJsonToolResult({ total: items.length, items });
+    },
+  );
+
+  server.registerTool(
+    'hot.trends',
+    {
+      title: '查询热点趋势',
+      description: '按关键词组和来源聚合热点数量。',
+      inputSchema: hotTrendsInputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+      },
+    },
+    async ({ limit }) => createJsonToolResult(buildHotTrends(listHotResults(options), limit ?? 20)),
+  );
+
+  server.registerTool(
+    'hot.summary',
+    {
+      title: '生成热点摘要',
+      description: '返回适合 AI 或 MCP 客户端展示的热点文本摘要。',
+      inputSchema: hotSummaryInputSchema,
+      annotations: {
+        readOnlyHint: true,
+        idempotentHint: true,
+      },
+    },
+    async ({ keyword, limit }) => {
+      const items = trimToLimit(
+        listHotResults(options).filter((result) =>
+          keyword ? JSON.stringify(result.data).toLowerCase().includes(String(keyword).toLowerCase()) : true,
+        ),
+        limit ?? 20,
+      );
+      return {
+        content: [{
+          type: 'text',
+          text: items.length === 0
+            ? '暂无匹配热点。'
+            : items.map((result, index) =>
+              `${index + 1}. ${String(result.data.title ?? result.id)} ${String(result.data.url ?? '')}`,
+            ).join('\n'),
+        }],
+      };
+    },
+  );
+
   for (const resource of listDiscoverableResources(options.taskService.listTasks())) {
     server.registerResource(
       `discoverable:${resource.uri}`,
@@ -232,6 +310,45 @@ export function registerReadOnlyCapabilities(
     },
     async (uri) => readResource(uri, options),
   );
+}
+
+function listHotResults(options: CreateMcpServerOptions) {
+  return options.resultService.listResults({}).filter((result) => {
+    const data = result.data;
+    return Boolean(data.title) && (
+      data.rank !== undefined
+      || data.sourceId !== undefined
+      || data.keywordGroups !== undefined
+      || data.isNew !== undefined
+      || data.url !== undefined
+    );
+  });
+}
+
+function buildHotTrends(results: ReturnType<typeof listHotResults>, limit: number) {
+  return {
+    keywordGroups: topCounts(
+      results.flatMap((result) =>
+        Array.isArray(result.data.keywordGroups) ? result.data.keywordGroups.map(String) : [],
+      ),
+      limit,
+    ),
+    sources: topCounts(
+      results.map((result) => String(result.data.sourceId ?? 'unknown')),
+      limit,
+    ),
+  };
+}
+
+function topCounts(values: string[], limit: number): Array<{ name: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, limit)
+    .map(([name, count]) => ({ name, count }));
 }
 
 async function readResource(uri: URL, options: CreateMcpServerOptions): Promise<ReadResourceResult> {

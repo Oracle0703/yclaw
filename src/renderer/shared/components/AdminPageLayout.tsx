@@ -6,6 +6,7 @@ import {
   CheckCircleOutlined,
   DatabaseOutlined,
   DeploymentUnitOutlined,
+  FireOutlined,
   FundOutlined,
   GlobalOutlined,
   HomeOutlined,
@@ -45,6 +46,11 @@ const MODULE_MENU: NonNullable<MenuProps['items']> = [
     key: '/data-center',
     label: '数据中心',
     icon: <DatabaseOutlined />,
+  },
+  {
+    key: '/hot-monitor',
+    label: '热点监控',
+    icon: <FireOutlined />,
   },
   {
     key: '/browser',

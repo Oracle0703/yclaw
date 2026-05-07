@@ -8,6 +8,9 @@ build/
 release/
 release-*/
 
+# Hot monitor / TrendRadar generated reports (see HotReportService outputDir)
+output/
+
 # Generated feature packages
 resources/feature-packs/
 

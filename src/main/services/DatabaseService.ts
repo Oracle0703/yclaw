@@ -879,6 +879,7 @@ export class DatabaseService {
           site_key TEXT NOT NULL,
           entry_url TEXT NOT NULL,
           parser_key TEXT NOT NULL,
+          platform_ids_json TEXT,
           session_id TEXT,
           schedule_json TEXT,
           enabled INTEGER NOT NULL DEFAULT 1,
@@ -939,6 +940,25 @@ export class DatabaseService {
       }
 
       this.db!.exec('INSERT INTO migrations (version) VALUES (22);');
+    }
+
+    if (currentDbVersion < 23) {
+      if (!this.hasColumn('hot_sources', 'filter_json')) {
+        this.db!.exec('ALTER TABLE hot_sources ADD COLUMN filter_json TEXT;');
+      }
+      if (!this.hasColumn('hot_sources', 'timeline_json')) {
+        this.db!.exec('ALTER TABLE hot_sources ADD COLUMN timeline_json TEXT;');
+      }
+
+      this.db!.exec('INSERT INTO migrations (version) VALUES (23);');
+    }
+
+    if (currentDbVersion < 24) {
+      if (!this.hasColumn('hot_sources', 'platform_ids_json')) {
+        this.db!.exec('ALTER TABLE hot_sources ADD COLUMN platform_ids_json TEXT;');
+      }
+
+      this.db!.exec('INSERT INTO migrations (version) VALUES (24);');
     }
   }
 

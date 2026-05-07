@@ -4,6 +4,7 @@ import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { buildSpawnSpec } from './spawn-utils';
 import { createElectronStderrFilter } from './dev-log-filter';
+import { ensureElectronNativeDeps } from './ensure-electron-native-deps';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -44,6 +45,7 @@ let isShuttingDown = false;
 let restartScheduled = false;
 let viteOrigin = 'http://localhost:5173';
 let electronStderrFilter: ReturnType<typeof createElectronStderrFilter> | null = null;
+const expectedElectronExits = new WeakSet<ChildProcess>();
 const RESTART_DEBOUNCE_MS = 250;
 
 const viteProcess = spawnProcess(getBin('vite'), [], {
@@ -132,6 +134,7 @@ function stopElectron(): Promise<void> {
       current.once('exit', () => resolvePromise());
     });
   electronExitPromise = waiter;
+  expectedElectronExits.add(current);
 
   if (current.pid) {
     killElectronTree(current.pid);
@@ -153,6 +156,7 @@ function spawnElectron(): void {
   // 启动前清理可能存在的本仓库 electron 孤儿进程，避免 single-instance lock 被占用
   // 导致新进程启动后立刻 app.quit() 而看不到窗口。
   reapStrayElectronProcesses();
+  ensureElectronNativeDeps(rootDir);
 
   const child = spawn(electronExecutable, ['src/main/index.ts'], {
     cwd: rootDir,
@@ -183,12 +187,14 @@ function spawnElectron(): void {
   });
 
   child.on('exit', (code, signal) => {
+    const expectedExit = expectedElectronExits.has(child);
+    expectedElectronExits.delete(child);
     electronStderrFilter?.flush();
     if (electronProcess === child) {
       electronProcess = null;
       electronExitPromise = null;
     }
-    if (!isShuttingDown && signal !== 'SIGTERM' && code !== 0) {
+    if (!isShuttingDown && !expectedExit && signal !== 'SIGTERM' && code !== 0) {
       console.error(`[electron] exited with code ${code ?? 'null'}`);
     }
   });

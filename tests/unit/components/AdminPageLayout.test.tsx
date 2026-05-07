@@ -13,6 +13,7 @@ vi.mock('@ant-design/icons', () => ({
   CheckCircleOutlined: () => <span>check-circle</span>,
   DatabaseOutlined: () => <span>database</span>,
   DeploymentUnitOutlined: () => <span>deployment</span>,
+  FireOutlined: () => <span>fire</span>,
   FundOutlined: () => <span>fund</span>,
   GlobalOutlined: () => <span>global</span>,
   HomeOutlined: () => <span>home</span>,
@@ -98,5 +99,17 @@ describe('AdminPageLayout', () => {
     fireEvent.click(screen.getByRole('button', { name: '自动签到' }));
 
     expect(navigateMock).toHaveBeenCalledWith('/signin');
+  });
+
+  it('renders the hot monitor menu and navigates to the standalone page', () => {
+    render(
+      <AdminPageLayout>
+        <div>content</div>
+      </AdminPageLayout>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '热点监控' }));
+
+    expect(navigateMock).toHaveBeenCalledWith('/hot-monitor');
   });
 });

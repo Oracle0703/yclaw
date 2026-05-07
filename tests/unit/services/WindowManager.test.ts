@@ -153,6 +153,18 @@ describe('WindowManager', () => {
     expect(win1.webContents.send).toHaveBeenCalledWith('app:navigate', { module: 'stock' });
   });
 
+  it('routes hot monitor module openWindow into the workbench window', async () => {
+    const win1 = manager.openWindow({ module: 'workbench' });
+    await Promise.resolve();
+    const win2 = manager.openWindow({ module: 'hot-monitor' });
+
+    expect(win2).toBe(win1);
+    expect(manager.getOpenModules()).not.toContain('hot-monitor');
+    expect(win1.webContents.send).toHaveBeenCalledWith('app:navigate', {
+      module: 'hot-monitor',
+    });
+  });
+
   it('should create distinct windows for the same module when instanceId differs', () => {
     const win1 = manager.openWindow({ module: 'custom-mod', instanceId: 'left' });
     const win2 = manager.openWindow({ module: 'custom-mod', instanceId: 'right' });

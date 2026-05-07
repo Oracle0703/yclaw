@@ -1,7 +1,7 @@
 import type { TaskFlow, TaskStep, TaskExecutionResult, StepResult } from '@shared/types';
 import { TaskStatus } from '@shared/types';
 import type { ActionDefinition, AutomationPage } from './types';
-import type { AutomationEngine } from './AutomationEngine';
+import type { ActionExecutionContext, AutomationEngine } from './AutomationEngine';
 import { withRetry, createBreakpoint, type Breakpoint } from './RetryPolicy';
 import { EVENTS } from '@shared/constants';
 import type { ExecutionLogService } from '@main/services/ExecutionLogService';
@@ -89,7 +89,7 @@ export class FlowRunner {
       const step = flow.steps[i];
 
       try {
-        const result = await this.executeStep(step, webContents);
+        const result = await this.executeStep(step, webContents, flow);
         stepResults.push(result);
 
         this.eventBus.emit(EVENTS.TASK_STEP_COMPLETED, {
@@ -193,7 +193,11 @@ export class FlowRunner {
   /**
    * 执行单步（带重试）
    */
-  private async executeStep(step: TaskStep, webContents: AutomationPage): Promise<StepResult> {
+  private async executeStep(
+    step: TaskStep,
+    webContents: AutomationPage,
+    flow: TaskFlow,
+  ): Promise<StepResult> {
     const retryCount = step.retryCount ?? this.defaultRetryCount;
     const retryDelay = step.retryDelay ?? this.defaultRetryDelay;
 
@@ -217,7 +221,7 @@ export class FlowRunner {
 
       const result = await withRetry(
         async () => {
-          const r = await this.engine.execute(webContents, action);
+          const r = await this.engine.execute(webContents, action, this.buildActionContext(flow));
           if (!r.success) throw new Error(r.error ?? 'Action failed');
           return r;
         },
@@ -245,5 +249,14 @@ export class FlowRunner {
         duration: Date.now() - startTime,
       };
     }
+  }
+
+  private buildActionContext(flow: TaskFlow): ActionExecutionContext {
+    return {
+      taskId: flow.id,
+      batchId: this.batchId,
+      templateId: flow.templateId ?? null,
+      sourceUrl: flow.entryUrl,
+    };
   }
 }

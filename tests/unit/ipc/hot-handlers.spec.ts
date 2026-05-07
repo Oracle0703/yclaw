@@ -24,8 +24,20 @@ describe('registerHotHandlers', () => {
     };
     const hotReportService = {
       listReports: vi.fn(() => [{ id: 'report-1' }]),
-      getReportDetail: vi.fn((reportId) => ({ id: reportId })),
+      getReportDetail: vi.fn((reportId) => ({ id: reportId, batchId: 'batch-1' })),
       generateReport: vi.fn((payload) => ({ id: 'report-2', ...payload })),
+    };
+    const hotTimelineService = {
+      listPresets: vi.fn(() => [{ preset: 'workday', schedule: { type: 'cron', cron: '*/30 9-18 * * 1-5' } }]),
+    };
+    const hotAiInsightService = {
+      summarize: vi.fn(async (payload) => ({ summary: 'AI摘要', ...payload })),
+    };
+    const hotNotificationService = {
+      sendReport: vi.fn(async (payload) => ({ status: 'succeeded', attempts: 1, ...payload })),
+    };
+    const hotResultService = {
+      listResults: vi.fn(() => [{ id: 'result-1', data: { title: 'AI 芯片投资升温' } }]),
     };
 
     registerHotHandlers({
@@ -33,11 +45,18 @@ describe('registerHotHandlers', () => {
       hotSourceService,
       hotRunService,
       hotReportService,
+      hotTimelineService,
+      hotAiInsightService,
+      hotNotificationService,
+      hotResultService,
     });
 
     expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_SOURCE_LIST, expect.any(Function));
     expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_RUN_START, expect.any(Function));
     expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_REPORT_GENERATE, expect.any(Function));
+    expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_TIMELINE_PRESETS, expect.any(Function));
+    expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_AI_SUMMARIZE, expect.any(Function));
+    expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_NOTIFICATION_SEND, expect.any(Function));
 
     expect(await handlers.get(IPC_CHANNELS.HOT_SOURCE_LIST)?.({})).toEqual([{ id: 'source-1' }]);
     expect(
@@ -59,13 +78,37 @@ describe('registerHotHandlers', () => {
       await handlers.get(IPC_CHANNELS.HOT_REPORT_GENERATE)?.({
         sourceId: 'source-1',
         batchId: 'batch-1',
-        format: 'md',
+        format: 'html',
       }),
     ).toEqual({
       id: 'report-2',
       sourceId: 'source-1',
       batchId: 'batch-1',
-      format: 'md',
+      format: 'html',
+    });
+    expect(await handlers.get(IPC_CHANNELS.HOT_TIMELINE_PRESETS)?.({})).toEqual([
+      { preset: 'workday', schedule: { type: 'cron', cron: '*/30 9-18 * * 1-5' } },
+    ]);
+    expect(
+      await handlers.get(IPC_CHANNELS.HOT_AI_SUMMARIZE)?.({
+        interest: '关注 AI 基建',
+        batchId: 'batch-1',
+      }),
+    ).toMatchObject({
+      interest: '关注 AI 基建',
+      results: [{ id: 'result-1', data: { title: 'AI 芯片投资升温' } }],
+      summary: 'AI摘要',
+    });
+    expect(
+      await handlers.get(IPC_CHANNELS.HOT_NOTIFICATION_SEND)?.({
+        reportId: 'report-1',
+        target: { type: 'webhook', url: 'https://hooks.example.com/hot' },
+      }),
+    ).toMatchObject({
+      status: 'succeeded',
+      attempts: 1,
+      report: { id: 'report-1' },
+      results: [{ id: 'result-1', data: { title: 'AI 芯片投资升温' } }],
     });
   });
 });

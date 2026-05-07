@@ -43,21 +43,6 @@ function getDevRuntimeFailure(options) {
     );
   }
 
-  const betterSqliteBinary = path.join(
-    rootDir,
-    'node_modules',
-    'better-sqlite3',
-    'build',
-    'Release',
-    'better_sqlite3.node',
-  );
-  if (!fs.existsSync(betterSqliteBinary)) {
-    return (
-      'better-sqlite3 native binding is missing (`node_modules/better-sqlite3/build/Release/better_sqlite3.node`). ' +
-      'Run `npx electron-builder install-app-deps` to rebuild Electron native dependencies.'
-    );
-  }
-
   return null;
 }
 

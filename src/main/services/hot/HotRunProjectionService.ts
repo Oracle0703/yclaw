@@ -4,12 +4,19 @@ import type { ResultService } from '../ResultService';
 import type { HotReportRepository } from '../repositories/HotReportRepository';
 import type { HotSourceRepository } from '../repositories/HotSourceRepository';
 
+type HotRunStartSource = {
+  id: string;
+  taskId: string;
+  name: string;
+  sourceKind?: string;
+};
+
 interface HotRunProjectionServiceOptions {
   sourceRepository?: Pick<HotSourceRepository, 'listSources' | 'getSource'>;
   batchService?: Pick<BatchService, 'listBatchesByTask' | 'getBatch'>;
   resultService?: Pick<ResultService, 'listResults'>;
   reportRepository?: Pick<HotReportRepository, 'getReportByBatchId'>;
-  startTask?: (taskId: string) => unknown;
+  startTask?: (source: HotRunStartSource) => unknown;
 }
 
 export class HotRunProjectionService {
@@ -17,7 +24,7 @@ export class HotRunProjectionService {
   private readonly batchService: Pick<BatchService, 'listBatchesByTask' | 'getBatch'>;
   private readonly resultService: Pick<ResultService, 'listResults'>;
   private readonly reportRepository: Pick<HotReportRepository, 'getReportByBatchId'>;
-  private readonly startTask?: (taskId: string) => unknown;
+  private readonly startTask?: (source: HotRunStartSource) => unknown;
 
   constructor(options: HotRunProjectionServiceOptions = {}) {
     if (!options.sourceRepository) {
@@ -86,7 +93,7 @@ export class HotRunProjectionService {
       return { sourceId, taskId: source.taskId, started: false };
     }
 
-    this.startTask(source.taskId);
+    this.startTask(source);
     return { sourceId, taskId: source.taskId, started: true };
   }
 

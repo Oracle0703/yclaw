@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const MARKER_RELATIVE_PATH = path.join('.cache', 'native-deps-runtime');
 
@@ -53,8 +54,42 @@ function buildNodeRebuildPlan(options) {
  */
 function buildElectronRestorePlan() {
   return {
-    command: 'npx --yes electron-builder install-app-deps',
+    command: 'npx --yes electron-rebuild -f -w better-sqlite3',
   };
+}
+
+function reapRepoElectronProcesses(rootDir, options = {}) {
+  const platform = options.platform ?? process.platform;
+  const spawnSyncImpl = options.spawnSyncImpl ?? spawnSync;
+  if (platform !== 'win32') {
+    return [];
+  }
+
+  const repoTag = String(rootDir).toLowerCase().replace(/'/g, "''");
+  const result = spawnSyncImpl(
+    'powershell',
+    [
+      '-NoProfile',
+      '-Command',
+      `Get-CimInstance Win32_Process -Filter "Name='electron.exe'" | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.ToLower().Contains('${repoTag}') } | ForEach-Object { $_.ProcessId }`,
+    ],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+  );
+
+  if (result.status !== 0 || !result.stdout) {
+    return [];
+  }
+
+  const pids = String(result.stdout)
+    .split(/\r?\n/)
+    .map((line) => Number(line.trim()))
+    .filter((pid) => Number.isFinite(pid) && pid > 0);
+
+  for (const pid of pids) {
+    spawnSyncImpl('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' });
+  }
+
+  return pids;
 }
 
 function markerFilePath(rootDir) {
@@ -98,6 +133,7 @@ module.exports = {
   isNativeAbiOrBindingError,
   buildNodeRebuildPlan,
   buildElectronRestorePlan,
+  reapRepoElectronProcesses,
   readRuntimeMarker,
   writeRuntimeMarker,
 };

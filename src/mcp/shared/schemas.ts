@@ -25,6 +25,21 @@ export const resultsQueryInputSchema = {
   limit: z.number().int().positive().max(500).optional(),
 };
 
+export const hotLatestInputSchema = {
+  sourceId: z.string().min(1).optional(),
+  keyword: z.string().min(1).optional(),
+  limit: z.number().int().positive().max(500).optional(),
+};
+
+export const hotTrendsInputSchema = {
+  limit: z.number().int().positive().max(500).optional(),
+};
+
+export const hotSummaryInputSchema = {
+  keyword: z.string().min(1).optional(),
+  limit: z.number().int().positive().max(100).optional(),
+};
+
 export const taskRunInputSchema = {
   taskId: z.string().min(1),
 };

@@ -98,6 +98,92 @@ describe('HotSourceService', () => {
     });
   });
 
+  it('keeps TrendRadar platform ids when creating a batch source and backing task', () => {
+    const trendRadarPlatformIds = [
+      'toutiao',
+      'baidu',
+      'wallstreetcn-hot',
+      'thepaper',
+      'bilibili-hot-search',
+      'cls-hot',
+      'ifeng',
+      'tieba',
+      'weibo',
+      'douyin',
+      'zhihu',
+    ];
+    taskCompiler.compile.mockImplementation((draft) => ({
+      name: draft.name,
+      description: 'trendradar · newsnow.batch 采集源',
+      entryUrl: draft.entryUrl,
+      schedule: draft.schedule,
+      sessionId: draft.sessionId,
+      enabled: draft.enabled,
+      tags: draft.tags,
+      steps: [
+        {
+          id: 'trendradar-request',
+          name: '请求多平台 API 数据',
+          action: {
+            type: 'extract',
+            selector: draft.entryUrl,
+            params: {
+              mode: 'api',
+              parserKey: draft.parserKey,
+              platformIds: draft.platformIds,
+            },
+          },
+        },
+      ],
+    } satisfies Pick<TaskFlow, 'name' | 'description' | 'entryUrl' | 'schedule' | 'sessionId' | 'enabled' | 'tags' | 'steps'>));
+    const service = new HotSourceService({
+      sourceRepository: sourceRepository as never,
+      taskService: taskService as never,
+      taskCompiler: taskCompiler as never,
+      now: () => new Date('2026-05-06T08:00:00.000Z'),
+      createId: () => 'source-trendradar',
+    });
+
+    service.createSource({
+      name: 'TrendRadar 多平台热榜',
+      sourceKind: 'api',
+      siteKey: 'trendradar',
+      entryUrl: 'https://newsnow.busiyi.world/api/s',
+      parserKey: 'newsnow.batch',
+      platformIds: trendRadarPlatformIds,
+      enabled: true,
+      tags: ['TrendRadar', '多平台', '热榜'],
+    });
+
+    expect(taskCompiler.compile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parserKey: 'newsnow.batch',
+        platformIds: trendRadarPlatformIds,
+      }),
+    );
+    expect(taskService.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entryUrl: 'https://newsnow.busiyi.world/api/s',
+        steps: [
+          expect.objectContaining({
+            action: expect.objectContaining({
+              params: expect.objectContaining({
+                platformIds: trendRadarPlatformIds,
+              }),
+            }),
+          }),
+        ],
+      }),
+    );
+    expect(sourceRepository.saveSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'source-trendradar',
+        parserKey: 'newsnow.batch',
+        platformIds: trendRadarPlatformIds,
+      }),
+    );
+  });
+
   it('updates source metadata and syncs the backing task', () => {
     sourceRepository.getSource.mockReturnValue({
       id: 'source-1',

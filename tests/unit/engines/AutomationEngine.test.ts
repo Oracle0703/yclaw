@@ -22,6 +22,7 @@ describe('AutomationEngine', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     engine = new AutomationEngine();
     wc = createMockWebContents();
   });
@@ -144,6 +145,387 @@ describe('AutomationEngine', () => {
           data: expect.any(Object),
         }),
       );
+    });
+
+    it('fetches and parses NewsNow API extracts without running a DOM selector', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'zhihu',
+            updatedTime: 1777680000000,
+            items: [
+              {
+                id: 'item-1',
+                title: '知乎热点 1',
+                url: 'https://www.zhihu.com/question/1',
+                mobileUrl: 'https://www.zhihu.com/question/1',
+                extra: { info: '123 万热度' },
+              },
+              {
+                title: '知乎热点 2',
+                url: 'https://www.zhihu.com/question/2',
+              },
+            ],
+          }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+        params: { mode: 'api', parserKey: 'newsnow.hot' },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([
+        {
+          itemId: 'item-1',
+          title: '知乎热点 1',
+          url: 'https://www.zhihu.com/question/1',
+          mobileUrl: 'https://www.zhihu.com/question/1',
+          rank: 1,
+          sourceId: 'zhihu',
+          updatedTime: '2026-05-02T00:00:00.000Z',
+          heat: '123 万热度',
+        },
+        {
+          itemId: null,
+          title: '知乎热点 2',
+          url: 'https://www.zhihu.com/question/2',
+          mobileUrl: null,
+          rank: 2,
+          sourceId: 'zhihu',
+          updatedTime: '2026-05-02T00:00:00.000Z',
+          heat: null,
+        },
+      ]);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+      expect(wc.executeJavaScript).not.toHaveBeenCalled();
+    });
+
+    it('sends browser-like headers for NewsNow API extracts', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'zhihu',
+            items: [],
+          }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+        params: { mode: 'api', parserKey: 'newsnow.hot' },
+      });
+
+      expect(result.success).toBe(true);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Accept: 'application/json, text/plain, */*',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+            'User-Agent': expect.stringContaining('Mozilla/5.0'),
+            Referer: 'https://newsnow.busiyi.world/',
+            Origin: 'https://newsnow.busiyi.world',
+          }),
+        }),
+      );
+    });
+
+    it('fetches and merges NewsNow batch extracts for multiple TrendRadar platforms', async () => {
+      const fetchMock = vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        const sourceId = url.searchParams.get('id') ?? 'unknown';
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              id: sourceId,
+              items: [
+                {
+                  title: `${sourceId} 热点`,
+                  url: `https://example.com/${sourceId}`,
+                },
+              ],
+            }),
+        };
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'https://newsnow.busiyi.world/api/s',
+        params: {
+          mode: 'api',
+          parserKey: 'newsnow.batch',
+          platformIds: ['toutiao', 'baidu'],
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([
+        expect.objectContaining({
+          title: 'toutiao 热点',
+          sourceId: 'toutiao',
+          rank: 1,
+        }),
+        expect.objectContaining({
+          title: 'baidu 热点',
+          sourceId: 'baidu',
+          rank: 1,
+        }),
+      ]);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://newsnow.busiyi.world/api/s?id=toutiao&latest',
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'User-Agent': expect.stringContaining('Mozilla/5.0'),
+            Referer: 'https://newsnow.busiyi.world/',
+            Origin: 'https://newsnow.busiyi.world',
+          }),
+        }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://newsnow.busiyi.world/api/s?id=baidu&latest',
+        expect.objectContaining({ headers: expect.any(Object) }),
+      );
+      expect(wc.executeJavaScript).not.toHaveBeenCalled();
+    });
+
+    it('keeps successful NewsNow batch items when one platform request fails', async () => {
+      const fetchMock = vi.fn(async (input: string | URL | Request) => {
+        const url = new URL(String(input));
+        const sourceId = url.searchParams.get('id') ?? 'unknown';
+        if (sourceId === 'douyin') {
+          return {
+            ok: false,
+            status: 500,
+            statusText: 'Internal Server Error',
+          };
+        }
+        return {
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              id: sourceId,
+              items: [
+                {
+                  title: `${sourceId} 热点`,
+                  url: `https://example.com/${sourceId}`,
+                },
+              ],
+            }),
+        };
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'https://newsnow.busiyi.world/api/s',
+        params: {
+          mode: 'api',
+          parserKey: 'newsnow.batch',
+          platformIds: ['baidu', 'douyin', 'zhihu'],
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([
+        expect.objectContaining({ title: 'baidu 热点', sourceId: 'baidu' }),
+        expect.objectContaining({ title: 'zhihu 热点', sourceId: 'zhihu' }),
+      ]);
+    });
+
+    it('persists each NewsNow API item as an extraction result', async () => {
+      const saveResult = vi.fn();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              id: 'weibo',
+              items: [
+                { title: '微博热点 1', url: 'https://weibo.com/1' },
+                { title: '微博热点 2', url: 'https://weibo.com/2' },
+              ],
+            }),
+        }),
+      );
+      engine = new AutomationEngine({
+        resultService: {
+          saveResult,
+        } as never,
+      });
+
+      await engine.execute(
+        wc,
+        {
+          type: 'extract',
+          selector: 'https://newsnow.busiyi.world/api/s?id=weibo&latest',
+          params: { mode: 'api', parserKey: 'newsnow.hot' },
+        },
+        {
+          taskId: 'task-1',
+          batchId: 'batch-1',
+          sourceUrl: 'https://newsnow.busiyi.world/api/s?id=weibo&latest',
+        },
+      );
+
+      expect(saveResult).toHaveBeenCalledTimes(2);
+      expect(saveResult).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          taskId: 'task-1',
+          batchId: 'batch-1',
+          data: expect.objectContaining({
+            title: '微博热点 1',
+            rank: 1,
+            sourceId: 'weibo',
+          }),
+        }),
+      );
+      expect(saveResult).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          taskId: 'task-1',
+          batchId: 'batch-1',
+          data: expect.objectContaining({
+            title: '微博热点 2',
+            rank: 2,
+            sourceId: 'weibo',
+          }),
+        }),
+      );
+    });
+
+    it('fetches RSS feeds and applies keyword filtering before persistence', async () => {
+      const saveResult = vi.fn();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: () =>
+            Promise.resolve(`
+          <rss><channel><title>财经 RSS</title>
+            <item>
+              <title>AI 芯片投资升温</title>
+              <link>https://example.com/ai-chip</link>
+              <guid>ai-chip</guid>
+            </item>
+            <item>
+              <title>娱乐热点</title>
+              <link>https://example.com/fun</link>
+            </item>
+          </channel></rss>
+        `),
+        }),
+      );
+      engine = new AutomationEngine({
+        resultService: {
+          saveResult,
+        } as never,
+      });
+
+      const result = await engine.execute(
+        wc,
+        {
+          type: 'extract',
+          selector: 'https://example.com/feed.xml',
+          params: {
+            mode: 'api',
+            parserKey: 'rss.feed',
+            filter: {
+              keywordGroups: [{ name: 'AI', include: ['AI', '芯片'] }],
+            },
+          },
+        },
+        {
+          taskId: 'task-1',
+          batchId: 'batch-1',
+          sourceUrl: 'https://example.com/feed.xml',
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([
+        expect.objectContaining({
+          title: 'AI 芯片投资升温',
+          url: 'https://example.com/ai-chip',
+          keywordGroups: ['AI'],
+          isNew: true,
+        }),
+      ]);
+      expect(saveResult).toHaveBeenCalledTimes(1);
+      expect(wc.executeJavaScript).not.toHaveBeenCalled();
+    });
+
+    it('aborts API extracts that exceed the configured timeout', async () => {
+      const fetchMock = vi.fn((_input: string, init?: { signal?: AbortSignal }) => {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new Error('aborted'));
+          });
+        });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+        params: { mode: 'api', parserKey: 'newsnow.hot', timeoutMs: 5 },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('aborted');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws an aggregated API error when all NewsNow batch platforms fail', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 500,
+          statusText: 'Internal Server Error',
+        }),
+      );
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'https://newsnow.busiyi.world/api/s',
+        params: {
+          mode: 'api',
+          parserKey: 'newsnow.batch',
+          platformIds: ['baidu', 'douyin'],
+        },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('baidu: 500');
+      expect(result.error).toContain('douyin: 500');
+    });
+
+    it('rejects newsnow.batch extracts without platform ids', async () => {
+      vi.stubGlobal('fetch', vi.fn());
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'https://newsnow.busiyi.world/api/s',
+        params: { mode: 'api', parserKey: 'newsnow.batch' },
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('newsnow.batch requires platformIds');
     });
   });
 

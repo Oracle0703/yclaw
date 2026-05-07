@@ -1,5 +1,8 @@
 import type { ActionDefinition, ActionResult, AutomationPage } from './types';
 import type { ResultService } from '@main/services/ResultService';
+import { HotFilterService } from '@main/services/hot/HotFilterService';
+import { HotRssParser } from '@main/services/hot/HotRssParser';
+import type { HotFilterConfig } from '@shared/types';
 
 export interface ActionExecutionContext {
   taskId: string;
@@ -67,6 +70,25 @@ export class AutomationEngine {
       return;
     }
 
+    const isApiExtract = action.params?.mode === 'api';
+    const createdAt = new Date().toISOString();
+    const sourceUrl = context.sourceUrl ?? (isApiExtract ? action.selector : undefined);
+
+    if (isApiExtract && Array.isArray(result.data)) {
+      for (const item of result.data) {
+        this.resultService.saveResult({
+          taskId: context.taskId,
+          batchId: context.batchId,
+          templateId: context.templateId ?? null,
+          data: isRecord(item) ? item : { value: item },
+          status: 'normal',
+          sourceUrl,
+          createdAt,
+        });
+      }
+      return;
+    }
+
     this.resultService.saveResult({
       taskId: context.taskId,
       batchId: context.batchId,
@@ -76,8 +98,8 @@ export class AutomationEngine {
         value: result.data,
       },
       status: 'normal',
-      sourceUrl: context.sourceUrl,
-      createdAt: new Date().toISOString(),
+      sourceUrl,
+      createdAt,
     });
   }
 
@@ -153,6 +175,10 @@ export class AutomationEngine {
   }
 
   private async extractAction(wc: AutomationPage, action: ActionDefinition): Promise<unknown> {
+    if (action.params?.mode === 'api') {
+      return this.extractApiAction(action);
+    }
+
     const attr = (action.params?.attribute as string) ?? 'textContent';
     return wc.executeJavaScript(`
       (() => {
@@ -162,9 +188,90 @@ export class AutomationEngine {
     `);
   }
 
+  private async extractApiAction(action: ActionDefinition): Promise<unknown[]> {
+    if (typeof globalThis.fetch !== 'function') {
+      throw new Error('Fetch API is not available in this runtime');
+    }
+
+    const parserKey = String(action.params?.parserKey ?? '');
+    if (parserKey === 'newsnow.batch') {
+      return this.extractNewsNowBatchAction(action);
+    }
+
+    const response = await fetchWithTimeout(action.selector, {
+      headers: buildApiRequestHeaders(action.selector, parserKey),
+      timeoutMs: getRequestTimeoutMs(action.params),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    if (parserKey === 'rss.feed') {
+      const xml = await response.text();
+      return this.applyHotFilter(
+        new HotRssParser().parse(xml, action.selector),
+        action.params?.filter,
+      );
+    }
+
+    const payload = await response.json();
+    if (parserKey === 'newsnow.hot') {
+      return this.applyHotFilter(parseNewsNowHot(payload, action.selector), action.params?.filter);
+    }
+
+    throw new Error(`Unsupported API parser: ${parserKey || 'unknown'}`);
+  }
+
+  private async extractNewsNowBatchAction(action: ActionDefinition): Promise<unknown[]> {
+    const platformIds = toStringList(action.params?.platformIds);
+    if (platformIds.length === 0) {
+      throw new Error('newsnow.batch requires platformIds');
+    }
+
+    const timeoutMs = getRequestTimeoutMs(action.params);
+    const items: Array<Record<string, unknown>> = [];
+    const failures: string[] = [];
+    for (const platformId of platformIds) {
+      const requestUrl = buildNewsNowPlatformUrl(action.selector, platformId);
+      try {
+        const response = await fetchWithTimeout(requestUrl, {
+          headers: buildApiRequestHeaders(requestUrl, 'newsnow.batch'),
+          timeoutMs,
+        });
+
+        if (!response.ok) {
+          failures.push(`${platformId}: ${response.status} ${response.statusText}`);
+          continue;
+        }
+
+        const payload = await response.json();
+        items.push(...parseNewsNowHot(payload, requestUrl));
+      } catch (error) {
+        failures.push(`${platformId}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    if (items.length === 0 && failures.length > 0) {
+      throw new Error(`API request failed: ${failures.join('; ')}`);
+    }
+
+    return this.applyHotFilter(items, action.params?.filter);
+  }
+
   private async screenshotAction(wc: AutomationPage): Promise<string> {
     const image = await wc.capturePage();
     return image.toDataURL();
+  }
+
+  private applyHotFilter(
+    items: Array<Record<string, unknown>>,
+    filter: unknown,
+  ): Array<Record<string, unknown>> {
+    if (!filter || typeof filter !== 'object' || Array.isArray(filter)) {
+      return items;
+    }
+    return new HotFilterService().apply(items, filter as HotFilterConfig);
   }
 }
 
@@ -173,4 +280,171 @@ export class AutomationEngine {
  */
 function escapeCssSelector(selector: string): string {
   return selector.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+}
+
+const DEFAULT_API_REQUEST_TIMEOUT_MS = 30_000;
+
+function getRequestTimeoutMs(params: ActionDefinition['params']): number {
+  const raw = params?.timeoutMs;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+    return raw;
+  }
+  return DEFAULT_API_REQUEST_TIMEOUT_MS;
+}
+
+async function fetchWithTimeout(
+  input: string,
+  init: { headers?: Record<string, string>; timeoutMs: number },
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), init.timeoutMs);
+  try {
+    return await globalThis.fetch(input, {
+      headers: init.headers,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function buildApiRequestHeaders(requestUrl: string, parserKey: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json, text/plain, */*',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+    Connection: 'keep-alive',
+    'Cache-Control': 'no-cache',
+    'User-Agent':
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+  };
+
+  if (parserKey !== 'newsnow.hot' && parserKey !== 'newsnow.batch') {
+    return headers;
+  }
+
+  try {
+    const { origin } = new URL(requestUrl);
+    headers.Origin = origin;
+    headers.Referer = `${origin}/`;
+  } catch {
+    headers.Origin = 'https://newsnow.busiyi.world';
+    headers.Referer = 'https://newsnow.busiyi.world/';
+  }
+
+  return headers;
+}
+
+function buildNewsNowPlatformUrl(baseUrl: string, platformId: string): string {
+  try {
+    const url = new URL(baseUrl);
+    const params = new URLSearchParams(url.search);
+    params.set('id', platformId);
+    params.delete('latest');
+    return `${url.origin}${url.pathname}?${params.toString()}&latest`;
+  } catch {
+    return `https://newsnow.busiyi.world/api/s?id=${encodeURIComponent(platformId)}&latest`;
+  }
+}
+
+function toStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => String(item).trim()).filter(Boolean);
+}
+
+interface NewsNowItem {
+  id?: unknown;
+  title?: unknown;
+  url?: unknown;
+  mobileUrl?: unknown;
+  pubDate?: unknown;
+  extra?: {
+    info?: unknown;
+  } | null;
+}
+
+function parseNewsNowHot(payload: unknown, requestUrl: string): Array<Record<string, unknown>> {
+  const sourceId = getNewsNowSourceId(payload, requestUrl);
+  const updatedTime = formatNewsNowTime(getRecordValue(payload, 'updatedTime'));
+  const items = getNewsNowItems(payload);
+
+  return items.map((item, index) => ({
+    itemId: toNullableString(item.id),
+    title: toNullableString(item.title) ?? '',
+    url: toNullableString(item.url),
+    mobileUrl: toNullableString(item.mobileUrl),
+    rank: index + 1,
+    sourceId,
+    updatedTime,
+    heat: toNullableString(item.extra?.info),
+    ...(toNullableString(item.pubDate) ? { pubDate: toNullableString(item.pubDate) } : {}),
+  }));
+}
+
+function getNewsNowItems(payload: unknown): NewsNowItem[] {
+  if (Array.isArray(payload)) {
+    return payload.filter(isRecord) as NewsNowItem[];
+  }
+
+  if (!isRecord(payload)) {
+    return [];
+  }
+
+  const items = payload.items;
+  if (Array.isArray(items)) {
+    return items.filter(isRecord) as NewsNowItem[];
+  }
+
+  if (isRecord(payload.data) && Array.isArray(payload.data.items)) {
+    return payload.data.items.filter(isRecord) as NewsNowItem[];
+  }
+
+  return [];
+}
+
+function getNewsNowSourceId(payload: unknown, requestUrl: string): string | null {
+  const payloadId = toNullableString(getRecordValue(payload, 'id'));
+  if (payloadId) {
+    return payloadId;
+  }
+
+  try {
+    return new URL(requestUrl).searchParams.get('id');
+  } catch {
+    return null;
+  }
+}
+
+function formatNewsNowTime(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const numericValue =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : Number.NaN;
+  const date = Number.isFinite(numericValue)
+    ? new Date(numericValue < 10_000_000_000 ? numericValue * 1000 : numericValue)
+    : new Date(String(value));
+
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function getRecordValue(record: unknown, key: string): unknown {
+  return isRecord(record) ? record[key] : undefined;
+}
+
+function toNullableString(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  return String(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

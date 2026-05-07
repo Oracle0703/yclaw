@@ -20,6 +20,19 @@ interface HotSourcePanelProps {
 
 export function HotSourcePanel(props: HotSourcePanelProps) {
   const isEditing = props.editingSourceId !== null;
+  const keywords = props.draft.filter?.keywordGroups?.[0]?.include?.join(',') ?? '';
+  const excludes = props.draft.filter?.excludeKeywords?.join(',') ?? '';
+
+  const updateKeywordFilter = (nextKeywords: string, nextExcludes: string) => {
+    const include = splitCsv(nextKeywords);
+    const exclude = splitCsv(nextExcludes);
+    props.onDraftChange('filter', {
+      keywordGroups: include.length > 0
+        ? [{ name: '默认关键词', include, exclude }]
+        : [],
+      excludeKeywords: exclude,
+    });
+  };
 
   return (
     <section className="browser-workspace-section">
@@ -47,6 +60,18 @@ export function HotSourcePanel(props: HotSourcePanelProps) {
         value={props.draft.parserKey}
         onChange={(event) => props.onDraftChange('parserKey', event.target.value)}
         placeholder="解析器标识，如 douyin.hot"
+      />
+      <input
+        className="browser-workspace-input"
+        value={keywords}
+        onChange={(event) => updateKeywordFilter(event.target.value, excludes)}
+        placeholder="关键词，逗号分隔"
+      />
+      <input
+        className="browser-workspace-input"
+        value={excludes}
+        onChange={(event) => updateKeywordFilter(keywords, event.target.value)}
+        placeholder="过滤词，逗号分隔"
       />
       <div className="browser-review-queue-actions">
         <button
@@ -94,4 +119,11 @@ export function HotSourcePanel(props: HotSourcePanelProps) {
       </div>
     </section>
   );
+}
+
+function splitCsv(value: string): string[] {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }

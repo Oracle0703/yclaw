@@ -1,4 +1,5 @@
 import { IPC_CHANNELS } from '@shared/constants';
+import type { ExtractionResult, HotReportFormat, HotReportSummary } from '@shared/types';
 
 type IpcControllerLike = {
   handle(channel: string, handler: (payload: unknown) => unknown): void;
@@ -21,10 +22,35 @@ export function registerHotHandlers(options: {
   hotReportService: {
     listReports(query?: unknown): unknown;
     getReportDetail(reportId: string): unknown;
-    generateReport(payload: { sourceId: string; batchId: string; format: 'md' | 'docx' }): unknown;
+    generateReport(payload: { sourceId: string; batchId: string; format: HotReportFormat }): unknown;
+  };
+  hotTimelineService: {
+    listPresets(): unknown;
+  };
+  hotAiInsightService: {
+    summarize(payload: { interest: string; results: ExtractionResult[] }): unknown;
+  };
+  hotNotificationService: {
+    sendReport(payload: {
+      target: { type: 'webhook'; url: string; headers?: Record<string, string>; maxRetries?: number; timeoutMs?: number };
+      report: HotReportSummary;
+      results: ExtractionResult[];
+    }): unknown;
+  };
+  hotResultService: {
+    listResults(query?: { batchId?: string }): ExtractionResult[];
   };
 }): void {
-  const { ipcController, hotSourceService, hotRunService, hotReportService } = options;
+  const {
+    ipcController,
+    hotSourceService,
+    hotRunService,
+    hotReportService,
+    hotTimelineService,
+    hotAiInsightService,
+    hotNotificationService,
+    hotResultService,
+  } = options;
 
   ipcController.handle(IPC_CHANNELS.HOT_SOURCE_LIST, () => hotSourceService.listSources());
   ipcController.handle(IPC_CHANNELS.HOT_SOURCE_DETAIL, (payload) =>
@@ -75,6 +101,29 @@ export function registerHotHandlers(options: {
       format: assertFormat(body.format),
     });
   });
+
+  ipcController.handle(IPC_CHANNELS.HOT_TIMELINE_PRESETS, () => hotTimelineService.listPresets());
+  ipcController.handle(IPC_CHANNELS.HOT_AI_SUMMARIZE, (payload) => {
+    const body = assertObject(payload);
+    const batchId = assertStringField(body, 'batchId');
+    return hotAiInsightService.summarize({
+      interest: assertStringField(body, 'interest'),
+      results: hotResultService.listResults({ batchId }),
+    });
+  });
+  ipcController.handle(IPC_CHANNELS.HOT_NOTIFICATION_SEND, (payload) => {
+    const body = assertObject(payload);
+    const report = hotReportService.getReportDetail(assertStringField(body, 'reportId'));
+    if (!isHotReportSummary(report)) {
+      throw new Error('report not found');
+    }
+
+    return hotNotificationService.sendReport({
+      target: assertWebhookTarget(body.target),
+      report,
+      results: hotResultService.listResults({ batchId: report.batchId }),
+    });
+  });
 }
 
 function assertObject(payload: unknown): Record<string, unknown> {
@@ -97,9 +146,44 @@ function assertStringField(payload: unknown, key: string): string {
   throw new Error(`${key} is required`);
 }
 
-function assertFormat(value: unknown): 'md' | 'docx' {
-  if (value === 'md' || value === 'docx') {
+function assertFormat(value: unknown): HotReportFormat {
+  if (value === 'md' || value === 'html' || value === 'docx') {
     return value;
   }
   throw new Error('format is required');
+}
+
+function assertWebhookTarget(value: unknown): {
+  type: 'webhook';
+  url: string;
+  headers?: Record<string, string>;
+  maxRetries?: number;
+  timeoutMs?: number;
+} {
+  const target = assertObject(value);
+  if (target.type !== 'webhook') {
+    throw new Error('webhook target is required');
+  }
+
+  const url = assertStringField(target, 'url');
+  return {
+    type: 'webhook',
+    url,
+    ...(isStringRecord(target.headers) ? { headers: target.headers } : {}),
+    ...(typeof target.maxRetries === 'number' ? { maxRetries: target.maxRetries } : {}),
+    ...(typeof target.timeoutMs === 'number' ? { timeoutMs: target.timeoutMs } : {}),
+  };
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return typeof value === 'object'
+    && value !== null
+    && Object.values(value).every((item) => typeof item === 'string');
+}
+
+function isHotReportSummary(value: unknown): value is HotReportSummary {
+  return typeof value === 'object'
+    && value !== null
+    && typeof (value as HotReportSummary).id === 'string'
+    && typeof (value as HotReportSummary).batchId === 'string';
 }

@@ -31,10 +31,14 @@ import { CsvExporter } from './services/data-center/exporters/CsvExporter';
 import { JsonExporter } from './services/data-center/exporters/JsonExporter';
 import { JsonlExporter } from './services/data-center/exporters/JsonlExporter';
 import { WebhookExporter } from './services/data-center/exporters/WebhookExporter';
+import { HotAiInsightService } from './services/hot/HotAiInsightService';
+import { HotNotificationService } from './services/hot/HotNotificationService';
 import { HotReportService } from './services/hot/HotReportService';
 import { HotRunProjectionService } from './services/hot/HotRunProjectionService';
 import { HotSourceService } from './services/hot/HotSourceService';
 import { HotTaskCompiler } from './services/hot/HotTaskCompiler';
+import { HotTimelineScheduler } from './services/hot/HotTimelineScheduler';
+import { TrendRadarConfigService } from './services/hot/TrendRadarConfigService';
 import { TabManager } from './browser/TabManager';
 import { EVENTS, IPC_CHANNELS, RUNNER_SCHEDULER_DEFAULTS } from '@shared/constants';
 import { AIService } from './ai/AIService';
@@ -67,7 +71,7 @@ import {
   RunnerRegistryService,
 } from './services/runner-scheduler';
 import path from 'path';
-import { getRendererUrl, getUserDataPath } from './utils/paths';
+import { getRendererUrl } from './utils/paths';
 import {
   AIRepository,
   AlertRepository,
@@ -169,6 +173,9 @@ export class App {
   private hotSourceService: HotSourceService;
   private hotRunService: HotRunProjectionService;
   private hotReportService: HotReportService;
+  private hotTimelineService: HotTimelineScheduler;
+  private hotAiInsightService: HotAiInsightService;
+  private hotNotificationService: HotNotificationService;
   private notificationService: NotificationService;
   private signinTaskService: SigninTaskService;
   private signinPreviewWindow: BrowserWindow | null = null;
@@ -255,8 +262,11 @@ export class App {
       eventBus: this.eventBus,
       createRunner: () =>
         new FlowRunner({
-          engine: new AutomationEngine(),
+          engine: new AutomationEngine({
+            resultService: this.resultService,
+          }),
           eventBus: this.eventBus,
+          executionLogService: this.executionLogService,
         }),
     });
     this.remoteRunnerService = new RemoteRunnerService({
@@ -393,7 +403,7 @@ export class App {
       batchService,
       resultService: this.resultService,
       reportRepository: hotReportRepository,
-      startTask: (taskId: string) => this.taskService.startTask(taskId, this.getTaskWebContents()),
+      startTask: (source) => this.startHotRunTask(source),
     });
     this.hotReportService = new HotReportService({
       sourceRepository: hotSourceRepository,
@@ -401,8 +411,10 @@ export class App {
       resultService: this.resultService,
       executionLogService: this.executionLogService,
       reportRepository: hotReportRepository,
-      outputDir: path.join(getUserDataPath(), 'hot-reports'),
+      outputDir: path.join(process.cwd(), 'output'),
+      trendRadarConfigService: new TrendRadarConfigService(),
     });
+    this.hotTimelineService = new HotTimelineScheduler();
     this.datasetService = new DatasetService({
       repository: dataDatasetRepository,
     });
@@ -503,6 +515,29 @@ export class App {
       contextManager,
       toolRegistry,
     });
+    this.hotAiInsightService = new HotAiInsightService({
+      aiClient: {
+        summarize: async ({ prompt }) => {
+          const response = await this.aiService.chat({ message: prompt });
+          return response.message.content;
+        },
+      },
+    });
+    this.hotNotificationService = new HotNotificationService({
+      deliver: async ({ url, headers, timeoutMs, payload }) => {
+        const result = await webhookDeliveryService.deliver({
+          exportJobId: `hot-notification-${Date.now()}`,
+          url,
+          headers,
+          timeoutMs,
+          payload,
+        });
+        return {
+          status: result.status,
+          error: result.error,
+        };
+      },
+    });
     this.dataSourceManager = new DataSourceManager({ eventBus: this.eventBus });
     this.indicatorLibrary = new IndicatorLibrary();
     this.taskAsCode = bootstrapTaskAsCode({
@@ -576,6 +611,10 @@ export class App {
       hotSourceService: this.hotSourceService as never,
       hotRunService: this.hotRunService as never,
       hotReportService: this.hotReportService as never,
+      hotTimelineService: this.hotTimelineService,
+      hotAiInsightService: this.hotAiInsightService,
+      hotNotificationService: this.hotNotificationService,
+      hotResultService: this.resultService,
     });
     registerSigninHandlers({
       ipcController: this.ipcController,
@@ -1211,6 +1250,14 @@ export class App {
 
     const webContents = this.getTaskWebContents(tabId);
     return this.taskService.startTask(taskId, webContents);
+  }
+
+  private startHotRunTask(source: { taskId: string; sourceKind?: string }): unknown {
+    if (source.sourceKind === 'browser') {
+      return this.taskService.startTask(source.taskId, this.getTaskWebContents());
+    }
+
+    return this.taskService.startTask(source.taskId, createHeadlessAutomationPage());
   }
 
   /**
@@ -2088,4 +2135,17 @@ function normalizeCookieDomains(cookies: Array<{ domain?: string }>): string[] {
         .filter((domain): domain is string => typeof domain === 'string' && domain.length > 0),
     ),
   ).sort();
+}
+
+function createHeadlessAutomationPage() {
+  return {
+    async executeJavaScript<T = unknown>(): Promise<T> {
+      return undefined as T;
+    },
+    async capturePage(): Promise<{ toDataURL(): string }> {
+      return {
+        toDataURL: () => 'data:image/png;base64,',
+      };
+    },
+  };
 }

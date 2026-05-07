@@ -90,13 +90,11 @@ describe('getDevRuntimeFailure', () => {
     );
   });
 
-  it('在 better-sqlite3 绑定缺失时提示重建原生依赖', () => {
+  it('在 better-sqlite3 绑定缺失时不提前失败，交给后续自动重建逻辑处理', () => {
     const rootDir = createTempRoot();
     createElectronInstall(rootDir);
 
-    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v22.22.0' })).toContain(
-      'better-sqlite3 native binding is missing',
-    );
+    expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v22.22.0' })).toBeNull();
   });
 
   it('在运行时依赖齐全时返回 null', () => {

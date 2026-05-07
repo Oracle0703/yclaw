@@ -7,6 +7,9 @@ import type { ExecutionLogService } from '../ExecutionLogService';
 import type { ResultService } from '../ResultService';
 import type { HotReportRepository } from '../repositories/HotReportRepository';
 import type { HotSourceRepository } from '../repositories/HotSourceRepository';
+import { HotFilterService } from './HotFilterService';
+import type { TrendRadarProfile } from './TrendRadarConfigService';
+import { formatSnapshotParts, renderTrendRadarHtml } from './HotTrendRadarHtmlRenderer';
 
 interface HotReportServiceOptions {
   sourceRepository?: Pick<HotSourceRepository, 'getSource'>;
@@ -16,8 +19,12 @@ interface HotReportServiceOptions {
   reportRepository?: Pick<HotReportRepository, 'saveReport' | 'listReports' | 'getReport' | 'getReportByBatchId'>;
   outputDir?: string;
   writeFile?: (filePath: string, content: string) => void;
+  readFile?: (filePath: string) => string;
   now?: () => Date;
   createId?: () => string;
+  trendRadarConfigService?: {
+    loadProfile(): TrendRadarProfile | null;
+  };
 }
 
 export class HotReportService {
@@ -28,8 +35,12 @@ export class HotReportService {
   private readonly reportRepository: Pick<HotReportRepository, 'saveReport' | 'listReports' | 'getReport' | 'getReportByBatchId'>;
   private readonly outputDir: string;
   private readonly writeFile: (filePath: string, content: string) => void;
+  private readonly readFile: (filePath: string) => string;
   private readonly now: () => Date;
   private readonly createId: () => string;
+  private readonly trendRadarConfigService?: {
+    loadProfile(): TrendRadarProfile | null;
+  };
 
   constructor(options: HotReportServiceOptions = {}) {
     if (!options.sourceRepository) {
@@ -55,8 +66,10 @@ export class HotReportService {
     this.reportRepository = options.reportRepository;
     this.outputDir = options.outputDir ?? path.join(process.cwd(), 'outputs', 'hot-reports');
     this.writeFile = options.writeFile ?? ((filePath, content) => fs.writeFileSync(filePath, content, 'utf8'));
+    this.readFile = options.readFile ?? ((filePath) => fs.readFileSync(filePath, 'utf8'));
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? (() => randomUUID());
+    this.trendRadarConfigService = options.trendRadarConfigService;
   }
 
   listReports(query: { sourceId?: string; batchId?: string } = {}): HotReportSummary[] {
@@ -64,11 +77,23 @@ export class HotReportService {
   }
 
   getReportDetail(reportId: string): HotReportSummary | null {
-    return this.reportRepository.getReport(reportId);
+    const report = this.reportRepository.getReport(reportId);
+    if (!report) {
+      return null;
+    }
+
+    try {
+      return {
+        ...report,
+        content: this.readFile(report.filePath),
+      };
+    } catch {
+      return report;
+    }
   }
 
   generateReport(input: { sourceId: string; batchId: string; format: HotReportFormat }): HotReportSummary {
-    if (input.format !== 'md') {
+    if (input.format !== 'md' && input.format !== 'html') {
       throw new Error(`Unsupported hot report format: ${input.format}`);
     }
 
@@ -85,18 +110,38 @@ export class HotReportService {
     const results = this.resultService.listResults({ batchId: input.batchId });
     const logs = this.executionLogService.query({ batchId: input.batchId });
     const reportId = this.createId();
-    const createdAt = this.now().toISOString();
+    const now = this.now();
+    const createdAt = now.toISOString();
     const normalizedOutputDir = this.outputDir.replace(/\\/g, '/').replace(/\/$/, '');
-    const filePath = `${normalizedOutputDir}/${reportId}.md`;
+    const { filePath, content, latestFilePath } = input.format === 'html'
+      ? this.buildHtmlOutput({
+        outputDir: normalizedOutputDir,
+        sourceName: source.name,
+        siteKey: source.siteKey,
+        parserKey: source.parserKey,
+        sourceUrl: source.entryUrl,
+        batchId: input.batchId,
+        createdAt: now,
+        results,
+      })
+      : {
+        filePath: `${normalizedOutputDir}/${reportId}.md`,
+        content: this.buildMarkdown({
+          sourceName: source.name,
+          sourceUrl: source.entryUrl,
+          batchId: input.batchId,
+          results,
+          logs,
+        }),
+        latestFilePath: null,
+      };
 
-    fs.mkdirSync(this.outputDir, { recursive: true });
-    this.writeFile(filePath, this.buildMarkdown({
-      sourceName: source.name,
-      sourceUrl: source.entryUrl,
-      batchId: input.batchId,
-      results,
-      logs,
-    }));
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    this.writeFile(filePath, content);
+    if (latestFilePath) {
+      fs.mkdirSync(path.dirname(latestFilePath), { recursive: true });
+      this.writeFile(latestFilePath, content);
+    }
 
     const report: HotReportSummary = {
       id: reportId,
@@ -109,6 +154,95 @@ export class HotReportService {
     };
     this.reportRepository.saveReport(report);
     return report;
+  }
+
+  private buildHtmlOutput(input: {
+    outputDir: string;
+    sourceName: string;
+    siteKey: string;
+    parserKey: string;
+    sourceUrl: string;
+    batchId: string;
+    createdAt: Date;
+    results: Array<{ id: string; data: Record<string, unknown> }>;
+  }): { filePath: string; content: string; latestFilePath: string } {
+    const { dateFolder, timeFilename } = formatSnapshotParts(input.createdAt);
+    const filePath = `${input.outputDir}/html/${dateFolder}/${timeFilename}.html`;
+    const latestFilePath = input.siteKey === 'trendradar' && input.parserKey === 'newsnow.batch'
+      ? `${input.outputDir}/html/latest/current.html`
+      : '';
+    return {
+      filePath,
+      latestFilePath,
+      content: renderTrendRadarHtml({
+        sourceName: input.sourceName,
+        sourceUrl: input.sourceUrl,
+        batchId: input.batchId,
+        createdAt: input.createdAt,
+        ...this.buildTrendRadarProjection(input),
+        mode: 'current',
+      }),
+    };
+  }
+
+  private buildTrendRadarProjection(input: {
+    sourceName: string;
+    siteKey: string;
+    parserKey: string;
+    sourceUrl: string;
+    batchId: string;
+    createdAt: Date;
+    results: Array<{ id: string; data: Record<string, unknown> }>;
+  }): {
+    results: Array<{ id: string; data: Record<string, unknown> }>;
+    totalCount: number;
+    standaloneGroups?: Array<{ name: string; items: Array<{ id: string; data: Record<string, unknown> }> }>;
+  } {
+    const totalCount = input.results.length;
+    const isTrendRadarBatch = input.siteKey === 'trendradar' && input.parserKey === 'newsnow.batch';
+    if (!isTrendRadarBatch || !this.trendRadarConfigService) {
+      return { results: input.results, totalCount };
+    }
+
+    const profile = this.trendRadarConfigService.loadProfile();
+    if (!profile) {
+      return { results: input.results, totalCount };
+    }
+
+    const results = profile.displayMode === 'keyword' && profile.filterMethod === 'keyword' && profile.filter
+      ? this.applyTrendRadarKeywordProjection(input.results, profile.filter)
+      : input.results;
+
+    return {
+      results,
+      totalCount,
+      standaloneGroups: buildStandaloneGroups(input.results, profile),
+    };
+  }
+
+  private applyTrendRadarKeywordProjection(
+    results: Array<{ id: string; data: Record<string, unknown> }>,
+    filter: {
+      keywordGroups?: Array<{ name: string; include: string[]; exclude?: string[] }>;
+      excludeKeywords?: string[];
+      seenUrls?: string[];
+    },
+  ): Array<{ id: string; data: Record<string, unknown> }> {
+    const filtered = new HotFilterService().apply(
+      results.map((result) => ({
+        __resultId: result.id,
+        ...result.data,
+      })),
+      filter,
+    );
+
+    return filtered.map((item) => {
+      const { __resultId, ...data } = item;
+      return {
+        id: String(__resultId),
+        data,
+      };
+    });
   }
 
   private buildMarkdown(input: {
@@ -126,7 +260,7 @@ export class HotReportService {
       `- 结果数：${input.results.length}`,
       '',
       '## 结果摘要',
-      ...input.results.map((result) => `- ${result.id}: ${JSON.stringify(result.data)}`),
+      ...input.results.flatMap((result, index) => formatHotResult(result, index)),
       '',
       '## 执行日志',
       ...input.logs.map((log) => `- [${log.level}] ${log.message}${log.createdAt ? ` (${log.createdAt})` : ''}`),
@@ -134,4 +268,62 @@ export class HotReportService {
 
     return lines.join('\n');
   }
+}
+
+function buildStandaloneGroups(
+  results: Array<{ id: string; data: Record<string, unknown> }>,
+  profile: TrendRadarProfile,
+): Array<{ name: string; items: Array<{ id: string; data: Record<string, unknown> }> }> {
+  if (profile.standalone.platformIds.length === 0) {
+    return [];
+  }
+
+  return profile.standalone.platformIds
+    .map((platformId) => {
+      const items = results.filter((result) => result.data.sourceId === platformId);
+      const limitedItems = profile.standalone.maxItems > 0
+        ? items.slice(0, profile.standalone.maxItems)
+        : items;
+      return {
+        name: resolveStandaloneGroupName(platformId, limitedItems, profile.platformNames),
+        items: limitedItems,
+      };
+    })
+    .filter((group) => group.items.length > 0);
+}
+
+function resolveStandaloneGroupName(
+  platformId: string,
+  items: Array<{ id: string; data: Record<string, unknown> }>,
+  platformNames: Record<string, string>,
+): string {
+  const sourceName = items.find((item) => typeof item.data.sourceName === 'string')?.data.sourceName;
+  if (typeof sourceName === 'string' && sourceName.trim().length > 0) {
+    return sourceName;
+  }
+  return platformNames[platformId] ?? platformId;
+}
+
+function formatHotResult(
+  result: { id: string; data: Record<string, unknown> },
+  index: number,
+): string[] {
+  const title = String(result.data.title ?? result.id);
+  const url = typeof result.data.url === 'string' ? result.data.url : '';
+  const rank = typeof result.data.rank === 'number' ? result.data.rank : index + 1;
+  const keywordGroups = Array.isArray(result.data.keywordGroups)
+    ? result.data.keywordGroups.join('、')
+    : '';
+  const isNew = result.data.isNew === true ? '是' : '否';
+  const summary = typeof result.data.summary === 'string' && result.data.summary.length > 0
+    ? result.data.summary
+    : '';
+
+  return [
+    `${rank}. ${url ? `[${title}](${url})` : title}`,
+    `   - 结果ID：${result.id}`,
+    `   - 关键词组：${keywordGroups || '无'}`,
+    `   - 新增：${isNew}`,
+    ...(summary ? [`   - 摘要：${summary}`] : []),
+  ];
 }

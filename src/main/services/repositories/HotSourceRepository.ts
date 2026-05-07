@@ -14,8 +14,11 @@ interface HotSourceRow {
   site_key: string;
   entry_url: string;
   parser_key: string;
+  platform_ids_json?: string | null;
   session_id?: string | null;
   schedule_json?: string | null;
+  filter_json?: string | null;
+  timeline_json?: string | null;
   enabled: number;
   tags_json?: string | null;
   created_at: string;
@@ -36,8 +39,11 @@ export class HotSourceRepository {
           site_key,
           entry_url,
           parser_key,
+          platform_ids_json,
           session_id,
           schedule_json,
+          filter_json,
+          timeline_json,
           enabled,
           tags_json,
           created_at,
@@ -58,8 +64,11 @@ export class HotSourceRepository {
         site_key,
         entry_url,
         parser_key,
+        platform_ids_json,
         session_id,
         schedule_json,
+        filter_json,
+        timeline_json,
         enabled,
         tags_json,
         created_at,
@@ -82,13 +91,16 @@ export class HotSourceRepository {
         site_key,
         entry_url,
         parser_key,
+        platform_ids_json,
         session_id,
         schedule_json,
+        filter_json,
+        timeline_json,
         enabled,
         tags_json,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         task_id = excluded.task_id,
         name = excluded.name,
@@ -96,8 +108,11 @@ export class HotSourceRepository {
         site_key = excluded.site_key,
         entry_url = excluded.entry_url,
         parser_key = excluded.parser_key,
+        platform_ids_json = excluded.platform_ids_json,
         session_id = excluded.session_id,
         schedule_json = excluded.schedule_json,
+        filter_json = excluded.filter_json,
+        timeline_json = excluded.timeline_json,
         enabled = excluded.enabled,
         tags_json = excluded.tags_json,
         updated_at = excluded.updated_at`,
@@ -109,8 +124,11 @@ export class HotSourceRepository {
         source.siteKey,
         source.entryUrl,
         source.parserKey,
+        JSON.stringify(source.platformIds ?? []),
         source.sessionId ?? null,
         source.schedule ? JSON.stringify(source.schedule) : null,
+        source.filter ? JSON.stringify(source.filter) : null,
+        source.timeline ? JSON.stringify(source.timeline) : null,
         source.enabled ? 1 : 0,
         JSON.stringify(source.tags ?? []),
         source.createdAt,
@@ -133,8 +151,11 @@ function mapHotSourceRow(row: HotSourceRow): HotSource {
     siteKey: row.site_key,
     entryUrl: row.entry_url,
     parserKey: row.parser_key,
+    platformIds: parseJson(row.platform_ids_json, []),
     sessionId: row.session_id ?? null,
     schedule: parseJson(row.schedule_json, null),
+    filter: parseJson(row.filter_json, null),
+    timeline: parseJson(row.timeline_json, null),
     enabled: row.enabled === 1,
     tags: parseJson(row.tags_json, []),
     createdAt: row.created_at,
