@@ -14,14 +14,23 @@ import { LogService } from '@main/services/LogService';
 
 describe('LogService', () => {
   let service: LogService;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     fs.mkdirSync(testLogDir, { recursive: true });
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     service = new LogService();
   });
 
   afterEach(() => {
     service.close();
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
     fs.rmSync(testLogDir, { recursive: true, force: true });
   });
 
@@ -92,6 +101,34 @@ describe('LogService', () => {
     expect(pkg).toContain('Platform:');
     expect(pkg).toContain('Node:');
     expect(pkg).toContain('test for export');
+  });
+
+  it('should query MCP audit entries from recent logs', () => {
+    service.info('main', 'MCP audit', { action: 'task.run', taskId: 'task-1' });
+    service.info('main', 'ordinary log', { ignored: true });
+    service.warn('main', 'MCP tool execute failed', { tool: 'mcp.mock.echo' });
+    service.close();
+
+    const entries = service.queryMcpAudit(10);
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      source: 'main',
+      level: 'warn',
+      message: 'MCP tool execute failed',
+      data: {
+        tool: 'mcp.mock.echo',
+      },
+    });
+    expect(entries[1]).toMatchObject({
+      source: 'main',
+      level: 'info',
+      message: 'MCP audit',
+      data: {
+        action: 'task.run',
+        taskId: 'task-1',
+      },
+    });
   });
 
   it('should close stream gracefully', () => {

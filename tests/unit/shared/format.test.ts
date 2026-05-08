@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatDate, formatFileSize, truncate } from '@renderer/shared/utils/format';
+import { formatBeijingDateTime, formatDate, formatFileSize, truncate } from '@renderer/shared/utils/format';
 
 describe('formatDate', () => {
   it('should format a Date object', () => {
@@ -43,6 +43,12 @@ describe('formatFileSize', () => {
   it('should handle boundary values', () => {
     expect(formatFileSize(1023)).toBe('1023 B');
     expect(formatFileSize(1024)).toBe('1.0 KB');
+  });
+});
+
+describe('formatBeijingDateTime', () => {
+  it('should format utc iso string into Asia/Shanghai time', () => {
+    expect(formatBeijingDateTime('2026-04-28T08:30:00.000Z')).toBe('2026-04-28 16:30:00');
   });
 });
 

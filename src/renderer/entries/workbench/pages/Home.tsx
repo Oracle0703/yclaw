@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 import {
   ArrowUpOutlined,
+  CheckCircleOutlined,
+  DatabaseOutlined,
   DeploymentUnitOutlined,
   FundOutlined,
   GlobalOutlined,
@@ -12,14 +14,20 @@ import {
   SafetyCertificateOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
-import { Button, Col, List, Progress, Row, Space, Tag, Typography } from 'antd';
 import {
-  CheckCard,
-  ProCard,
-  ProDescriptions,
-  ProTable,
-} from '@ant-design/pro-components';
-import type { ProColumns } from '@ant-design/pro-components';
+  Button,
+  Card,
+  Col,
+  Descriptions,
+  List,
+  Progress,
+  Row,
+  Space,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
+import type { TableColumnsType } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { PageShell } from '../../../shared/components/PageShell';
 
@@ -73,6 +81,22 @@ const modules: ModuleSummary[] = [
     tag: 'RPA',
     status: '队列高峰',
     icon: <RobotOutlined style={{ fontSize: 22 }} />,
+  },
+  {
+    id: 'signin',
+    name: '自动签到',
+    description: '统一承接京东签到编排与运行巡检。',
+    tag: 'Signin',
+    status: '可扩展',
+    icon: <CheckCircleOutlined style={{ fontSize: 22 }} />,
+  },
+  {
+    id: 'data-center',
+    name: '数据中心',
+    description: '结果资产、导出任务与数据集统一管理。',
+    tag: 'DataOps',
+    status: '出口待补强',
+    icon: <DatabaseOutlined style={{ fontSize: 22 }} />,
   },
   {
     id: 'browser',
@@ -223,6 +247,8 @@ function getModuleId(moduleName: string) {
   const map: Record<string, string> = {
     股票分析: 'stock',
     自动化采集: 'automation',
+    自动签到: 'signin',
+    数据中心: 'data-center',
     内嵌浏览器: 'browser',
     插件中心: 'plugin-center',
   };
@@ -238,13 +264,15 @@ export default function Home() {
     const routeMap: Record<string, string> = {
       stock: '/stock',
       automation: '/automation',
+      signin: '/signin',
+      'data-center': '/data-center',
       browser: '/browser',
       'plugin-center': '/plugin-center',
     };
     navigate(routeMap[moduleId] ?? '/');
   };
 
-  const flowColumns: ProColumns<FlowRecord>[] = [
+  const flowColumns: TableColumnsType<FlowRecord> = [
     {
       title: '工作流',
       dataIndex: 'name',
@@ -330,241 +358,261 @@ export default function Home() {
         </Space>
       }
     >
-    <Space direction="vertical" size={20} style={{ width: '100%' }}>
-      <ProCard className="yclaw-panel-card yclaw-page-hero" split="vertical">
-        <ProCard colSpan={{ xs: '100%', xl: '62%' }} bordered={false}>
-          <Space direction="vertical" size={18} style={{ width: '100%' }}>
-            <Space wrap>
-              <Tag color="processing">Ops Cockpit</Tag>
-            </Space>
-            <div>
-              <Typography.Title level={2} style={{ marginTop: 0, marginBottom: 8 }}>
-                统一承接流程、数据与插件的运营工作台
-              </Typography.Title>
-              <Typography.Paragraph className="yclaw-hero-description">
-                用更轻的管理台布局承接自动化执行、行情分析、浏览器会话与插件治理，减少跳转和信息干扰。
-              </Typography.Paragraph>
-            </div>
-            <Space wrap size={12} className="yclaw-hero-actions">
-              <Button
-                type="primary"
-                size="large"
-                icon={<RocketOutlined />}
-                onClick={() => void openModule('automation')}
-              >
-                创建执行流程
-              </Button>
-              <Button size="large" onClick={() => void openModule('plugin-center')}>
-                进入插件审批
-              </Button>
-            </Space>
-          </Space>
-        </ProCard>
-        <ProCard colSpan={{ xs: '100%', xl: '38%' }} title="今日经营态" bordered={false}>
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <div className="yclaw-hero-metric">
-              <div>
-                <Typography.Text type="secondary">执行成功率</Typography.Text>
-                <Typography.Title level={3}>96.8%</Typography.Title>
-              </div>
-              <Tag color="success">
-                <ArrowUpOutlined /> 2.4%
-              </Tag>
-            </div>
-            <div className="yclaw-hero-metric">
-              <div>
-                <Typography.Text type="secondary">待处理告警</Typography.Text>
-                <Typography.Title level={3}>05</Typography.Title>
-              </div>
-              <Tag color="warning">需要值守</Tag>
-            </div>
-            <div className="yclaw-hero-metric">
-              <div>
-                <Typography.Text type="secondary">跨模块协同链路</Typography.Text>
-                <Typography.Title level={3}>12</Typography.Title>
-              </div>
-              <Tag color="processing">健康运行</Tag>
-            </div>
-          </Space>
-        </ProCard>
-      </ProCard>
+      <Space direction="vertical" size={20} style={{ width: '100%' }}>
+        <Card className="yclaw-panel-card yclaw-page-hero">
+          <Row gutter={[24, 24]}>
+            <Col xs={24} xl={15}>
+              <Space direction="vertical" size={18} style={{ width: '100%' }}>
+                <Space wrap>
+                  <Tag color="processing">Ops Cockpit</Tag>
+                </Space>
+                <div>
+                  <Typography.Title level={2} style={{ marginTop: 0, marginBottom: 8 }}>
+                    统一承接流程、数据与插件的运营工作台
+                  </Typography.Title>
+                  <Typography.Paragraph className="yclaw-hero-description">
+                    用更轻的管理台布局承接自动化执行、行情分析、浏览器会话与插件治理，减少跳转和信息干扰。
+                  </Typography.Paragraph>
+                </div>
+                <Space wrap size={12} className="yclaw-hero-actions">
+                  <Button
+                    type="primary"
+                    size="large"
+                    icon={<RocketOutlined />}
+                    onClick={() => void openModule('automation')}
+                  >
+                    创建执行流程
+                  </Button>
+                  <Button size="large" onClick={() => void openModule('plugin-center')}>
+                    进入插件审批
+                  </Button>
+                </Space>
+              </Space>
+            </Col>
 
-      <Row gutter={[16, 16]}>
-        {kpiCards.map((item) => (
-          <Col xs={24} sm={12} xl={6} key={item.title}>
-            <ProCard className="yclaw-panel-card yclaw-kpi-card" bordered={false}>
-              <div className="yclaw-kpi-card-head">
-                <Typography.Text type="secondary">{item.title}</Typography.Text>
-                <span className="yclaw-kpi-card-icon">{item.icon}</span>
-              </div>
-              <Typography.Title level={3} className="yclaw-kpi-card-value">
-                {item.value}
-              </Typography.Title>
-              <Typography.Text type="secondary">{item.meta}</Typography.Text>
-            </ProCard>
-          </Col>
-        ))}
-      </Row>
-
-      <Row gutter={[20, 20]}>
-        <Col xs={24} xl={16}>
-          <ProCard
-            className="yclaw-panel-card"
-            title="核心工作流"
-            extra={<Tag color="processing">运行中</Tag>}
-          >
-            <ProTable<FlowRecord>
-              className="yclaw-compact-table"
-              rowKey="key"
-              search={false}
-              options={false}
-              toolBarRender={false}
-              pagination={false}
-              size="small"
-              columns={flowColumns}
-              dataSource={recentFlows}
-            />
-          </ProCard>
-        </Col>
-
-        <Col xs={24} xl={8}>
-          <ProCard
-            className="yclaw-panel-card"
-            title="值班面板"
-            extra={<Tag color="warning">待处理</Tag>}
-            split="horizontal"
-          >
-            <ProCard bordered={false}>
-              <List
-                className="yclaw-signal-list"
-                dataSource={todoItems}
-                renderItem={(item) => (
-                  <List.Item className="yclaw-todo-item">
-                    <div className="yclaw-signal-item">
-                      <div className="yclaw-list-title-row">
-                        <Typography.Text strong>{item.title}</Typography.Text>
-                        <Tag color={item.level === 'P0' ? 'error' : 'warning'}>{item.level}</Tag>
-                      </div>
-                      <Typography.Paragraph className="yclaw-signal-description">
-                        {item.description}
-                      </Typography.Paragraph>
-                      <Typography.Text type="secondary" className="yclaw-inline-meta">
-                        负责人 · {item.owner}
-                      </Typography.Text>
-                    </div>
-                  </List.Item>
-                )}
-              />
-            </ProCard>
-            <ProCard bordered={false} title="运行画像">
-              <ProDescriptions
-                column={1}
-                dataSource={runtimeProfile}
-                columns={[
-                  { title: '版本', dataIndex: 'version' },
-                  { title: '运行时', dataIndex: 'runtime' },
-                  { title: '渲染层', dataIndex: 'renderer' },
-                  { title: '安全机制', dataIndex: 'security' },
-                  { title: '配置同步', dataIndex: 'sync' },
-                  { title: '部署形态', dataIndex: 'deployment' },
-                ]}
-              />
-            </ProCard>
-          </ProCard>
-        </Col>
-      </Row>
-
-      <Row gutter={[20, 20]}>
-        <Col xs={24} xl={14}>
-          <ProCard
-            className="yclaw-panel-card"
-            title="业务模块矩阵"
-            extra={<Tag color="processing">4 个模块</Tag>}
-          >
-            <Row gutter={[16, 16]}>
-              {modules.map((item) => (
-                <Col xs={24} sm={12} key={item.id}>
-                  <CheckCard
-                    checked={selectedModule === item.id}
-                    className="yclaw-module-card"
-                    title={item.name}
-                    description={`${item.tag} · ${item.description}`}
-                    avatar={item.icon}
-                    extra={<Tag color="blue">{item.status}</Tag>}
-                    onClick={() => {
-                      setSelectedModule(item.id);
-                      void openModule(item.id);
-                    }}
-                  />
-                </Col>
-              ))}
-            </Row>
-          </ProCard>
-        </Col>
-
-        <Col xs={24} xl={10}>
-          <ProCard className="yclaw-panel-card" title="风险与资源" split="horizontal">
-            <ProCard bordered={false}>
-              <List
-                className="yclaw-signal-list"
-                dataSource={alerts}
-                renderItem={(item) => (
-                  <List.Item>
-                    <div className="yclaw-signal-item">
-                      <div className="yclaw-list-title-row">
-                        <span className={`yclaw-signal-dot yclaw-signal-dot-${item.severity}`} />
-                        <Typography.Text strong>{item.title}</Typography.Text>
-                        <Tag
-                          color={
-                            item.severity === 'high'
-                              ? 'error'
-                              : item.severity === 'medium'
-                                ? 'warning'
-                                : 'success'
-                          }
-                        >
-                          {item.tag}
-                        </Tag>
-                      </div>
-                      <Typography.Paragraph className="yclaw-signal-description">
-                        {item.description}
-                      </Typography.Paragraph>
-                    </div>
-                  </List.Item>
-                )}
-              />
-            </ProCard>
-            <ProCard bordered={false} title="资源利用率">
-              <Space direction="vertical" size={14} style={{ width: '100%' }}>
-                {resourceUsage.map((item) => (
-                  <div key={item.label}>
-                    <div className="yclaw-resource-row">
-                      <Typography.Text>{item.label}</Typography.Text>
-                      <Typography.Text type="secondary">{item.percent}%</Typography.Text>
-                    </div>
-                    <Progress percent={item.percent} showInfo={false} strokeColor={item.color} />
+            <Col xs={24} xl={9}>
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                <div className="yclaw-hero-metric">
+                  <div>
+                    <Typography.Text type="secondary">执行成功率</Typography.Text>
+                    <Typography.Title level={3}>96.8%</Typography.Title>
                   </div>
+                  <Tag color="success">
+                    <ArrowUpOutlined /> 2.4%
+                  </Tag>
+                </div>
+                <div className="yclaw-hero-metric">
+                  <div>
+                    <Typography.Text type="secondary">待处理告警</Typography.Text>
+                    <Typography.Title level={3}>05</Typography.Title>
+                  </div>
+                  <Tag color="warning">需要值守</Tag>
+                </div>
+                <div className="yclaw-hero-metric">
+                  <div>
+                    <Typography.Text type="secondary">跨模块协同链路</Typography.Text>
+                    <Typography.Title level={3}>12</Typography.Title>
+                  </div>
+                  <Tag color="processing">健康运行</Tag>
+                </div>
+              </Space>
+            </Col>
+          </Row>
+        </Card>
+
+        <Row gutter={[16, 16]}>
+          {kpiCards.map((item) => (
+            <Col xs={24} sm={12} xl={6} key={item.title}>
+              <Card className="yclaw-panel-card yclaw-kpi-card">
+                <div className="yclaw-kpi-card-head">
+                  <Typography.Text type="secondary">{item.title}</Typography.Text>
+                  <span className="yclaw-kpi-card-icon">{item.icon}</span>
+                </div>
+                <Typography.Title level={3} className="yclaw-kpi-card-value">
+                  {item.value}
+                </Typography.Title>
+                <Typography.Text type="secondary">{item.meta}</Typography.Text>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+
+        <Row gutter={[20, 20]}>
+          <Col xs={24} xl={16}>
+            <Card
+              className="yclaw-panel-card"
+              title="核心工作流"
+              extra={<Tag color="processing">运行中</Tag>}
+            >
+              <Table<FlowRecord>
+                className="yclaw-compact-table"
+                rowKey="key"
+                pagination={false}
+                size="small"
+                columns={flowColumns}
+                dataSource={recentFlows}
+              />
+            </Card>
+          </Col>
+
+          <Col xs={24} xl={8}>
+            <Card
+              className="yclaw-panel-card"
+              title="值班面板"
+              extra={<Tag color="warning">待处理</Tag>}
+            >
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                <List
+                  className="yclaw-signal-list"
+                  dataSource={todoItems}
+                  renderItem={(item) => (
+                    <List.Item className="yclaw-todo-item">
+                      <div className="yclaw-signal-item">
+                        <div className="yclaw-list-title-row">
+                          <Typography.Text strong>{item.title}</Typography.Text>
+                          <Tag color={item.level === 'P0' ? 'error' : 'warning'}>{item.level}</Tag>
+                        </div>
+                        <Typography.Paragraph className="yclaw-signal-description">
+                          {item.description}
+                        </Typography.Paragraph>
+                        <Typography.Text type="secondary" className="yclaw-inline-meta">
+                          负责人 · {item.owner}
+                        </Typography.Text>
+                      </div>
+                    </List.Item>
+                  )}
+                />
+
+                <div className="yclaw-panel-section">
+                  <Typography.Text strong>运行画像</Typography.Text>
+                  <Descriptions column={1} size="small" style={{ marginTop: 12 }}>
+                    <Descriptions.Item label="版本">{runtimeProfile.version}</Descriptions.Item>
+                    <Descriptions.Item label="运行时">{runtimeProfile.runtime}</Descriptions.Item>
+                    <Descriptions.Item label="渲染层">{runtimeProfile.renderer}</Descriptions.Item>
+                    <Descriptions.Item label="安全机制">{runtimeProfile.security}</Descriptions.Item>
+                    <Descriptions.Item label="配置同步">{runtimeProfile.sync}</Descriptions.Item>
+                    <Descriptions.Item label="部署形态">{runtimeProfile.deployment}</Descriptions.Item>
+                  </Descriptions>
+                </div>
+              </Space>
+            </Card>
+          </Col>
+        </Row>
+
+        <Row gutter={[20, 20]}>
+          <Col xs={24} xl={14}>
+            <Card
+              className="yclaw-panel-card"
+              title="业务模块矩阵"
+              extra={<Tag color="processing">6 个模块</Tag>}
+            >
+              <Row gutter={[16, 16]}>
+                {modules.map((item) => (
+                  <Col xs={24} sm={12} key={item.id}>
+                    <Card
+                      hoverable
+                      tabIndex={0}
+                      className={`yclaw-panel-card yclaw-module-card${selectedModule === item.id ? ' is-active' : ''}`}
+                      onClick={() => {
+                        setSelectedModule(item.id);
+                        void openModule(item.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedModule(item.id);
+                          void openModule(item.id);
+                        }
+                      }}
+                    >
+                      <Space align="start" size={14}>
+                        <span className="yclaw-module-card-icon">{item.icon}</span>
+                        <div className="yclaw-module-card-content">
+                          <div className="yclaw-list-title-row">
+                            <Typography.Text strong>{item.name}</Typography.Text>
+                            <Tag color="blue">{item.status}</Tag>
+                          </div>
+                          <Typography.Text type="secondary" className="yclaw-module-card-meta">
+                            {item.tag}
+                          </Typography.Text>
+                          <Typography.Paragraph className="yclaw-signal-description">
+                            {item.description}
+                          </Typography.Paragraph>
+                        </div>
+                      </Space>
+                    </Card>
+                  </Col>
                 ))}
+              </Row>
+            </Card>
+          </Col>
+
+          <Col xs={24} xl={10}>
+            <Card className="yclaw-panel-card" title="风险与资源">
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                <List
+                  className="yclaw-signal-list"
+                  dataSource={alerts}
+                  renderItem={(item) => (
+                    <List.Item>
+                      <div className="yclaw-signal-item">
+                        <div className="yclaw-list-title-row">
+                          <span className={`yclaw-signal-dot yclaw-signal-dot-${item.severity}`} />
+                          <Typography.Text strong>{item.title}</Typography.Text>
+                          <Tag
+                            color={
+                              item.severity === 'high'
+                                ? 'error'
+                                : item.severity === 'medium'
+                                  ? 'warning'
+                                  : 'success'
+                            }
+                          >
+                            {item.tag}
+                          </Tag>
+                        </div>
+                        <Typography.Paragraph className="yclaw-signal-description">
+                          {item.description}
+                        </Typography.Paragraph>
+                      </div>
+                    </List.Item>
+                  )}
+                />
+
+                <div className="yclaw-panel-section">
+                  <Typography.Text strong>资源利用率</Typography.Text>
+                  <Space direction="vertical" size={14} style={{ width: '100%', marginTop: 12 }}>
+                    {resourceUsage.map((item) => (
+                      <div key={item.label}>
+                        <div className="yclaw-resource-row">
+                          <Typography.Text>{item.label}</Typography.Text>
+                          <Typography.Text type="secondary">{item.percent}%</Typography.Text>
+                        </div>
+                        <Progress percent={item.percent} showInfo={false} strokeColor={item.color} />
+                      </div>
+                    ))}
+                  </Space>
+                </div>
+
+                <div className="yclaw-panel-section">
+                  <Space direction="vertical" size={12} className="yclaw-action-stack">
+                    <Typography.Text strong>建议动作</Typography.Text>
+                    <Button type="primary" block onClick={() => void openModule('plugin-center')}>
+                      先处理插件审批
+                    </Button>
+                    <Button block onClick={() => void openModule('automation')}>
+                      再检查自动化队列
+                    </Button>
+                    <Button block onClick={() => void openModule('stock')}>
+                      打开行情监控视图
+                    </Button>
+                  </Space>
+                </div>
               </Space>
-            </ProCard>
-            <ProCard bordered={false}>
-              <Space direction="vertical" size={12} className="yclaw-action-stack">
-                <Typography.Text strong>建议动作</Typography.Text>
-                <Button type="primary" block onClick={() => void openModule('plugin-center')}>
-                  先处理插件审批
-                </Button>
-                <Button block onClick={() => void openModule('automation')}>
-                  再检查自动化队列
-                </Button>
-                <Button block onClick={() => void openModule('stock')}>
-                  打开行情监控视图
-                </Button>
-              </Space>
-            </ProCard>
-          </ProCard>
-        </Col>
-      </Row>
-    </Space>
+            </Card>
+          </Col>
+        </Row>
+      </Space>
     </PageShell>
   );
 }

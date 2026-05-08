@@ -1,6 +1,6 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
-import { Button, Result } from 'antd';
+import { Button, Result, notification } from 'antd';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -29,7 +29,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     this.props.onError?.(error, errorInfo);
-    console.error('[ErrorBoundary]', error, errorInfo);
+    notification.error({
+      key: 'renderer-error-boundary',
+      message: '页面渲染出错',
+      description: error.message || '发生了未知错误',
+      placement: 'bottomRight',
+    });
+
+    if (import.meta.env.DEV) {
+      console.error('[ErrorBoundary]', error, errorInfo);
+    }
   }
 
   private handleRetry = () => {

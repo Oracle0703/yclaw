@@ -33,7 +33,7 @@ export const taskFlowSchema = z.object({
       action: z.object({
         type: z.enum(['click', 'input', 'scroll', 'extract', 'screenshot']),
         selector: z.string().min(1),
-        params: z.record(z.unknown()).optional(),
+        params: z.record(z.string(), z.unknown()).optional(),
         timeout: z.number().int().min(0).max(120000).optional(),
       }),
       retryCount: z.number().int().min(0).max(10).optional(),

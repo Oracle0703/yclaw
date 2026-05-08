@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getLogPath } from '../utils/paths';
-import { formatLogEntry, logEntryToString, type LogLevel, type LogSource } from '@shared/utils';
+import { formatLogEntry, logEntryToString, type LogEntry, type LogLevel, type LogSource } from '@shared/utils';
 
 /**
  * 日志服务
@@ -73,6 +73,38 @@ export class LogService {
     return content;
   }
 
+  queryMcpAudit(limit = 20): LogEntry[] {
+    const files = fs.readdirSync(this.logDir)
+      .filter((file) => file.endsWith('.log'))
+      .sort()
+      .reverse();
+    const entries: LogEntry[] = [];
+
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(this.logDir, file), 'utf-8');
+      const lines = content
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      for (const line of lines.reverse()) {
+        const entry = this.parseLogLine(line);
+        if (!entry) {
+          continue;
+        }
+        if (entry.source !== 'main' || !entry.message.startsWith('MCP ')) {
+          continue;
+        }
+        entries.push(entry);
+        if (entries.length >= limit) {
+          return entries;
+        }
+      }
+    }
+
+    return entries;
+  }
+
   close(): void {
     // no-op: using sync writes
   }
@@ -99,5 +131,36 @@ export class LogService {
     } catch {
       // 清理失败不影响运行
     }
+  }
+
+  private parseLogLine(line: string): LogEntry | null {
+    const match = line.match(
+      /^\[(.+?)\] \[(DEBUG|INFO|WARN|ERROR)\] \[(main|renderer|plugin|engine)\] (.+)$/,
+    );
+    if (!match) {
+      return null;
+    }
+
+    const [, timestamp, levelRaw, source, rest] = match;
+    const jsonIndex = rest.search(/\s(?:\{|\[)/);
+    const message = jsonIndex >= 0 ? rest.slice(0, jsonIndex) : rest;
+    const dataRaw = jsonIndex >= 0 ? rest.slice(jsonIndex + 1) : undefined;
+
+    let data: unknown;
+    if (dataRaw) {
+      try {
+        data = JSON.parse(dataRaw);
+      } catch {
+        data = dataRaw;
+      }
+    }
+
+    return {
+      timestamp,
+      level: levelRaw.toLowerCase() as LogLevel,
+      source: source as LogSource,
+      message,
+      ...(data !== undefined ? { data } : {}),
+    };
   }
 }

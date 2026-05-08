@@ -1,6 +1,77 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+vi.mock('antd', () => {
+  return {
+    Button: ({
+      children,
+      onClick,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+    }) => (
+      <button type="button" onClick={onClick}>
+        {children}
+      </button>
+    ),
+    Card: ({
+      children,
+      title,
+      extra,
+    }: {
+      children?: React.ReactNode;
+      title?: React.ReactNode;
+      extra?: React.ReactNode;
+    }) => (
+      <section>
+        <header>
+          {title}
+          {extra}
+        </header>
+        {children}
+      </section>
+    ),
+    Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+    Typography: {
+      Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+      Paragraph: ({ children }: { children?: React.ReactNode }) => <p>{children}</p>,
+    },
+    Descriptions: Object.assign(
+      ({ children }: { children?: React.ReactNode }) => <dl>{children}</dl>,
+      {
+        Item: ({
+          children,
+          label,
+        }: {
+          children?: React.ReactNode;
+          label?: React.ReactNode;
+        }) => (
+          <div>
+            {label ? <dt>{label}</dt> : null}
+            <dd>{children}</dd>
+          </div>
+        ),
+      },
+    ),
+    Switch: ({
+      checked,
+      onChange,
+    }: {
+      checked?: boolean;
+      onChange?: (checked: boolean) => void;
+    }) => (
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked ? 'true' : 'false'}
+        onClick={() => onChange?.(!checked)}
+      />
+    ),
+  };
+});
+
 import { PluginCard } from '@renderer/entries/plugin-center/components/PluginCard';
 import { PluginStatus } from '@shared/types';
 

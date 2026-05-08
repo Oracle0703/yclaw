@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Button } from 'antd';
 import type { OHLCVData, IndicatorResult } from '@shared/types';
 
 interface KLineChartProps {
@@ -42,7 +43,7 @@ export function KLineChart({
       if (entry) {
         const w = Math.floor(entry.contentRect.width);
         if (w > 0) {
-          setContainerSize((prev) => ({
+          setContainerSize((_prev) => ({
             width: propWidth ?? w,
             height: isFullscreen ? window.innerHeight - 48 : propHeight,
           }));
@@ -190,13 +191,13 @@ export function KLineChart({
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setCrosshair(null)}
       />
-      <button
+      <Button
         className="kline-fullscreen-btn"
         onClick={() => setIsFullscreen((v) => !v)}
         title={isFullscreen ? '退出全屏' : '全屏'}
       >
         {isFullscreen ? '✕ 退出全屏' : '⛶ 全屏'}
-      </button>
+      </Button>
     </div>
   );
 }

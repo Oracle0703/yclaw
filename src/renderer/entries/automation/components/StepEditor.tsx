@@ -13,9 +13,10 @@ const ACTION_TYPES: { value: ActionType; label: string }[] = [
 interface StepEditorProps {
   steps: TaskStep[];
   onChange: (steps: TaskStep[]) => void;
+  recordedSteps?: TaskStep[];
 }
 
-export function StepEditor({ steps, onChange }: StepEditorProps) {
+export function StepEditor({ steps, onChange, recordedSteps = [] }: StepEditorProps) {
   const addStep = () => {
     const newStep: TaskStep = {
       id: `step-${Date.now()}`,
@@ -44,6 +45,16 @@ export function StepEditor({ steps, onChange }: StepEditorProps) {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Space wrap>
+        <Button
+          type="default"
+          onClick={() => onChange(recordedSteps)}
+          disabled={recordedSteps.length === 0}
+        >
+          导入录制结果
+        </Button>
+      </Space>
+
       {steps.map((step, i) => (
         <ProCard
           key={step.id}

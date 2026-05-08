@@ -24,6 +24,33 @@ export interface AIConfig {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  mcp?: {
+    embeddedHttp?: {
+      host?: string;
+      port?: number;
+      token?: string;
+    };
+    servers?: McpClientServerConfig[];
+  };
+}
+
+export interface McpClientServerConfig {
+  id: string;
+  name: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  enabled?: boolean;
+}
+
+export interface McpClientServerStatus {
+  id: string;
+  name: string;
+  enabled: boolean;
+  connected: boolean;
+  state: 'connected' | 'unavailable' | 'disabled';
+  toolCount: number;
+  lastError?: string;
 }
 
 export interface AIToolDef {
@@ -31,12 +58,69 @@ export interface AIToolDef {
   description: string;
   parameters: Record<string, unknown>;
   confirmationLevel: 0 | 1 | 2 | 3;
+  source?: 'builtin' | `mcp:${string}`;
 }
 
 export interface ToolResult {
   success: boolean;
   data?: unknown;
   error?: string;
+}
+
+export interface AITaskOpsTaskSummary {
+  id: string;
+  name: string;
+  status: string;
+  updatedAt: string;
+  currentRevisionId?: string | null;
+}
+
+export interface AITaskOpsRunnerSummary {
+  id: string;
+  name: string;
+  kind: string;
+  status: string;
+  runningCount: number;
+  maxConcurrency: number;
+}
+
+export interface AITaskOpsResultSummary {
+  taskId: string;
+  batchId: string;
+  status: string;
+  qualityStatus?: string;
+  revisionId?: string;
+}
+
+export interface AITaskOperationsContext {
+  workspaces: Array<{
+    id: string;
+    name: string;
+  }>;
+  tasks: AITaskOpsTaskSummary[];
+  alerts: Array<{
+    id: string;
+    taskId: string;
+    batchId?: string;
+    message: string;
+    createdAt: string;
+    read: boolean;
+    status?: string;
+    level?: string;
+    assignee?: string | null;
+  }>;
+  reviews: Array<{
+    id: string;
+    taskId: string;
+    batchId?: string | null;
+    reviewType: string;
+    conclusion?: string | null;
+    owner?: string | null;
+    followUpActions: string[];
+    createdAt: string;
+  }>;
+  runners: AITaskOpsRunnerSummary[];
+  results: AITaskOpsResultSummary[];
 }
 
 export interface AIServiceContext {
@@ -57,6 +141,7 @@ export interface AIServiceContext {
     version: string;
     enabled: boolean;
   }>;
+  taskOperations?: AITaskOperationsContext;
 }
 
 export interface AIChatRequest {
@@ -64,7 +149,16 @@ export interface AIChatRequest {
   conversationId?: string;
 }
 
+export interface AIToolCall {
+  name: string;
+  params: Record<string, unknown>;
+}
+
+export type AIPendingToolCall = AIToolCall;
+
 export interface AIChatResponse {
   message: ChatMessage;
   conversationId: string;
+  pendingToolCall?: AIPendingToolCall;
+  executedToolCall?: AIToolCall;
 }

@@ -1,0 +1,30 @@
+.yclaw-automation-split {
+  display: flex;
+  gap: 16px;
+  min-height: 480px;
+}
+
+.yclaw-automation-sidebar {
+  flex: 0 0 320px;
+  min-width: 260px;
+  max-width: 380px;
+}
+
+.yclaw-automation-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 960px) {
+  .yclaw-automation-split {
+    flex-direction: column;
+  }
+
+  .yclaw-automation-sidebar {
+    flex: none;
+    max-width: none;
+  }
+}

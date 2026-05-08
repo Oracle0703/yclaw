@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ContextManager } from '@main/ai/ContextManager';
+import { ToolRegistry } from '@main/ai/ToolRegistry';
 
 // Mock os module
 vi.mock('os', () => ({
@@ -18,23 +20,96 @@ vi.mock('os', () => ({
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
+const mockTaskRepository = {
+  getTasks: vi.fn(() => []),
+};
+
+const mockPluginRepository = {
+  getInstalledPlugins: vi.fn(() => []),
+};
+
+const mockAIRepository = {
+  saveAIConversation: vi.fn(),
+  saveAIMessage: vi.fn(),
+  deleteAIConversation: vi.fn(() => true),
+};
+const mockStartTask = vi.fn();
+
 import { AIService } from '@main/ai/AIService';
 
 describe('AIService', () => {
   let service: AIService;
+  let contextManager: ContextManager;
+  let toolRegistry: ToolRegistry;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStartTask.mockReset();
+    contextManager = new ContextManager({
+      taskRepository: mockTaskRepository,
+      pluginRepository: mockPluginRepository,
+    });
+    toolRegistry = new ToolRegistry();
     service = new AIService({
       provider: 'openai',
       apiKey: 'test-key',
       baseUrl: 'https://api.test.com/v1',
       model: 'gpt-test',
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry,
     });
   });
 
+  it('should require context manager injection', () => {
+    expect(
+      () =>
+        new AIService({
+          aiRepository: mockAIRepository,
+          taskRepository: mockTaskRepository,
+        }),
+    ).toThrowError('contextManager is required');
+  });
+
+  it('should require ai repository injection', () => {
+    expect(
+      () =>
+        new AIService({
+          taskRepository: mockTaskRepository,
+          contextManager,
+        }),
+    ).toThrowError('aiRepository is required');
+  });
+
+  it('should require task repository injection', () => {
+    expect(
+      () =>
+        new AIService({
+          aiRepository: mockAIRepository,
+          contextManager,
+        }),
+    ).toThrowError('taskRepository is required');
+  });
+
+  it('should require tool registry injection', () => {
+    expect(
+      () =>
+        new AIService({
+          aiRepository: mockAIRepository,
+          taskRepository: mockTaskRepository,
+          contextManager,
+        }),
+    ).toThrowError('toolRegistry is required');
+  });
+
   it('should initialize with default config', () => {
-    const s = new AIService();
+    const s = new AIService({
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
+    });
     const config = s.getConfig();
     expect(config.provider).toBe('openai');
     expect(config.model).toBe('gpt-3.5-turbo');
@@ -53,6 +128,92 @@ describe('AIService', () => {
     expect(toolNames).toContain('navigate');
   });
 
+  it('should register task_start when startTask is injected', () => {
+    const serviceWithTaskStart = new AIService({
+      provider: 'openai',
+      apiKey: 'test-key',
+      baseUrl: 'https://api.test.com/v1',
+      model: 'gpt-test',
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
+      startTask: mockStartTask,
+    });
+
+    const toolNames = serviceWithTaskStart.getToolRegistry().list().map((tool) => tool.name);
+    expect(toolNames).toContain('task_start');
+  });
+
+  it('should execute task_list tool via injected task repository', async () => {
+    mockTaskRepository.getTasks.mockReturnValueOnce([
+      { id: 'task-1', name: '任务一', status: 'running', updatedAt: '2026-04-17 14:00:00' },
+      { id: 'task-2', name: '任务二', status: 'completed', updatedAt: '2026-04-17 14:05:00' },
+    ]);
+
+    const result = await service.getToolRegistry().execute('task_list', {}, {
+      currentModule: 'workbench',
+      systemMetrics: { cpu: 0, memory: 0, disk: 0, uptime: 0 },
+      recentTasks: [],
+      installedPlugins: [],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockTaskRepository.getTasks).toHaveBeenCalledTimes(1);
+    expect(result.data).toMatchObject({
+      summary: {
+        total: 2,
+        running: 1,
+        success: 1,
+      },
+    });
+  });
+
+  it('should execute task_start tool via injected task starter', async () => {
+    mockTaskRepository.getTasks.mockReturnValueOnce([
+      { id: 'task-1', name: '早盘巡检', status: 'idle', updatedAt: '2026-04-17 14:00:00' },
+    ]);
+    mockStartTask.mockReturnValueOnce({
+      taskId: 'task-1',
+      status: 'running',
+    });
+
+    const serviceWithTaskStart = new AIService({
+      provider: 'openai',
+      apiKey: 'test-key',
+      baseUrl: 'https://api.test.com/v1',
+      model: 'gpt-test',
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
+      startTask: mockStartTask,
+    });
+
+    const result = await serviceWithTaskStart.getToolRegistry().execute(
+      'task_start',
+      {
+        taskName: '早盘巡检',
+      },
+      {
+        currentModule: 'workbench',
+        systemMetrics: { cpu: 0, memory: 0, disk: 0, uptime: 0 },
+        recentTasks: [],
+        installedPlugins: [],
+      },
+    );
+
+    expect(mockStartTask).toHaveBeenCalledWith('task-1');
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        taskId: 'task-1',
+        taskName: '早盘巡检',
+        status: 'running',
+      },
+    });
+  });
+
   it('should handle chat and return response', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -68,6 +229,167 @@ describe('AIService', () => {
     expect(response.message.content).toBe('你好，很高兴帮助你！');
     expect(response.conversationId).toBeTruthy();
     expect(mockFetch).toHaveBeenCalledOnce();
+  });
+
+  it('should include available tools and call protocol in system prompt', async () => {
+    toolRegistry.register({
+      name: 'mcp.mock.echo',
+      description: '回显输入',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+        },
+      },
+      confirmationLevel: 0,
+      source: 'mcp:mock',
+      execute: vi.fn(),
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: '无需工具' } }],
+        }),
+    });
+
+    await service.chat({ message: '有哪些工具？' });
+
+    const requestBody = JSON.parse(String(mockFetch.mock.calls[0][1]?.body)) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const systemMessage = requestBody.messages.find((message) => message.role === 'system');
+    expect(systemMessage?.content).toContain('## 可用工具');
+    expect(systemMessage?.content).toContain('mcp.mock.echo');
+    expect(systemMessage?.content).toContain('YCLAW_TOOL_CALL');
+  });
+
+  it('should execute a safe tool when the model returns a tool call directive', async () => {
+    const execute = vi.fn(async () => ({
+      success: true,
+      data: {
+        text: 'pong',
+      },
+    }));
+    toolRegistry.register({
+      name: 'mcp.mock.echo',
+      description: '回显输入',
+      parameters: {},
+      confirmationLevel: 0,
+      source: 'mcp:mock',
+      execute,
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: 'YCLAW_TOOL_CALL {"name":"mcp.mock.echo","params":{"text":"ping"}}',
+              },
+            },
+          ],
+        }),
+    });
+
+    const response = await service.chat({ message: '调用 echo' });
+
+    expect(execute).toHaveBeenCalledWith(
+      {
+        text: 'ping',
+      },
+      expect.objectContaining({
+        currentModule: 'workbench',
+      }),
+    );
+    expect(response.executedToolCall).toEqual({
+      name: 'mcp.mock.echo',
+      params: {
+        text: 'ping',
+      },
+    });
+    expect(response.message.content).toContain('已调用工具：mcp.mock.echo');
+    expect(response.message.content).toContain('"text": "pong"');
+  });
+
+  it('should require confirmation and skip execution for dangerous tool directives', async () => {
+    const execute = vi.fn();
+    toolRegistry.register({
+      name: 'mcp.mock.danger',
+      description: '危险操作',
+      parameters: {},
+      confirmationLevel: 2,
+      source: 'mcp:mock',
+      execute,
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: 'YCLAW_TOOL_CALL {"name":"mcp.mock.danger","params":{"action":"refresh"}}',
+              },
+            },
+          ],
+        }),
+    });
+
+    const response = await service.chat({ message: '执行危险工具' });
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(response.message.content).toContain('我准备执行操作：mcp.mock.danger');
+    expect(response.message.content).toContain('"action": "refresh"');
+    expect(response.pendingToolCall).toEqual({
+      name: 'mcp.mock.danger',
+      params: {
+        action: 'refresh',
+      },
+    });
+  });
+
+  it('should return a conversational pending reply for task_start directives', async () => {
+    mockTaskRepository.getTasks.mockReturnValueOnce([
+      { id: 'task-1', name: '早盘巡检', status: 'idle', updatedAt: '2026-04-17 14:00:00' },
+    ]);
+    const serviceWithTaskStart = new AIService({
+      provider: 'openai',
+      apiKey: 'test-key',
+      baseUrl: 'https://api.test.com/v1',
+      model: 'gpt-test',
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
+      startTask: mockStartTask,
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [
+            {
+              message: {
+                content: 'YCLAW_TOOL_CALL {"name":"task_start","params":{"taskName":"早盘巡检"}}',
+              },
+            },
+          ],
+        }),
+    });
+
+    const response = await serviceWithTaskStart.chat({ message: '帮我启动早盘巡检' });
+
+    expect(mockStartTask).not.toHaveBeenCalled();
+    expect(response.pendingToolCall).toEqual({
+      name: 'task_start',
+      params: {
+        taskName: '早盘巡检',
+      },
+    });
+    expect(response.message.content).toContain('我可以帮你启动任务「早盘巡检」');
+    expect(response.message.content).toContain('确认后我会立即发起执行');
   });
 
   it('should maintain conversation history', async () => {
@@ -128,10 +450,44 @@ describe('AIService', () => {
     expect(service.listConversations()).toHaveLength(0);
   });
 
+  it('should persist conversation and messages to database', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: '已记录到数据库' } }],
+        }),
+    });
+
+    await service.chat({ message: '请记录这段对话' });
+
+    expect(mockAIRepository.saveAIConversation).toHaveBeenCalledTimes(1);
+    expect(mockAIRepository.saveAIMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('should delete persisted conversation from database', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          choices: [{ message: { content: 'ok' } }],
+        }),
+    });
+
+    const response = await service.chat({ message: '待删除会话' });
+    service.deleteConversation(response.conversationId);
+
+    expect(mockAIRepository.deleteAIConversation).toHaveBeenCalledWith(response.conversationId);
+  });
+
   it('should return prompt without API key warning', async () => {
     const noKeyService = new AIService({
       provider: 'openai',
       apiKey: '',
+      aiRepository: mockAIRepository,
+      taskRepository: mockTaskRepository,
+      contextManager,
+      toolRegistry: new ToolRegistry(),
     });
 
     const response = await noKeyService.chat({ message: 'hello' });

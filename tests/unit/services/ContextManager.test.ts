@@ -14,13 +14,45 @@ vi.mock('os', () => ({
   uptime: () => 7200,
 }));
 
+const mockTaskRepository = {
+  getTasks: vi.fn(() => [
+    { id: 'task-1', name: '采集任务', status: 'running', updatedAt: '2026-04-15 10:00:00' },
+  ]),
+};
+const mockPluginRepository = {
+  getInstalledPlugins: vi.fn(() => [
+    { name: 'OCR', version: '1.0.0', enabled: true },
+  ]),
+};
+
 import { ContextManager } from '@main/ai/ContextManager';
 
 describe('ContextManager', () => {
   let manager: ContextManager;
 
   beforeEach(() => {
-    manager = new ContextManager();
+    manager = new ContextManager({
+      taskRepository: mockTaskRepository,
+      pluginRepository: mockPluginRepository,
+    });
+  });
+
+  it('should require task repository injection', () => {
+    expect(
+      () =>
+        new ContextManager({
+          pluginRepository: mockPluginRepository,
+        }),
+    ).toThrowError('taskRepository is required');
+  });
+
+  it('should require plugin repository injection', () => {
+    expect(
+      () =>
+        new ContextManager({
+          taskRepository: mockTaskRepository,
+        }),
+    ).toThrowError('pluginRepository is required');
   });
 
   it('should collect system context', async () => {
@@ -29,8 +61,10 @@ describe('ContextManager', () => {
     expect(ctx.currentModule).toBe('workbench');
     expect(ctx.systemMetrics.memory).toBeGreaterThan(0);
     expect(ctx.systemMetrics.uptime).toBe(7200);
-    expect(Array.isArray(ctx.recentTasks)).toBe(true);
-    expect(Array.isArray(ctx.installedPlugins)).toBe(true);
+    expect(ctx.recentTasks).toEqual([
+      { name: '采集任务', status: 'running', updatedAt: '2026-04-15 10:00:00' },
+    ]);
+    expect(ctx.installedPlugins).toEqual([{ name: 'OCR', version: '1.0.0', enabled: true }]);
   });
 
   it('should update current module', async () => {

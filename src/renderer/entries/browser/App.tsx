@@ -1,14 +1,17 @@
-import { useState } from 'react';
-import { Button, Col, Descriptions, Empty, Row, Space, Tag, Typography } from 'antd';
+import { useEffect, useState } from 'react';
+import { Button, Card, Space, Tag, Typography, message } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { ProCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
 import { useLoading } from '../../shared/hooks/useLoading';
 import { AddressBar } from './components/AddressBar';
+import { RecorderPanel } from './components/RecorderPanel';
 import { TabBar } from './components/TabBar';
 import type { Tab } from '@shared/types/browser';
+import './styles.css';
+
+const DEFAULT_RECORDER_URL = 'https://www.jd.com/';
 
 export default function App() {
   const { invoke } = useIpc();
@@ -16,97 +19,134 @@ export default function App() {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
 
-  const activeTab = tabs.find((t) => t.id === activeTabId);
-  const browserKpis = [
-    { title: '打开标签数', value: `${tabs.length}` },
-    { title: '当前活动标签', value: activeTab?.title ?? '未选择' },
-    { title: '活动地址', value: activeTab?.url ?? 'about:blank' },
-  ] as const;
+  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
 
-  const createTab = async () => {
-    await withLoading(async () => {
-      const res = await invoke<{ id: number }>(IPC_CHANNELS.BROWSER_CREATE_TAB, {
-        url: 'https://www.google.com',
+  const reportActionError = (error: unknown, fallbackMessage: string) => {
+    message.error(error instanceof Error ? error.message : fallbackMessage);
+  };
+
+  useEffect(() => {
+    void invoke<Tab[]>(IPC_CHANNELS.BROWSER_LIST_TABS)
+      .then((existingTabs) => {
+        if (existingTabs && existingTabs.length > 0) {
+          setTabs(existingTabs);
+          setActiveTabId(existingTabs[existingTabs.length - 1].id);
+        }
+      })
+      .catch((error) => {
+        reportActionError(error, '读取标签页失败');
       });
-      if (res) {
-        const newTab: Tab = { id: res.id, title: '新标签页', url: 'about:blank', loading: true };
-        setTabs((prev) => [...prev, newTab]);
-        setActiveTabId(res.id);
-      }
-    }, '正在创建标签页...');
+  }, [invoke]);
+
+  const createTab = async (url = DEFAULT_RECORDER_URL): Promise<Tab | null> => {
+    try {
+      return await withLoading(async () => {
+        const tab = await invoke<Tab>(IPC_CHANNELS.BROWSER_CREATE_TAB, { url });
+        if (tab) {
+          setTabs((prev) => {
+            const withoutDuplicate = prev.filter((item) => item.id !== tab.id);
+            return [...withoutDuplicate, tab];
+          });
+          setActiveTabId(tab.id);
+        }
+        return tab ?? null;
+      }, '正在打开操作窗口...');
+    } catch (error) {
+      reportActionError(error, '打开操作窗口失败');
+      return null;
+    }
   };
 
   const closeTab = async (id: number) => {
-    await invoke(IPC_CHANNELS.BROWSER_CLOSE_TAB, { id });
-    setTabs((prev) => {
-      const remaining = prev.filter((t) => t.id !== id);
-      setActiveTabId((currentId) =>
-        currentId === id
-          ? remaining.length > 0
-            ? remaining[remaining.length - 1].id
-            : null
-          : currentId,
-      );
-      return remaining;
-    });
+    try {
+      await invoke(IPC_CHANNELS.BROWSER_CLOSE_TAB, { id });
+      setTabs((prev) => {
+        const remaining = prev.filter((tab) => tab.id !== id);
+        setActiveTabId((currentId) =>
+          currentId === id ? (remaining[remaining.length - 1]?.id ?? null) : currentId,
+        );
+        return remaining;
+      });
+    } catch (error) {
+      reportActionError(error, '关闭操作窗口失败');
+    }
   };
 
   const navigate = async (url: string) => {
-    if (activeTabId != null) {
+    if (activeTabId == null) {
+      await createTab(url);
+      return;
+    }
+
+    try {
       await invoke(IPC_CHANNELS.BROWSER_NAVIGATE, { tabId: activeTabId, url });
+    } catch (error) {
+      reportActionError(error, '页面跳转失败');
+    }
+  };
+
+  const runTabAction = async (channel: string, fallbackMessage: string) => {
+    if (activeTabId == null) {
+      message.warning('请先打开操作窗口');
+      return;
+    }
+
+    try {
+      await invoke(channel, { tabId: activeTabId });
+    } catch (error) {
+      reportActionError(error, fallbackMessage);
     }
   };
 
   useIpcEvent('tab:title', (data: unknown) => {
-    const { id, title } = data as { id: number; title: string };
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, title } : t)));
+    const nextTab = data as Tab;
+    setTabs((prev) => prev.map((tab) => (tab.id === nextTab.id ? { ...tab, ...nextTab } : tab)));
   });
 
   useIpcEvent('tab:navigate', (data: unknown) => {
-    const { id, url } = data as { id: number; url: string };
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, url } : t)));
+    const nextTab = data as Tab;
+    setTabs((prev) => prev.map((tab) => (tab.id === nextTab.id ? { ...tab, ...nextTab } : tab)));
   });
 
   useIpcEvent('tab:loading', (data: unknown) => {
-    const { id, loading } = data as { id: number; loading: boolean };
-    setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, loading } : t)));
+    const nextTab = data as Tab;
+    setTabs((prev) => prev.map((tab) => (tab.id === nextTab.id ? { ...tab, ...nextTab } : tab)));
   });
 
   return (
     <PageShell
-      title="内嵌浏览器"
-      subTitle="管理会话、标签页和受控导航"
-      content="浏览器模块先以中台工作台形式组织标签、地址栏和当前会话元信息，后续可继续接入真实 WebContentsView 容器。"
+      title="API 调查录制器"
+      subTitle="打开真实操作窗口，手动完成签到/领豆，停止后导出请求记录"
+      content="输入目标网址后打开窗口，再开始调查录制。其他无关浏览器工作台功能已移除。"
       extra={
         <Space wrap className="yclaw-page-actions">
-          <Tag color="processing">Browser</Tag>
+          <Tag color="processing">Network Recorder</Tag>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => void createTab()}>
-            新建标签页
+            打开操作窗口
           </Button>
         </Space>
       }
     >
       <Space direction="vertical" size={20} style={{ width: '100%' }}>
-        <Row gutter={[16, 16]}>
-          {browserKpis.map((item) => (
-            <Col xs={24} md={8} key={item.title}>
-              <ProCard className="yclaw-panel-card yclaw-kpi-card" bordered={false}>
-                <div className="yclaw-kpi-card-head">
-                  <Typography.Text type="secondary">{item.title}</Typography.Text>
-                </div>
-                <Typography.Title
-                  level={3}
-                  className="yclaw-kpi-card-value yclaw-kpi-card-value-compact"
-                >
-                  {item.value}
-                </Typography.Title>
-              </ProCard>
-            </Col>
-          ))}
-        </Row>
-
-        <ProCard className="yclaw-panel-card" title="会话控制台">
+        <Card className="yclaw-panel-card" title="操作页面">
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <AddressBar
+              url={activeTab?.url ?? ''}
+              canGoBack={activeTab?.canGoBack ?? false}
+              canGoForward={activeTab?.canGoForward ?? false}
+              onNavigate={(url) => {
+                void navigate(url);
+              }}
+              onBack={() => {
+                void runTabAction(IPC_CHANNELS.BROWSER_GO_BACK, '后退失败');
+              }}
+              onForward={() => {
+                void runTabAction(IPC_CHANNELS.BROWSER_GO_FORWARD, '前进失败');
+              }}
+              onReload={() => {
+                void runTabAction(IPC_CHANNELS.BROWSER_RELOAD, '刷新失败');
+              }}
+            />
             <TabBar
               tabs={tabs}
               activeTabId={activeTabId}
@@ -118,46 +158,18 @@ export default function App() {
                 void createTab();
               }}
             />
-            <AddressBar
-              url={activeTab?.url ?? ''}
-              canGoBack={false}
-              canGoForward={false}
-              onNavigate={(url) => {
-                void navigate(url);
-              }}
-              onBack={() => void invoke(IPC_CHANNELS.BROWSER_GO_BACK, { tabId: activeTabId })}
-              onForward={() => void invoke(IPC_CHANNELS.BROWSER_GO_FORWARD, { tabId: activeTabId })}
-              onReload={() => void invoke(IPC_CHANNELS.BROWSER_RELOAD, { tabId: activeTabId })}
-            />
+            <Typography.Text type="secondary">
+              {activeTab
+                ? `当前操作窗口：${activeTab.title || activeTab.url || '新标签页'}`
+                : '还没有操作窗口。点击“打开操作窗口”，或直接在地址栏输入网址后回车。'}
+            </Typography.Text>
           </Space>
-        </ProCard>
+        </Card>
 
-        <ProCard className="yclaw-panel-card" title="当前视图">
-          <div className="browser-viewport yclaw-browser-frame">
-            {activeTab ? (
-              <Descriptions bordered column={1}>
-                <Descriptions.Item label="标题">{activeTab.title || '新标签页'}</Descriptions.Item>
-                <Descriptions.Item label="URL">{activeTab.url}</Descriptions.Item>
-                <Descriptions.Item label="状态">
-                  <Tag color={activeTab.loading ? 'processing' : 'success'}>
-                    {activeTab.loading ? '加载中' : '已就绪'}
-                  </Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="说明">
-                  <Typography.Text type="secondary">
-                    当前仓库先完成浏览器中台外壳和标签控制区，后续可以继续把真实的 WebContentsView
-                    容器挂入这个区域。
-                  </Typography.Text>
-                </Descriptions.Item>
-              </Descriptions>
-            ) : (
-              <Empty
-                description="点击上方新建标签页，开始创建受控浏览会话"
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-              />
-            )}
-          </div>
-        </ProCard>
+        <RecorderPanel
+          tabId={activeTabId}
+          onCreateTab={async () => (await createTab())?.id ?? null}
+        />
       </Space>
     </PageShell>
   );

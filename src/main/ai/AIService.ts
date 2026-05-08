@@ -10,14 +10,45 @@ import type {
   AIChatResponse,
   ChatMessage,
   Conversation,
+  AIServiceContext,
+  AIToolDef,
+  ToolResult,
+  AIToolCall,
+  AIPendingToolCall,
 } from '@shared/types';
-import { ContextManager } from './ContextManager';
+import type { ContextManager } from './ContextManager';
 import { OpenAIProvider, OllamaProvider } from './LLMProvider';
 import { ToolRegistry } from './ToolRegistry';
-import { taskListTool } from './tools/taskTools';
+import { createTaskListTool, createTaskStartTool } from './tools/taskTools';
 import { systemStatusTool } from './tools/systemTools';
-import { navigateTool } from './tools/navigateTools';
+import { navigateTool, createNavigateTool } from './tools/navigateTools';
+import { taskOpsTools } from './tools/taskOpsTools';
 import type { LLMProvider } from './types';
+import type { AIRepository, TaskRepository } from '../services/repositories';
+import type { TaskState } from '../services/TaskService';
+
+import crypto from 'crypto';
+
+interface ToolCallDirective {
+  name: string;
+  params: Record<string, unknown>;
+}
+
+interface ToolDirectiveResolution {
+  content: string;
+  pendingToolCall?: AIPendingToolCall;
+  executedToolCall?: AIToolCall;
+}
+
+export interface AIServiceOptions {
+  config?: Partial<AIConfig>;
+  openWindow?: (module: string) => void;
+  startTask?: (taskId: string) => TaskState;
+  contextManager?: ContextManager;
+  toolRegistry?: ToolRegistry;
+  aiRepository?: Pick<AIRepository, 'saveAIConversation' | 'saveAIMessage' | 'deleteAIConversation'>;
+  taskRepository?: Pick<TaskRepository, 'getTasks'>;
+}
 
 export class AIService {
   private provider: LLMProvider;
@@ -25,24 +56,100 @@ export class AIService {
   private toolRegistry: ToolRegistry;
   private conversations = new Map<string, Conversation>();
   private config: AIConfig;
+  private aiRepository: Pick<AIRepository, 'saveAIConversation' | 'saveAIMessage' | 'deleteAIConversation'>;
+  private taskRepository: Pick<TaskRepository, 'getTasks'>;
 
-  constructor(config?: Partial<AIConfig>) {
+  constructor(configOrOptions?: Partial<AIConfig> | AIServiceOptions) {
+    const opts = this.normalizeOptions(configOrOptions);
+
     this.config = {
       provider: 'openai',
       model: 'gpt-3.5-turbo',
       temperature: 0.7,
       maxTokens: 2048,
-      ...config,
+      ...opts.config,
     };
 
+    if (!opts.contextManager) {
+      throw new Error('contextManager is required');
+    }
+
+    if (!opts.aiRepository) {
+      throw new Error('aiRepository is required');
+    }
+
+    if (!opts.taskRepository) {
+      throw new Error('taskRepository is required');
+    }
+
+    if (!opts.toolRegistry) {
+      throw new Error('toolRegistry is required');
+    }
+
     this.provider = this.createProvider(this.config);
-    this.contextManager = new ContextManager();
-    this.toolRegistry = new ToolRegistry();
+    this.contextManager = opts.contextManager;
+    this.aiRepository = opts.aiRepository;
+    this.taskRepository = opts.taskRepository;
+    this.toolRegistry = opts.toolRegistry;
 
     // Register built-in tools
-    this.toolRegistry.register(taskListTool);
+    this.toolRegistry.register(createTaskListTool(this.taskRepository));
+    if (opts.startTask) {
+      this.toolRegistry.register(createTaskStartTool(this.taskRepository, opts.startTask));
+    }
     this.toolRegistry.register(systemStatusTool);
-    this.toolRegistry.register(navigateTool);
+    taskOpsTools.forEach((tool) => this.toolRegistry.register(tool));
+    if (opts.openWindow) {
+      this.toolRegistry.register(createNavigateTool(opts.openWindow));
+    } else {
+      this.toolRegistry.register(navigateTool);
+    }
+  }
+
+  private normalizeOptions(configOrOptions?: Partial<AIConfig> | AIServiceOptions): AIServiceOptions {
+    if (!configOrOptions) {
+      return {};
+    }
+
+    const optionKeys: Array<keyof AIServiceOptions> = [
+      'config',
+      'openWindow',
+      'startTask',
+      'contextManager',
+      'toolRegistry',
+      'aiRepository',
+      'taskRepository',
+    ];
+    const hasOptionKeys = optionKeys.some((key) => key in configOrOptions);
+
+    if (!hasOptionKeys) {
+      return { config: configOrOptions as Partial<AIConfig> };
+    }
+
+    const rawOptions = configOrOptions as AIServiceOptions & Partial<AIConfig>;
+    const {
+      config,
+      openWindow,
+      startTask,
+      contextManager,
+      toolRegistry,
+      aiRepository,
+      taskRepository,
+      ...directConfig
+    } = rawOptions;
+
+    return {
+      config: {
+        ...directConfig,
+        ...config,
+      },
+      openWindow,
+      startTask,
+      contextManager,
+      toolRegistry,
+      aiRepository,
+      taskRepository,
+    };
   }
 
   private createProvider(config: AIConfig): LLMProvider {
@@ -102,15 +209,22 @@ export class AIService {
       timestamp: Date.now(),
     };
     conversation.messages.push(userMessage);
+    this.aiRepository.saveAIMessage(conversationId, userMessage);
 
     // Collect context and build system prompt
     const context = await this.contextManager.collectContext();
-    const systemPrompt = this.contextManager.contextToPrompt(context);
+    const systemPrompt = this.buildSystemPrompt(context);
 
     // Call LLM
     let responseContent: string;
+    let executedToolCall: AIToolCall | undefined;
+    let pendingToolCall: AIPendingToolCall | undefined;
     try {
       responseContent = await this.provider.chat(conversation.messages, systemPrompt);
+      const toolResolution = await this.resolveToolDirective(responseContent, context);
+      responseContent = toolResolution.content;
+      executedToolCall = toolResolution.executedToolCall;
+      pendingToolCall = toolResolution.pendingToolCall;
     } catch (error) {
       responseContent = `抱歉，AI 服务调用失败: ${error instanceof Error ? error.message : String(error)}`;
     }
@@ -124,10 +238,14 @@ export class AIService {
     };
     conversation.messages.push(assistantMessage);
     conversation.updatedAt = Date.now();
+    this.aiRepository.saveAIConversation(conversation);
+    this.aiRepository.saveAIMessage(conversationId, assistantMessage);
 
     return {
       message: assistantMessage,
       conversationId,
+      executedToolCall,
+      pendingToolCall,
     };
   }
 
@@ -136,10 +254,198 @@ export class AIService {
   }
 
   deleteConversation(id: string): boolean {
-    return this.conversations.delete(id);
+    const removed = this.conversations.delete(id);
+    const deletedFromDb = this.aiRepository.deleteAIConversation(id);
+    return removed || deletedFromDb;
   }
 
   private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    return crypto.randomUUID();
+  }
+
+  private buildSystemPrompt(context: AIServiceContext): string {
+    const basePrompt = this.contextManager.contextToPrompt(context);
+    const tools = this.toolRegistry.list();
+
+    if (tools.length === 0) {
+      return basePrompt;
+    }
+
+    return [
+      basePrompt,
+      '',
+      '## 可用工具',
+      ...tools.map((tool) => this.formatToolForPrompt(tool)),
+      '',
+      '## 工具调用协议',
+      '当你需要调用工具时，只输出一行：',
+      'YCLAW_TOOL_CALL {"name":"工具名","params":{"参数名":"参数值"}}',
+      '不要在工具调用行之外输出其他内容。危险工具需要用户确认，系统不会自动执行。',
+    ].join('\n');
+  }
+
+  private formatToolForPrompt(tool: AIToolDef): string {
+    return [
+      `- ${tool.name}: ${tool.description}`,
+      `  - source: ${tool.source ?? 'builtin'}`,
+      `  - confirmationLevel: ${tool.confirmationLevel}`,
+      `  - parameters: ${JSON.stringify(tool.parameters)}`,
+    ].join('\n');
+  }
+
+  private async resolveToolDirective(
+    responseContent: string,
+    context: AIServiceContext,
+  ): Promise<ToolDirectiveResolution> {
+    const directive = this.parseToolDirective(responseContent);
+    if (!directive) {
+      return { content: responseContent };
+    }
+
+    const tool = this.toolRegistry.get(directive.name);
+    if (!tool) {
+      return { content: `未找到工具：${directive.name}` };
+    }
+
+    if (tool.confirmationLevel >= 2) {
+      return {
+        content: this.formatPendingToolResult(tool.name, directive.params),
+        pendingToolCall: {
+          name: tool.name,
+          params: directive.params,
+        },
+      };
+    }
+
+    const result = await this.toolRegistry.execute(tool.name, directive.params, context);
+    return {
+      content: this.formatToolResult(tool.name, directive.params, result),
+      executedToolCall: {
+        name: tool.name,
+        params: directive.params,
+      },
+    };
+  }
+
+  private parseToolDirective(responseContent: string): ToolCallDirective | null {
+    const match = responseContent.match(/YCLAW_TOOL_CALL\s+(\{[\s\S]*\})/);
+    if (!match) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(match[1]) as {
+        name?: unknown;
+        params?: unknown;
+      };
+      if (typeof parsed.name !== 'string' || parsed.name.trim().length === 0) {
+        return null;
+      }
+      if (!parsed.params || typeof parsed.params !== 'object' || Array.isArray(parsed.params)) {
+        return {
+          name: parsed.name.trim(),
+          params: {},
+        };
+      }
+
+      return {
+        name: parsed.name.trim(),
+        params: parsed.params as Record<string, unknown>,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private formatToolResult(
+    toolName: string,
+    params: Record<string, unknown>,
+    result: ToolResult,
+  ): string {
+    if (toolName === 'task_start') {
+      return this.formatTaskStartResult(params, result);
+    }
+
+    if (!result.success) {
+      return [
+        `工具调用失败：${toolName}`,
+        '',
+        '参数：',
+        '```json',
+        JSON.stringify(params, null, 2),
+        '```',
+        '',
+        `错误：${result.error ?? '未知错误'}`,
+      ].join('\n');
+    }
+
+    return [
+      `已调用工具：${toolName}`,
+      '',
+      '参数：',
+      '```json',
+      JSON.stringify(params, null, 2),
+      '```',
+      '',
+      '结果：',
+      '```json',
+      JSON.stringify(result.data, null, 2),
+      '```',
+    ].join('\n');
+  }
+
+  private formatPendingToolResult(toolName: string, params: Record<string, unknown>): string {
+    if (toolName === 'task_start') {
+      const taskLabel =
+        (typeof params.taskName === 'string' && params.taskName.trim()) ||
+        (typeof params.taskId === 'string' && params.taskId.trim()) ||
+        '该任务';
+      return [
+        `我可以帮你启动任务「${taskLabel}」。`,
+        '',
+        '确认后我会立即发起执行。',
+      ].join('\n');
+    }
+
+    return [
+      `我准备执行操作：${toolName}`,
+      '',
+      '参数：',
+      '```json',
+      JSON.stringify(params, null, 2),
+      '```',
+      '',
+      '请确认是否继续。',
+    ].join('\n');
+  }
+
+  private formatTaskStartResult(
+    params: Record<string, unknown>,
+    result: ToolResult,
+  ): string {
+    if (!result.success) {
+      return result.error
+        ? `启动任务失败：${result.error}`
+        : '启动任务失败，请稍后再试。';
+    }
+
+    const data = (result.data ?? {}) as {
+      taskId?: string;
+      taskName?: string;
+      status?: string;
+    };
+    const taskLabel =
+      data.taskName ||
+      (typeof params.taskName === 'string' ? params.taskName : undefined) ||
+      (typeof params.taskId === 'string' ? params.taskId : undefined) ||
+      '目标任务';
+
+    return [
+      `已帮你启动任务「${taskLabel}」。`,
+      data.status ? `当前状态：${data.status}` : null,
+      data.taskId ? `任务 ID：${data.taskId}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 }

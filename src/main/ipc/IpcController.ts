@@ -1,7 +1,6 @@
 import { ipcMain } from 'electron';
 import type { IpcResponse } from '@shared/types';
 import type { IpcHandler } from './channels';
-import { EventBus } from './EventBus';
 
 /**
  * IPC 控制器 — 路由注册与分发
@@ -10,11 +9,6 @@ export class IpcController {
   private handlers = new Map<string, IpcHandler>();
   private rateLimits = new Map<string, { count: number; resetTime: number }>();
   private readonly maxCallsPerSecond = 100;
-  private eventBus: EventBus;
-
-  constructor() {
-    this.eventBus = EventBus.getInstance();
-  }
 
   /**
    * 注册 IPC handle 路由

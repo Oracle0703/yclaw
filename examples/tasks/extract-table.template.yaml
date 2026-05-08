@@ -1,0 +1,16 @@
+schemaVersion: 1
+kind: Template
+metadata:
+  id: extract-table
+  name: 通用表格抽取
+  tags:
+    - extract
+spec:
+  fields:
+    - name: title
+      selector: thead th
+      attribute: text
+    - name: rows
+      selector: tbody tr
+      attribute: text
+      transform: trim

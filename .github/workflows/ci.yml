@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+      SKIP_POSTINSTALL: 1
+      npm_config_progress: false
+      npm_config_fund: false
       npm_config_registry: https://registry.npmjs.org/
     steps:
       - uses: actions/checkout@v4
@@ -23,15 +26,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: npm
           registry-url: https://registry.npmjs.org/
 
       - name: Install dependencies
         shell: bash
+        timeout-minutes: 12
         run: |
-          # Work around npm optional dependency lockfile corruption for Rollup native packages.
+          # `npm ci` against the committed lockfile triggers an npm 10.8.2 hang
+          # ("Exit handler never called!") after extracting the @modelcontextprotocol/sdk
+          # dependency tree. Regenerate the lockfile and use `npm install`, which is the
+          # pattern that has reliably succeeded for this repository (~40s on hosted runners).
+          # Native modules (better-sqlite3) are rebuilt for the active Node runtime by the
+          # `pretest` script (scripts/ensure-node-native-deps.cjs); SKIP_POSTINSTALL=1
+          # prevents `electron-builder install-app-deps` from rebuilding them against
+          # Electron's ABI during install.
           rm -rf node_modules package-lock.json
-          npm install --no-audit
+          npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint

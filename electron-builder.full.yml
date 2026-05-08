@@ -1,0 +1,28 @@
+extends: ./electron-builder.yml
+
+files:
+  - from: .
+    filter:
+      - package.json
+      - dist/main/**/*
+      - dist/renderer/entries/workbench/**/*
+      - dist/renderer/entries/browser/**/*
+      - dist/renderer/plugin-host/**/*
+      - dist/renderer/assets/**/*
+      - resources/**/*
+      - node_modules/**/*
+      - '!docs{,/**/*}'
+      - '!tests{,/**/*}'
+      - '!src{,/**/*}'
+      - '!plugins/_template{,/**/*}'
+      - '!**/*.map'
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

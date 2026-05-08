@@ -1,5 +1,45 @@
 import { describe, it, expect } from 'vitest';
+import React from 'react';
 import { render, screen } from '@testing-library/react';
+
+vi.mock('antd', () => ({
+  Button: ({
+    children,
+    onClick,
+  }: {
+    children?: React.ReactNode;
+    onClick?: () => void;
+  }) => (
+    <button type="button" onClick={onClick}>
+      {children}
+    </button>
+  ),
+  Timeline: ({
+    items = [],
+  }: {
+    items?: Array<{ children?: React.ReactNode }>;
+  }) => (
+    <div>
+      {items.map((item, index) => (
+        <div key={index} className="ant-timeline-item">
+          {item.children}
+        </div>
+      ))}
+    </div>
+  ),
+  Typography: {
+    Text: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+  },
+}));
+
+vi.mock('@ant-design/icons', () => ({
+  CheckCircleOutlined: () => <span>success</span>,
+  ClockCircleOutlined: () => <span>pending</span>,
+  CloseCircleOutlined: () => <span>failed</span>,
+  LoadingOutlined: () => <span>running</span>,
+  WarningOutlined: () => <span>partial</span>,
+}));
+
 import TaskTimeline from '@renderer/shared/components/TaskTimeline';
 import type { TimelineItem } from '@renderer/shared/components/TaskTimeline';
 

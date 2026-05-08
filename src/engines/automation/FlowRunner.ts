@@ -1,16 +1,21 @@
-import type { WebContents } from 'electron';
-import type { TaskFlow, TaskStep, TaskStatus, TaskExecutionResult, StepResult } from '@shared/types';
-import type { ActionDefinition } from './types';
-import { AutomationEngine } from './AutomationEngine';
+import type { TaskFlow, TaskStep, TaskExecutionResult, StepResult } from '@shared/types';
+import { TaskStatus } from '@shared/types';
+import type { ActionDefinition, AutomationPage } from './types';
+import type { ActionExecutionContext, AutomationEngine } from './AutomationEngine';
 import { withRetry, createBreakpoint, type Breakpoint } from './RetryPolicy';
-import { EventBus } from '@main/ipc/EventBus';
 import { EVENTS } from '@shared/constants';
+import type { ExecutionLogService } from '@main/services/ExecutionLogService';
 
 export interface FlowRunnerOptions {
+  engine?: Pick<AutomationEngine, 'execute'>;
+  eventBus?: {
+    emit: (event: string, payload?: unknown) => void;
+  };
   /** 默认每步重试次数 */
   defaultRetryCount?: number;
   /** 默认重试延迟 (ms) */
   defaultRetryDelay?: number;
+  executionLogService?: Pick<ExecutionLogService, 'append'>;
 }
 
 /**
@@ -18,9 +23,9 @@ export interface FlowRunnerOptions {
  * 支持错误重试 & 断点继续
  */
 export class FlowRunner {
-  private engine: AutomationEngine;
-  private eventBus: EventBus;
-  private status: TaskStatus = 'idle' as TaskStatus;
+  private engine: Pick<AutomationEngine, 'execute'>;
+  private eventBus: NonNullable<FlowRunnerOptions['eventBus']>;
+  private status: TaskStatus = TaskStatus.IDLE;
   private currentStepIndex = 0;
   private breakpoint: Breakpoint | null = null;
   private aborted = false;
@@ -28,30 +33,49 @@ export class FlowRunner {
   private pauseResolve: (() => void) | null = null;
   private readonly defaultRetryCount: number;
   private readonly defaultRetryDelay: number;
+  private readonly executionLogService?: Pick<ExecutionLogService, 'append'>;
+  private flowId = '';
+  private batchId = '';
 
   constructor(options: FlowRunnerOptions = {}) {
-    this.engine = new AutomationEngine();
-    this.eventBus = EventBus.getInstance();
+    if (!options.eventBus) {
+      throw new Error('eventBus is required');
+    }
+
+    if (!options.engine) {
+      throw new Error('engine is required');
+    }
+
+    this.engine = options.engine;
+    this.eventBus = options.eventBus;
     this.defaultRetryCount = options.defaultRetryCount ?? 3;
     this.defaultRetryDelay = options.defaultRetryDelay ?? 1000;
+    this.executionLogService = options.executionLogService;
   }
 
   /**
    * 执行整个任务流
    */
-  async run(flow: TaskFlow, webContents: WebContents, fromStep = 0): Promise<TaskExecutionResult> {
-    this.status = 'running' as TaskStatus;
+  async run(
+    flow: TaskFlow,
+    webContents: AutomationPage,
+    fromStep = 0,
+    batchId?: string,
+  ): Promise<TaskExecutionResult> {
+    this.status = TaskStatus.RUNNING;
     this.aborted = false;
     this.paused = false;
     this.currentStepIndex = fromStep;
     this.breakpoint = null;
+    this.flowId = flow.id;
+    this.batchId = batchId ?? `batch:${flow.id}`;
 
     const stepResults: StepResult[] = [];
     this.eventBus.emit(EVENTS.TASK_STARTED, { flowId: flow.id });
 
     for (let i = fromStep; i < flow.steps.length; i++) {
       if (this.aborted) {
-        this.status = 'idle' as TaskStatus;
+        this.status = TaskStatus.IDLE;
         return { success: false, stepResults, error: 'Task aborted' };
       }
 
@@ -65,7 +89,7 @@ export class FlowRunner {
       const step = flow.steps[i];
 
       try {
-        const result = await this.executeStep(step, webContents);
+        const result = await this.executeStep(step, webContents, flow);
         stepResults.push(result);
 
         this.eventBus.emit(EVENTS.TASK_STEP_COMPLETED, {
@@ -77,7 +101,7 @@ export class FlowRunner {
         if (!result.success) {
           // 步骤失败，保存断点
           this.breakpoint = createBreakpoint(flow.id, i, result.error);
-          this.status = 'failed' as TaskStatus;
+          this.status = TaskStatus.FAILED;
           this.eventBus.emit(EVENTS.TASK_FAILED, {
             flowId: flow.id,
             stepIndex: i,
@@ -93,7 +117,7 @@ export class FlowRunner {
       } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
         this.breakpoint = createBreakpoint(flow.id, i, error);
-        this.status = 'failed' as TaskStatus;
+        this.status = TaskStatus.FAILED;
         this.eventBus.emit(EVENTS.TASK_FAILED, {
           flowId: flow.id,
           stepIndex: i,
@@ -108,7 +132,7 @@ export class FlowRunner {
       }
     }
 
-    this.status = 'completed' as TaskStatus;
+    this.status = TaskStatus.COMPLETED;
     this.eventBus.emit(EVENTS.TASK_COMPLETED, { flowId: flow.id });
     return { success: true, stepResults };
   }
@@ -116,12 +140,14 @@ export class FlowRunner {
   /**
    * 从断点恢复执行
    */
-  async resume(flow: TaskFlow, webContents: WebContents): Promise<TaskExecutionResult> {
-    const fromStep = this.breakpoint
-      ? this.breakpoint.stepIndex
-      : this.currentStepIndex;
+  async resume(
+    flow: TaskFlow,
+    webContents: AutomationPage,
+    batchId?: string,
+  ): Promise<TaskExecutionResult> {
+    const fromStep = this.breakpoint ? this.breakpoint.stepIndex : this.currentStepIndex;
     this.breakpoint = null;
-    return this.run(flow, webContents, fromStep);
+    return this.run(flow, webContents, fromStep, batchId);
   }
 
   /**
@@ -129,7 +155,7 @@ export class FlowRunner {
    */
   pause(): void {
     this.paused = true;
-    this.status = 'paused' as TaskStatus;
+    this.status = TaskStatus.PAUSED;
   }
 
   /**
@@ -137,7 +163,7 @@ export class FlowRunner {
    */
   unpause(): void {
     this.paused = false;
-    this.status = 'running' as TaskStatus;
+    this.status = TaskStatus.RUNNING;
     if (this.pauseResolve) {
       this.pauseResolve();
       this.pauseResolve = null;
@@ -167,7 +193,11 @@ export class FlowRunner {
   /**
    * 执行单步（带重试）
    */
-  private async executeStep(step: TaskStep, webContents: WebContents): Promise<StepResult> {
+  private async executeStep(
+    step: TaskStep,
+    webContents: AutomationPage,
+    flow: TaskFlow,
+  ): Promise<StepResult> {
     const retryCount = step.retryCount ?? this.defaultRetryCount;
     const retryDelay = step.retryDelay ?? this.defaultRetryDelay;
 
@@ -181,9 +211,17 @@ export class FlowRunner {
     const startTime = Date.now();
 
     try {
+      this.executionLogService?.append({
+        taskId: this.flowId,
+        batchId: this.batchId,
+        stepIndex: this.currentStepIndex,
+        level: 'info',
+        message: `Starting step ${step.id}`,
+      });
+
       const result = await withRetry(
         async () => {
-          const r = await this.engine.execute(webContents, action);
+          const r = await this.engine.execute(webContents, action, this.buildActionContext(flow));
           if (!r.success) throw new Error(r.error ?? 'Action failed');
           return r;
         },
@@ -197,6 +235,13 @@ export class FlowRunner {
         duration: Date.now() - startTime,
       };
     } catch (err) {
+      this.executionLogService?.append({
+        taskId: this.flowId,
+        batchId: this.batchId,
+        stepIndex: this.currentStepIndex,
+        level: 'error',
+        message: err instanceof Error ? err.message : String(err),
+      });
       return {
         stepId: step.id,
         success: false,
@@ -204,5 +249,14 @@ export class FlowRunner {
         duration: Date.now() - startTime,
       };
     }
+  }
+
+  private buildActionContext(flow: TaskFlow): ActionExecutionContext {
+    return {
+      taskId: flow.id,
+      batchId: this.batchId,
+      templateId: flow.templateId ?? null,
+      sourceUrl: flow.entryUrl,
+    };
   }
 }

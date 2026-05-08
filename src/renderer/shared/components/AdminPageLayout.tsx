@@ -1,59 +1,131 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import {
-  AppstoreOutlined,
   BarsOutlined,
+  CheckCircleOutlined,
+  DatabaseOutlined,
   DeploymentUnitOutlined,
+  FireOutlined,
+  MessageOutlined,
   FundOutlined,
   GlobalOutlined,
   HomeOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
   NotificationOutlined,
   SafetyCertificateOutlined,
   RobotOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
-import { Badge, Space, Tag, Typography } from 'antd';
-import { ProLayout } from '@ant-design/pro-components';
-import type { MenuDataItem } from '@ant-design/pro-components';
+import { Badge, Button, Layout, Menu, Space, Tag, Typography } from 'antd';
+import type { MenuProps } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const MODULE_MENU: MenuDataItem[] = [
+interface ModuleMenuItem {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+}
+
+const MODULE_MENU: ModuleMenuItem[] = [
   {
-    path: '/',
-    name: '总览',
+    key: '/',
+    label: '总览',
     icon: <HomeOutlined />,
   },
   {
-    path: '/stock',
-    name: '行情分析',
+    key: '/stock',
+    label: '行情分析',
     icon: <FundOutlined />,
   },
   {
-    path: '/automation',
-    name: '自动化',
+    key: '/automation',
+    label: '自动化',
     icon: <RobotOutlined />,
   },
   {
-    path: '/browser',
-    name: '浏览器',
+    key: '/signin',
+    label: '自动签到',
+    icon: <CheckCircleOutlined />,
+  },
+  {
+    key: '/data-center',
+    label: '数据中心',
+    icon: <DatabaseOutlined />,
+  },
+  {
+    key: '/hot-monitor',
+    label: '热点监控',
+    icon: <FireOutlined />,
+  },
+  {
+    key: '/comment-monitor',
+    label: '评论监控',
+    icon: <MessageOutlined />,
+  },
+  {
+    key: '/browser',
+    label: '浏览器',
     icon: <GlobalOutlined />,
   },
   {
-    path: '/plugin-center',
-    name: '插件',
+    key: '/plugin-center',
+    label: '插件',
     icon: <DeploymentUnitOutlined />,
   },
   {
-    path: '/settings',
-    name: '设置',
+    key: '/settings',
+    label: '设置',
     icon: <SettingOutlined />,
   },
 ];
+
+function getSelectedMenuKey(pathname: string) {
+  const matchedKey = MODULE_MENU.map((item) => item.key)
+    .filter((key) => key !== '/')
+    .find((key) => pathname === key || pathname.startsWith(`${key}/`));
+
+  return matchedKey ?? '/';
+}
+
+function getSelectedMenuLabel(selectedKey: string): string {
+  return MODULE_MENU.find((menuItem) => menuItem.key === selectedKey)?.label ?? '总览';
+}
+
+function formatLocalTime(date: Date): string {
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function formatLocalDateTime(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day} ${formatLocalTime(date)}`;
+}
 
 export function AdminPageLayout({ children }: PropsWithChildren) {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+  const selectedKey = useMemo(() => getSelectedMenuKey(location.pathname), [location.pathname]);
+  const selectedTitle = useMemo(() => getSelectedMenuLabel(selectedKey), [selectedKey]);
+  const visibleLocalTime = collapsed ? formatLocalTime(now) : formatLocalDateTime(now);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const handleMenuJump = (path?: string) => {
     if (!path) {
@@ -64,102 +136,69 @@ export function AdminPageLayout({ children }: PropsWithChildren) {
 
   return (
     <div className="yclaw-admin-shell">
-      <ProLayout
-        title="YClaw Ops"
-        logo={<div className="yclaw-brand-logo">Y</div>}
-        layout="side"
-        navTheme="realDark"
-        fixSiderbar
-        fixedHeader
-        collapsed={collapsed}
-        onCollapse={setCollapsed}
-        siderWidth={232}
-        contentWidth="Fluid"
-        location={{ pathname: location.pathname }}
-        route={{ routes: MODULE_MENU }}
-        bgLayoutImgList={[]}
-        menu={{
-          locale: false,
-          collapsedShowTitle: false,
-        }}
-        token={{
-          header: {
-            colorBgHeader: 'rgba(255, 255, 255, 0.88)',
-            colorHeaderTitle: '#0f172a',
-            colorTextMenuSecondary: '#475569',
-            colorBgMenuItemHover: 'rgba(22, 119, 255, 0.08)',
-          },
-          sider: {
-            colorBgMenuItemSelected: 'linear-gradient(90deg, rgba(22, 119, 255, 0.28), rgba(54, 207, 201, 0.2))',
-            colorMenuItemDivider: 'rgba(255, 255, 255, 0.08)',
-            colorTextMenu: 'rgba(255, 255, 255, 0.72)',
-            colorTextMenuSelected: '#ffffff',
-            colorTextMenuActive: '#ffffff',
-          },
-          pageContainer: {
-            paddingInlinePageContainerContent: 24,
-            paddingBlockPageContainerContent: 0,
-          },
-        }}
-        actionsRender={() => [
-          <Tag key="security" color="cyan">
-            <SafetyCertificateOutlined /> 安全
-          </Tag>,
-          <Tag key="pipeline" color="geekblue">
-            <BarsOutlined /> 协同
-          </Tag>,
-          <Badge key="notice" dot>
-            <NotificationOutlined className="yclaw-header-action" />
-          </Badge>,
-        ]}
-        menuItemRender={(item, dom) => {
-          if (!item.path) {
-            return dom;
-          }
-
-          return (
-            <a
-              href="#"
-              onClick={(event) => {
-                event.preventDefault();
-                handleMenuJump(item.path);
+      <Layout className="yclaw-admin-layout">
+        <Layout.Sider
+          theme="light"
+          width={204}
+          collapsible
+          trigger={null}
+          collapsed={collapsed}
+          collapsedWidth={64}
+          onCollapse={setCollapsed}
+        >
+          <div className="yclaw-admin-sider">
+            <Menu
+              mode="inline"
+              theme="light"
+              className="yclaw-admin-menu"
+              selectedKeys={[selectedKey]}
+              items={MODULE_MENU as MenuProps['items']}
+              onClick={({ key }) => {
+                handleMenuJump(String(key));
               }}
-            >
-              {dom}
-            </a>
-          );
-        }}
-        headerTitleRender={(logo, pageTitle) => (
-          <Space size={12}>
-            {logo}
-            <div>
-              <Typography.Text strong>{pageTitle}</Typography.Text>
-              <Typography.Text type="secondary" className="yclaw-brand-subtitle">
-                桌面运营台
-              </Typography.Text>
-            </div>
-          </Space>
-        )}
-        menuFooterRender={(props) =>
-          props?.collapsed ? (
-            <div className="yclaw-menu-footer-collapsed" aria-label="Ops Cockpit" title="Ops Cockpit">
-              <AppstoreOutlined />
-            </div>
-          ) : (
-            <div className="yclaw-menu-footer">
-              <div className="yclaw-menu-footer-eyebrow">Ops Cockpit</div>
-              <div className="yclaw-menu-footer-title">统一调度台</div>
-              <div className="yclaw-menu-footer-text">流程、数据、插件统一编排</div>
-              <div className="yclaw-menu-footer-meta">
-                <span>5 Modules</span>
-                <span>12 Runbooks</span>
+            />
+
+            <div className="yclaw-admin-sider-footer">
+              <Button
+                type="text"
+                className="yclaw-admin-trigger yclaw-admin-sider-trigger"
+                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                onClick={() => {
+                  setCollapsed((value) => !value);
+                }}
+                aria-label={collapsed ? '展开导航' : '收起导航'}
+              />
+              <div className="yclaw-local-time" aria-label={visibleLocalTime}>
+                <span className="yclaw-local-time-value">{visibleLocalTime}</span>
               </div>
             </div>
-          )
-        }
-      >
-        {children}
-      </ProLayout>
+          </div>
+        </Layout.Sider>
+
+        <Layout className="yclaw-admin-main">
+          <Layout.Header className="yclaw-admin-header">
+            <Space size={12} className="yclaw-admin-header-left">
+              <div className="yclaw-brand-title">
+                <Typography.Text strong>{selectedTitle}</Typography.Text>
+              </div>
+            </Space>
+
+            <Space size={12} wrap>
+              <Tag color="cyan">
+                <SafetyCertificateOutlined /> 安全
+              </Tag>
+              <Tag color="geekblue">
+                <BarsOutlined /> 协同
+              </Tag>
+              <Badge dot>
+                <NotificationOutlined className="yclaw-header-action" />
+              </Badge>
+            </Space>
+          </Layout.Header>
+
+          <Layout.Content className="yclaw-admin-content">{children}</Layout.Content>
+        </Layout>
+      </Layout>
     </div>
   );
 }

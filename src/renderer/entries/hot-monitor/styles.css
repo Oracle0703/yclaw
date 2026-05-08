@@ -1,0 +1,324 @@
+.hot-monitor-drawer-content {
+  display: block;
+}
+
+.hot-monitor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.hot-monitor-toolbar-title {
+  color: var(--yclaw-text-primary);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.hot-monitor-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.hot-monitor-latest-source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.78);
+}
+
+.hot-monitor-source-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.hot-monitor-task-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.hot-monitor-task-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.hot-monitor-task-table th,
+.hot-monitor-task-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  color: var(--yclaw-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.hot-monitor-task-table th {
+  background: rgba(248, 250, 252, 0.92);
+  color: var(--yclaw-text-primary);
+  font-weight: 700;
+}
+
+.hot-monitor-task-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.hot-monitor-task-table tr[data-selected='true'] td {
+  background: rgba(22, 119, 255, 0.06);
+}
+
+.hot-monitor-table-actions {
+  justify-content: flex-end;
+}
+
+.hot-monitor-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hot-monitor-recent-reports > .browser-workspace-section {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.hot-monitor-recent-reports > .browser-workspace-section > .browser-workspace-section-title {
+  display: none;
+}
+
+.hot-monitor-recent-reports .browser-workspace-input {
+  max-width: 320px;
+}
+
+.hot-monitor-config-source {
+  margin-top: 16px;
+}
+
+.hot-monitor-config-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.hot-report-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 520px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.hot-report-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.hot-report-row-main {
+  min-width: 0;
+}
+
+.hot-report-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 0;
+}
+
+.hot-report-preview-frame {
+  width: 100%;
+  min-height: 480px;
+  border: 0;
+  background: #ffffff;
+}
+
+.hot-monitor-config-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+  padding: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.88);
+}
+
+.hot-monitor-config-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 0.8fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.hot-monitor-config-grid-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hot-monitor-task-modal-content .browser-workspace-section {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.hot-monitor-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.hot-monitor-platform-config {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.76);
+}
+
+.hot-monitor-switch-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: var(--yclaw-control-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.hot-monitor-switch-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--yclaw-accent);
+}
+
+.hot-monitor-platform-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.hot-monitor-platform-row[draggable='true'] {
+  cursor: grab;
+}
+
+.hot-monitor-platform-grip {
+  color: var(--yclaw-text-secondary);
+  font-family: var(--yclaw-font-mono);
+  font-size: 13px;
+  letter-spacing: -1px;
+}
+
+.hot-monitor-platform-main {
+  min-width: 0;
+}
+
+.hot-monitor-platform-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.hot-monitor-config-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.hot-monitor-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--yclaw-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.hot-monitor-config-field legend {
+  padding: 0;
+  color: var(--yclaw-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.hot-monitor-config-field > input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--yclaw-accent);
+}
+
+.hot-monitor-keyword-textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.hot-monitor-keyword-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hot-monitor-keyword-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.hot-monitor-keyword-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@media (max-width: 960px) {
+  .hot-monitor-config-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hot-monitor-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hot-monitor-latest-source,
+  .hot-monitor-source-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hot-report-row {
+    grid-template-columns: 1fr;
+  }
+}
