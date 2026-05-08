@@ -63,7 +63,7 @@
     "antd": "^5.29.3",
     "electron": "^41.2.0",
     "electron-builder": "^25.1.8",
-    "eslint": "^8.57.0",
+    "eslint": "^10.3.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.0.0",
