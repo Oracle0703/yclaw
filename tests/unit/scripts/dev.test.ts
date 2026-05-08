@@ -22,6 +22,7 @@ describe('scripts/dev.ts', () => {
   const spawned: Array<{ command: string; args: string[]; process: FakeChildProcess }> = [];
   const ensureElectronNativeDepsMock = vi.fn();
   const spawnSyncMock = vi.fn(() => ({ status: 0, stdout: '' }));
+  const originalPlatform = process.platform;
   vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
   vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -35,10 +36,22 @@ describe('scripts/dev.ts', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: originalPlatform,
+    });
   });
+
+  function mockWindowsPlatform(): void {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32',
+    });
+  }
 
   it('等待 main watch ready 后启动 Electron，并在主进程重新编译完成后重启', async () => {
     vi.useFakeTimers();
+    mockWindowsPlatform();
     vi.doMock('../../../scripts/ensure-electron-native-deps', () => ({
       ensureElectronNativeDeps: ensureElectronNativeDepsMock,
     }));
@@ -103,6 +116,7 @@ describe('scripts/dev.ts', () => {
 
   it('热重载主动结束旧 Electron 时不把 Windows code 1 记成错误', async () => {
     vi.useFakeTimers();
+    mockWindowsPlatform();
     vi.doMock('../../../scripts/ensure-electron-native-deps', () => ({
       ensureElectronNativeDeps: ensureElectronNativeDepsMock,
     }));
@@ -145,6 +159,7 @@ describe('scripts/dev.ts', () => {
 
   it('Electron 非预期退出后自动重新拉起，避免热重载停住', async () => {
     vi.useFakeTimers();
+    mockWindowsPlatform();
     vi.doMock('../../../scripts/ensure-electron-native-deps', () => ({
       ensureElectronNativeDeps: ensureElectronNativeDepsMock,
     }));
