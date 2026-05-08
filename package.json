@@ -59,7 +59,7 @@
     "@typescript-eslint/eslint-plugin": "^8.16.0",
     "@typescript-eslint/parser": "^8.16.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^4.1.5",
     "antd": "^5.29.3",
     "electron": "^41.2.0",
     "electron-builder": "^25.1.8",
