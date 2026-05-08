@@ -616,8 +616,8 @@ export class TabManager {
     try {
       const allCookies = await view.webContents.session.cookies.get({});
       cookies = allCookies
-        .filter((cookie: { domain?: string }) =>
-          shouldRecordCookie(cookie.domain, domainAllowlist, storage?.pageUrl),
+        .filter((cookie: { name?: string; domain?: string }) =>
+          shouldRecordCookie(cookie.name, cookie.domain, domainAllowlist, storage?.pageUrl),
         )
         .map(normalizeCookie);
     } catch {
@@ -783,7 +783,10 @@ function normalizeCookie(cookie: {
   };
 }
 
+const CROSS_DOMAIN_COOKIE_ALLOWLIST = new Set(['pin', 'thor', 'pt_key', 'pt_pin']);
+
 function shouldRecordCookie(
+  cookieName: string | undefined,
   cookieDomain: string | undefined,
   domainAllowlist: string[],
   pageUrl: string | undefined,
@@ -806,8 +809,12 @@ function shouldRecordCookie(
     const normalizedDomain = normalizeCookieDomain(domain);
     return (
       normalizedDomain === normalizedCookieDomain
-      || normalizedDomain.endsWith(`.${normalizedCookieDomain}`)
       || normalizedCookieDomain.endsWith(`.${normalizedDomain}`)
+      || (
+        normalizedDomain.endsWith(`.${normalizedCookieDomain}`)
+        && typeof cookieName === 'string'
+        && CROSS_DOMAIN_COOKIE_ALLOWLIST.has(cookieName)
+      )
     );
   });
 }

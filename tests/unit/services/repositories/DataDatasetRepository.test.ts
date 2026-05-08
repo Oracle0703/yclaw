@@ -6,8 +6,9 @@ import { DataDatasetRepository } from '@main/services/repositories/DataDatasetRe
 
 describe('data-center migrations · datasets', () => {
   it('creates dataset table', () => {
-    const database = new DatabaseService({ dbName: 'data-dataset-test.sqlite' });
-    database.open();
+    const db = new Database(':memory:');
+    const database = new DatabaseService({ database: db });
+    database.migrate();
 
     const tables = database
       .all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")

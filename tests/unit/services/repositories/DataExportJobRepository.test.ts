@@ -6,8 +6,9 @@ import { DataExportJobRepository } from '@main/services/repositories/DataExportJ
 
 describe('data-center migrations · export jobs', () => {
   it('creates export job and audit tables', () => {
-    const database = new DatabaseService({ dbName: 'data-export-job-test.sqlite' });
-    database.open();
+    const db = new Database(':memory:');
+    const database = new DatabaseService({ database: db });
+    database.migrate();
 
     const tables = database
       .all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")

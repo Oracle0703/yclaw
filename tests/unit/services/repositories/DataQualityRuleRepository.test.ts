@@ -6,8 +6,9 @@ import { DataQualityRuleRepository } from '@main/services/repositories/DataQuali
 
 describe('data-center migrations · quality rules', () => {
   it('creates quality rule table', () => {
-    const database = new DatabaseService({ dbName: 'data-quality-rule-test.sqlite' });
-    database.open();
+    const db = new Database(':memory:');
+    const database = new DatabaseService({ database: db });
+    database.migrate();
 
     const tables = database
       .all<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
