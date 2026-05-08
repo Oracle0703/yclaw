@@ -16,7 +16,13 @@ vi.mock('@ant-design/icons', () => ({
 }));
 
 vi.mock('antd', () => {
-  const DescriptionsItem = ({ children, label }: { children?: React.ReactNode; label?: React.ReactNode }) => (
+  const DescriptionsItem = ({
+    children,
+    label,
+  }: {
+    children?: React.ReactNode;
+    label?: React.ReactNode;
+  }) => (
     <div>
       <span>{label}</span>
       <div>{children}</div>
@@ -47,7 +53,13 @@ vi.mock('antd', () => {
       children?: React.ReactNode;
       open?: boolean;
       title?: React.ReactNode;
-    }) => (open ? <section><h2>{title}</h2>{children}</section> : null),
+    }) =>
+      open ? (
+        <section>
+          <h2>{title}</h2>
+          {children}
+        </section>
+      ) : null,
     Descriptions: Object.assign(
       ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
       { Item: DescriptionsItem },

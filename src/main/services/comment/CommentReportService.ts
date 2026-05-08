@@ -3,7 +3,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { shell } from 'electron';
-import type { CommentItem, CommentReportFormat, CommentReportSummary, ExtractionResult } from '@shared/types';
+import type {
+  CommentItem,
+  CommentReportFormat,
+  CommentReportSummary,
+  ExtractionResult,
+} from '@shared/types';
 import type { BatchService } from '../BatchService';
 import type { ResultService } from '../ResultService';
 import type { CommentReportRepository } from '../repositories/CommentReportRepository';
@@ -13,7 +18,10 @@ interface CommentReportServiceOptions {
   sourceRepository?: Pick<CommentSourceRepository, 'getSource'>;
   batchService?: Pick<BatchService, 'getBatch'>;
   resultService?: Pick<ResultService, 'listResults'>;
-  reportRepository?: Pick<CommentReportRepository, 'saveReport' | 'listReports' | 'getReport' | 'deleteReport'>;
+  reportRepository?: Pick<
+    CommentReportRepository,
+    'saveReport' | 'listReports' | 'getReport' | 'deleteReport'
+  >;
   outputDir?: string;
   now?: () => Date;
   createId?: () => string;
@@ -27,7 +35,10 @@ export class CommentReportService {
   private readonly sourceRepository: Pick<CommentSourceRepository, 'getSource'>;
   private readonly batchService: Pick<BatchService, 'getBatch'>;
   private readonly resultService: Pick<ResultService, 'listResults'>;
-  private readonly reportRepository: Pick<CommentReportRepository, 'saveReport' | 'listReports' | 'getReport' | 'deleteReport'>;
+  private readonly reportRepository: Pick<
+    CommentReportRepository,
+    'saveReport' | 'listReports' | 'getReport' | 'deleteReport'
+  >;
   private readonly outputDir: string;
   private readonly now: () => Date;
   private readonly createId: () => string;
@@ -49,14 +60,18 @@ export class CommentReportService {
     this.outputDir = options.outputDir ?? path.join(os.tmpdir(), 'yclaw-comment-reports');
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? (() => randomUUID());
-    this.writeFile = options.writeFile ?? ((filePath, content) => {
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, content, 'utf8');
-    });
+    this.writeFile =
+      options.writeFile ??
+      ((filePath, content) => {
+        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        fs.writeFileSync(filePath, content, 'utf8');
+      });
     this.readFile = options.readFile ?? ((filePath) => fs.readFileSync(filePath, 'utf8'));
-    this.unlinkFile = options.unlinkFile ?? ((filePath) => {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    });
+    this.unlinkFile =
+      options.unlinkFile ??
+      ((filePath) => {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      });
     this.revealFile = options.revealFile ?? ((filePath) => shell.showItemInFolder(filePath));
   }
 
@@ -73,7 +88,11 @@ export class CommentReportService {
     };
   }
 
-  generateReport(payload: { sourceId: string; batchId: string; format: CommentReportFormat }): CommentReportSummary {
+  generateReport(payload: {
+    sourceId: string;
+    batchId: string;
+    format: CommentReportFormat;
+  }): CommentReportSummary {
     const source = this.sourceRepository.getSource(payload.sourceId);
     if (!source) throw new Error(`Comment source "${payload.sourceId}" not found`);
 
@@ -87,9 +106,10 @@ export class CommentReportService {
     const title = `${source.name} 评论洞察`;
     const results = this.resultService.listResults({ batchId: payload.batchId });
     const comments = results.map(toCommentItem).filter(Boolean) as CommentItem[];
-    const content = payload.format === 'html'
-      ? renderHtmlReport(title, source.name, comments, createdAt)
-      : renderMarkdownReport(title, source.name, comments, createdAt);
+    const content =
+      payload.format === 'html'
+        ? renderHtmlReport(title, source.name, comments, createdAt)
+        : renderMarkdownReport(title, source.name, comments, createdAt);
     const filePath = path.join(this.outputDir, `${reportId}.${payload.format}`);
     this.writeFile(filePath, content);
 
@@ -142,7 +162,12 @@ function toCommentItem(result: ExtractionResult): CommentItem | null {
   };
 }
 
-function renderMarkdownReport(title: string, sourceName: string, comments: CommentItem[], createdAt: string): string {
+function renderMarkdownReport(
+  title: string,
+  sourceName: string,
+  comments: CommentItem[],
+  createdAt: string,
+): string {
   const topComments = [...comments]
     .sort((a, b) => (b.likeCount ?? 0) - (a.likeCount ?? 0))
     .slice(0, 10);
@@ -159,12 +184,20 @@ function renderMarkdownReport(title: string, sourceName: string, comments: Comme
     '## 代表评论',
     '',
     ...(topComments.length > 0
-      ? topComments.map((comment, index) => `${index + 1}. ${comment.authorName ?? '匿名'}：${comment.content}（赞 ${comment.likeCount ?? 0}）`)
+      ? topComments.map(
+          (comment, index) =>
+            `${index + 1}. ${comment.authorName ?? '匿名'}：${comment.content}（赞 ${comment.likeCount ?? 0}）`,
+        )
       : ['未采集到评论。']),
   ].join('\n');
 }
 
-function renderHtmlReport(title: string, sourceName: string, comments: CommentItem[], createdAt: string): string {
+function renderHtmlReport(
+  title: string,
+  sourceName: string,
+  comments: CommentItem[],
+  createdAt: string,
+): string {
   const body = renderMarkdownReport(title, sourceName, comments, createdAt)
     .split('\n')
     .map((line) => `<p>${escapeHtml(line)}</p>`)
@@ -196,8 +229,12 @@ function extractKeywords(comments: CommentItem[]): string[] {
 function buildRiskHint(comments: CommentItem[]): string {
   if (comments.length === 0) return '未采集到评论，建议检查登录态或页面结构。';
   const riskWords = ['投诉', '骗人', '虚假', '维权', '退款'];
-  const riskCount = comments.filter((comment) => riskWords.some((word) => comment.content.includes(word))).length;
-  return riskCount > 0 ? `发现 ${riskCount} 条潜在风险评论，需要人工复核。` : '未发现明显风险词，仍建议人工抽检高赞评论。';
+  const riskCount = comments.filter((comment) =>
+    riskWords.some((word) => comment.content.includes(word)),
+  ).length;
+  return riskCount > 0
+    ? `发现 ${riskCount} 条潜在风险评论，需要人工复核。`
+    : '未发现明显风险词，仍建议人工抽检高赞评论。';
 }
 
 function escapeHtml(value: string): string {
