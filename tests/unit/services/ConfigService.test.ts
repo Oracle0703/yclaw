@@ -9,30 +9,20 @@ vi.mock('@main/utils/paths', () => ({
   getConfigPath: () => testDir,
 }));
 
-// Mock EventBus
-vi.mock('@main/ipc/EventBus', () => {
-  const emitFn = vi.fn();
-  return {
-    EventBus: {
-      getInstance: () => ({
-        emit: emitFn,
-        on: vi.fn(),
-        off: vi.fn(),
-      }),
-      _emit: emitFn,
-    },
-  };
-});
-
 import { ConfigService } from '@main/services/ConfigService';
-import { EventBus } from '@main/ipc/EventBus';
 
 describe('ConfigService', () => {
   let service: ConfigService;
+  const mockEventBus = {
+    emit: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+  };
 
   beforeEach(() => {
+    vi.clearAllMocks();
     fs.mkdirSync(testDir, { recursive: true });
-    service = new ConfigService();
+    service = new ConfigService({ eventBus: mockEventBus as never });
   });
 
   afterEach(() => {
@@ -45,11 +35,37 @@ describe('ConfigService', () => {
     expect(config.general.language).toBe('zh-CN');
     expect(config.general.startupBehavior).toBe('showWorkbench');
     expect(config.general.closeToTray).toBe(false);
+    expect((config as Record<string, unknown>).ai).toMatchObject({
+      provider: 'openai',
+      model: 'gpt-3.5-turbo',
+    });
   });
 
   it('should get a specific section', () => {
     const general = service.get('general');
     expect(general.theme).toBe('system');
+  });
+
+  it('should persist ai config section', () => {
+    (service as unknown as { set: (key: string, value: unknown) => void }).set('ai', {
+      provider: 'ollama',
+      baseUrl: 'http://localhost:11434',
+      model: 'llama3',
+      temperature: 0.2,
+      maxTokens: 4096,
+    });
+
+    const config = service.getAll() as Record<string, unknown>;
+    expect(config.ai).toMatchObject({
+      provider: 'ollama',
+      model: 'llama3',
+      maxTokens: 4096,
+    });
+
+    const filePath = path.join(testDir, 'settings.json');
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    expect(raw.ai.provider).toBe('ollama');
+    expect(raw.ai.model).toBe('llama3');
   });
 
   it('should set a section and persist', () => {
@@ -71,14 +87,13 @@ describe('ConfigService', () => {
   });
 
   it('should emit CONFIG_CHANGED event on set', () => {
-    const bus = EventBus.getInstance();
     service.set('general', {
       theme: 'light',
       language: 'zh-CN',
       startupBehavior: 'showWorkbench',
       closeToTray: false,
     });
-    expect(bus.emit).toHaveBeenCalled();
+    expect(mockEventBus.emit).toHaveBeenCalled();
   });
 
   it('should partially update general config', () => {
@@ -131,7 +146,11 @@ describe('ConfigService', () => {
   it('should survive corrupt config file', () => {
     const filePath = path.join(testDir, 'settings.json');
     fs.writeFileSync(filePath, 'corrupt{{{', 'utf-8');
-    const newService = new ConfigService();
+    const newService = new ConfigService({ eventBus: mockEventBus as never });
     expect(newService.getAll().general.theme).toBe('system');
+  });
+
+  it('should require event bus injection', () => {
+    expect(() => new ConfigService()).toThrowError('eventBus is required');
   });
 });

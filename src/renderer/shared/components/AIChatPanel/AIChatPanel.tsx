@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CloseOutlined, RobotOutlined, SendOutlined, UserOutlined } from '@ant-design/icons';
 import { Avatar, Badge, Button, Input, Space, Spin, Typography } from 'antd';
-import type { ChatMessage } from '@shared/types';
+import { IPC_CHANNELS } from '@shared/constants/channels';
+import type {
+  AIChatResponse,
+  AIPendingToolCall,
+  ChatMessage,
+  ToolResult,
+} from '@shared/types';
 import { useAIChatStore } from './store';
 
 const { TextArea } = Input;
 
-/** 简易 Markdown 渲染 */
+/** 简易 Markdown 渲染（安全：不使用 dangerouslySetInnerHTML） */
 function renderMarkdown(text: string): React.ReactNode {
   // Split by code blocks
   const parts = text.split(/(```[\s\S]*?```)/g);
@@ -29,9 +35,18 @@ function renderMarkdown(text: string): React.ReactNode {
         </pre>
       );
     }
-    // Bold
-    const withBold = part.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    return <span key={i} dangerouslySetInnerHTML={{ __html: withBold }} />;
+    // Bold — split on **...** and render as React elements (no innerHTML)
+    const segments = part.split(/(\*\*.+?\*\*)/g);
+    return (
+      <span key={i}>
+        {segments.map((seg, j) => {
+          if (seg.startsWith('**') && seg.endsWith('**')) {
+            return <strong key={j}>{seg.slice(2, -2)}</strong>;
+          }
+          return <span key={j}>{seg}</span>;
+        })}
+      </span>
+    );
   });
 }
 
@@ -72,10 +87,20 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 }
 
 export default function AIChatPanel() {
-  const { messages, isOpen, isLoading, toggle, close, addMessage, setConversationId, setLoading } =
-    useAIChatStore();
+  const {
+    messages,
+    conversationId,
+    isOpen,
+    isLoading,
+    toggle,
+    close,
+    addMessage,
+    setConversationId,
+    setLoading,
+  } = useAIChatStore();
 
   const [inputValue, setInputValue] = useState('');
+  const [pendingToolCall, setPendingToolCall] = useState<AIPendingToolCall | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom on new messages
@@ -97,6 +122,103 @@ export default function AIChatPanel() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggle]);
 
+  const addAssistantMessage = useCallback(
+    (content: string) => {
+      addMessage({
+        id: `${Date.now()}-assistant-${Math.random().toString(36).slice(2, 8)}`,
+        role: 'assistant',
+        content,
+        timestamp: Date.now(),
+      });
+    },
+    [addMessage],
+  );
+
+  const formatToolPayload = useCallback((value: unknown) => JSON.stringify(value, null, 2), []);
+
+  const formatToolExecutionMessage = useCallback(
+    (name: string, params: Record<string, unknown>, payload: unknown) => {
+      if (name === 'task_start') {
+        const data = (payload ?? {}) as {
+          taskId?: string;
+          taskName?: string;
+          status?: string;
+        };
+        const taskLabel =
+          data.taskName ||
+          (typeof params.taskName === 'string' ? params.taskName : undefined) ||
+          (typeof params.taskId === 'string' ? params.taskId : undefined) ||
+          '目标任务';
+
+        return [
+          `已帮你启动任务「${taskLabel}」。`,
+          data.status ? `当前状态：${data.status}` : null,
+          data.taskId ? `任务 ID：${data.taskId}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n');
+      }
+
+      return [
+        `已执行操作「${name}」。`,
+        payload ? `返回结果：\n\`\`\`json\n${formatToolPayload(payload)}\n\`\`\`` : null,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+    },
+    [formatToolPayload],
+  );
+
+  const describePendingToolCall = useCallback((toolCall: AIPendingToolCall) => {
+    if (toolCall.name === 'task_start') {
+      const label =
+        (typeof toolCall.params.taskName === 'string' && toolCall.params.taskName.trim()) ||
+        (typeof toolCall.params.taskId === 'string' && toolCall.params.taskId.trim()) ||
+        '目标任务';
+      return {
+        title: '确认开始任务',
+        summary: `助手准备帮你启动任务「${label}」。`,
+        confirmText: '确认开始任务',
+      };
+    }
+
+    return {
+      title: '确认执行操作',
+      summary: `助手准备执行操作「${toolCall.name}」。`,
+      confirmText: '确认执行',
+    };
+  }, []);
+
+  const executeTool = useCallback(
+    async (name: string, params: Record<string, unknown>) => {
+      try {
+        const response = await window.electronAPI.invoke<ToolResult>(IPC_CHANNELS.AI_TOOL_EXECUTE, {
+          name,
+          params,
+        });
+
+        if (!response.success || !response.data) {
+          addAssistantMessage(response.error?.message ?? '工具执行失败');
+          return;
+        }
+
+        if (!response.data.success) {
+          if (name === 'task_start') {
+            addAssistantMessage(`启动任务失败：${response.data.error ?? '未知错误'}`);
+            return;
+          }
+          addAssistantMessage(`执行操作失败：${response.data.error ?? '未知错误'}`);
+          return;
+        }
+
+        addAssistantMessage(formatToolExecutionMessage(name, params, response.data.data));
+      } catch {
+        addAssistantMessage(name === 'task_start' ? '启动任务失败：无法连接主进程。' : '执行操作失败：无法连接主进程。');
+      }
+    },
+    [addAssistantMessage, formatToolExecutionMessage],
+  );
+
   const sendMessage = useCallback(async () => {
     const content = inputValue.trim();
     if (!content || isLoading) return;
@@ -109,17 +231,21 @@ export default function AIChatPanel() {
     };
     addMessage(userMessage);
     setInputValue('');
+    setPendingToolCall(null);
     setLoading(true);
 
     try {
-      const response = await window.electronAPI.invoke<{
-        message: ChatMessage;
-        conversationId: string;
-      }>('ai:chat', { message: content });
+      const response = await window.electronAPI.invoke<AIChatResponse>(IPC_CHANNELS.AI_CHAT, {
+        message: content,
+        conversationId: conversationId ?? undefined,
+      });
 
-      if (response.success && response.data) {
+      if (response.success && response.data?.message) {
         addMessage(response.data.message);
         setConversationId(response.data.conversationId);
+        if (response.data.pendingToolCall) {
+          setPendingToolCall(response.data.pendingToolCall);
+        }
       } else {
         addMessage({
           id: `${Date.now()}-error`,
@@ -138,7 +264,14 @@ export default function AIChatPanel() {
     } finally {
       setLoading(false);
     }
-  }, [inputValue, isLoading, addMessage, setConversationId, setLoading]);
+  }, [
+    inputValue,
+    conversationId,
+    isLoading,
+    addMessage,
+    setConversationId,
+    setLoading,
+  ]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -176,6 +309,8 @@ export default function AIChatPanel() {
   }
 
   // Expanded panel
+  const pendingToolMeta = pendingToolCall ? describePendingToolCall(pendingToolCall) : null;
+
   return (
     <div
       data-testid="ai-chat-panel"
@@ -228,7 +363,7 @@ export default function AIChatPanel() {
             <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
               你好！我是 YClaw 运营助手。
               <br />
-              可以问我关于任务状态、系统资源等问题。
+              你可以直接问我任务状态、系统资源，或者让我帮你启动任务。
             </Typography.Paragraph>
             <Space direction="vertical" size={4}>
               <Button
@@ -244,10 +379,19 @@ export default function AIChatPanel() {
                 size="small"
                 type="dashed"
                 onClick={() => {
-                  setInputValue('系统资源使用情况如何？');
+                  setInputValue('帮我看看现在有哪些任务在运行');
                 }}
               >
-                系统资源使用情况如何？
+                帮我看看现在有哪些任务在运行
+              </Button>
+              <Button
+                size="small"
+                type="dashed"
+                onClick={() => {
+                  setInputValue('帮我启动一个任务');
+                }}
+              >
+                帮我启动一个任务
               </Button>
             </Space>
           </div>
@@ -274,6 +418,68 @@ export default function AIChatPanel() {
         )}
       </div>
 
+      <div
+        style={{
+          padding: '8px 12px',
+          borderTop: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        {pendingToolCall ? (
+          <div
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              backgroundColor: 'rgba(220, 38, 38, 0.08)',
+            }}
+          >
+            <Typography.Text strong>{pendingToolMeta?.title}</Typography.Text>
+            <Typography.Paragraph style={{ marginBottom: 8 }}>
+              {pendingToolMeta?.summary}
+            </Typography.Paragraph>
+            <Typography.Paragraph style={{ marginBottom: 8 }}>
+              参数：
+            </Typography.Paragraph>
+            <pre
+              style={{
+                marginTop: 0,
+                marginBottom: 12,
+                padding: '8px 10px',
+                borderRadius: 6,
+                background: 'rgba(15, 23, 42, 0.55)',
+                overflow: 'auto',
+                fontSize: 12,
+              }}
+            >
+              <code>{formatToolPayload(pendingToolCall.params)}</code>
+            </pre>
+            <Space>
+              <Button
+                type="primary"
+                danger
+                onClick={() => {
+                  const currentCall = pendingToolCall;
+                  setPendingToolCall(null);
+                  void executeTool(currentCall.name, currentCall.params);
+                }}
+              >
+                {pendingToolMeta?.confirmText}
+              </Button>
+              <Button
+                onClick={() => {
+                  addAssistantMessage(`已取消本次操作。`);
+                  setPendingToolCall(null);
+                }}
+              >
+                取消
+              </Button>
+            </Space>
+          </div>
+        ) : null}
+      </div>
+
       {/* Input */}
       <div
         style={{
@@ -288,7 +494,7 @@ export default function AIChatPanel() {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="问我任何问题..."
+          placeholder="直接问我，或说“帮我启动某个任务”"
           autoSize={{ minRows: 1, maxRows: 3 }}
           style={{ flex: 1 }}
         />

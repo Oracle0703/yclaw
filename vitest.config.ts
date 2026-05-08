@@ -7,20 +7,20 @@ export default defineConfig({
     alias: {
       '@shared': resolve(__dirname, 'src/shared'),
       '@main': resolve(__dirname, 'src/main'),
+      '@mcp': resolve(__dirname, 'src/mcp'),
+      '@runner': resolve(__dirname, 'src/runner'),
       '@renderer': resolve(__dirname, 'src/renderer'),
       '@engines': resolve(__dirname, 'src/engines'),
+      '@cli': resolve(__dirname, 'src/cli'),
     },
   },
   test: {
     globals: true,
-    environment: 'happy-dom',
-    include: ['tests/**/*.{test,spec}.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.{ts,tsx}'],
       exclude: ['src/**/*.d.ts', 'src/**/index.html'],
     },
-    setupFiles: ['tests/setup.ts'],
   },
 });

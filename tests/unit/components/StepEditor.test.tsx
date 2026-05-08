@@ -1,6 +1,95 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+vi.mock('antd', () => {
+  return {
+    Button: ({
+      children,
+      onClick,
+      disabled,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+      disabled?: boolean;
+    }) => (
+      <button type="button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    ),
+    Row: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Col: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Space: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Typography: {
+      Text: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    },
+    Form: Object.assign(
+      ({ children }: { children: React.ReactNode }) => <form>{children}</form>,
+      {
+        Item: ({
+          children,
+          label,
+        }: {
+          children: React.ReactNode;
+          label?: React.ReactNode;
+        }) => (
+          <div>
+            {label ? <span>{label}</span> : null}
+            {children}
+          </div>
+        ),
+      },
+    ),
+    Input: ({
+      value,
+      onChange,
+      placeholder,
+    }: {
+      value?: string;
+      onChange?: (event: { target: { value: string } }) => void;
+      placeholder?: string;
+    }) => (
+      <input
+        value={value ?? ''}
+        placeholder={placeholder}
+        onChange={(event) => onChange?.({ target: { value: event.target.value } })}
+      />
+    ),
+    Select: ({
+      value,
+      options = [],
+      onChange,
+    }: {
+      value?: string;
+      options?: Array<{ value: string; label: string }>;
+      onChange?: (value: string) => void;
+    }) => (
+      <select value={value} onChange={(event) => onChange?.(event.target.value)}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    ),
+    InputNumber: ({
+      value,
+      onChange,
+    }: {
+      value?: number;
+      onChange?: (value: number | null) => void;
+    }) => (
+      <input
+        type="number"
+        value={value ?? ''}
+        onChange={(event) =>
+          onChange?.(event.target.value === '' ? null : Number(event.target.value))
+        }
+      />
+    ),
+  };
+});
+
 import { StepEditor } from '@renderer/entries/automation/components/StepEditor';
 import type { TaskStep } from '@shared/types';
 
@@ -64,5 +153,27 @@ describe('StepEditor', () => {
     render(<StepEditor steps={steps} onChange={onChange} />);
     const selects = screen.getAllByRole('combobox');
     expect(selects.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('imports recorded steps into the editor', () => {
+    const recordedSteps: TaskStep[] = [
+      {
+        id: 'recorded-1',
+        name: 'Recorded Step',
+        action: { type: 'extract', selector: '.price' },
+      },
+    ];
+
+    render(
+      <StepEditor
+        steps={steps}
+        onChange={onChange}
+        recordedSteps={recordedSteps}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /导入录制结果/ }));
+
+    expect(onChange).toHaveBeenCalledWith(recordedSteps);
   });
 });

@@ -18,8 +18,11 @@
     "paths": {
       "@shared/*": ["src/shared/*"],
       "@main/*": ["src/main/*"],
+      "@mcp/*": ["src/mcp/*"],
+      "@runner/*": ["src/runner/*"],
       "@renderer/*": ["src/renderer/*"],
-      "@engines/*": ["src/engines/*"]
+      "@engines/*": ["src/engines/*"],
+      "@cli/*": ["src/cli/*"]
     }
   },
   "include": ["src"],

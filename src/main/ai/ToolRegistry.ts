@@ -9,6 +9,7 @@ export class ToolRegistry {
   private tools = new Map<string, AITool>();
 
   register(tool: AITool): void {
+    tool.source ??= 'builtin';
     this.tools.set(tool.name, tool);
   }
 

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock electron ipcMain
 type MockHandler = (...args: unknown[]) => unknown | Promise<unknown>;
 const handlers = new Map<string, MockHandler>();
+const mockEventBusGetInstance = vi.hoisted(() => vi.fn());
 vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn((channel: string, handler: MockHandler) => {
@@ -13,18 +14,27 @@ vi.mock('electron', () => ({
     }),
   },
 }));
+vi.mock('@main/ipc/EventBus', () => ({
+  EventBus: {
+    getInstance: mockEventBusGetInstance,
+  },
+}));
 
 // Must import after mock
 import { IpcController } from '@main/ipc/IpcController';
-import { EventBus } from '@main/ipc/EventBus';
+import { IPC_CHANNELS } from '@shared/constants/channels';
 
 describe('IpcController', () => {
   let controller: IpcController;
 
   beforeEach(() => {
     handlers.clear();
-    (EventBus as unknown as { instance: undefined }).instance = undefined;
+    mockEventBusGetInstance.mockReset();
     controller = new IpcController();
+  });
+
+  it('does not depend on event bus initialization', () => {
+    expect(mockEventBusGetInstance).not.toHaveBeenCalled();
   });
 
   it('should register a handler for a channel', () => {
@@ -90,5 +100,13 @@ describe('IpcController', () => {
     controller.handle('ch:b', async () => 2);
     controller.dispose();
     expect(controller.getRegisteredChannels()).toHaveLength(0);
+  });
+
+  it('exposes automation browser ops channels', () => {
+    expect(IPC_CHANNELS.TASK_CREATE).toBe('task:create');
+    expect(IPC_CHANNELS.BATCH_RETRY).toBe('batch:retry');
+    expect(IPC_CHANNELS.INTERVENTION_RESUME).toBe('intervention:resume');
+    expect(IPC_CHANNELS.RESULT_EXPORT).toBe('result:export');
+    expect(IPC_CHANNELS.SESSION_BIND).toBe('session:bind');
   });
 });

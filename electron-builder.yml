@@ -6,25 +6,67 @@ directories:
   output: release
   buildResources: resources
 
+afterPack: scripts/after-pack-prune.cjs
+
+compression: maximum
+
 files:
-  - dist/**/*
-  - package.json
-  - node_modules/**/*
-  - resources/**/*
+  - from: .
+    filter:
+      - package.json
+      - dist/main/**/*
+      - dist/renderer/entries/workbench/**/*
+      - dist/renderer/entries/browser/**/*
+      - dist/renderer/plugin-host/**/*
+      - dist/renderer/assets/**/*
+      - node_modules/**/*
+      - resources/**/*
+      - '!node_modules/**/*.d.ts'
+      - '!node_modules/**/*.d.cts'
+      - '!node_modules/**/*.d.mts'
+      - '!node_modules/**/src/**/*.ts'
+      - '!node_modules/**/src/**/*.tsx'
+      - '!node_modules/**/src/**/*.cts'
+      - '!node_modules/**/src/**/*.mts'
+      - '!node_modules/**/tests{,/**/*}'
+      - '!node_modules/**/__tests__{,/**/*}'
+      - '!node_modules/**/docs{,/**/*}'
+      - '!node_modules/**/examples{,/**/*}'
+      - '!dist/features{,/**/*}'
+      - '!resources/feature-packs{,/**/*}'
+      - '!docs{,/**/*}'
+      - '!tests{,/**/*}'
+      - '!src{,/**/*}'
+      - '!plugins/_template{,/**/*}'
+      - '!**/*.map'
 
 asar: true
+asarUnpack:
+  - node_modules/better-sqlite3/build/Release/*.node
+
+electronLanguages:
+  - zh-CN
+  - en-US
 
 mac:
   category: public.app-category.developer-tools
   target:
-    - dmg
-    - zip
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
 
 win:
   target:
-    - nsis
+    - target: nsis-web
+      arch:
+        - x64
 
-nsis:
+nsisWeb:
   oneClick: false
   allowToChangeInstallationDirectory: true
 

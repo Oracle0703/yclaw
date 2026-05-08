@@ -7,11 +7,25 @@
     "rootDir": "src",
     "jsx": "react-jsx",
     "declaration": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "paths": {
+      "@shared/*": ["src/shared/*"],
+      "@main/*": ["src/main/*"],
+      "@mcp/*": ["src/mcp/*"],
+      "@runner/*": ["src/runner/*"],
+      "@renderer/*": ["src/renderer/*"],
+      "@engines/*": ["src/engines/*"],
+      "@cli/*": ["src/cli/*"],
+      "@modelcontextprotocol/sdk/*": [
+        "node_modules/@modelcontextprotocol/sdk/dist/cjs/*"
+      ]
+    }
   },
   "include": [
     "src/main",
     "src/shared",
-    "src/engines"
+    "src/engines",
+    "src/mcp",
+    "src/runner"
   ]
 }

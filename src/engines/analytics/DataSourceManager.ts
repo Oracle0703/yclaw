@@ -1,7 +1,12 @@
 import type { OHLCVData, DataSourceConfig } from '@shared/types';
 import type { DataSourceConnection } from './types';
-import { EventBus } from '@main/ipc/EventBus';
 import { EVENTS } from '@shared/constants';
+
+interface DataSourceManagerOptions {
+  eventBus?: {
+    emit: (event: string, payload?: unknown) => void;
+  };
+}
 
 /**
  * 数据源管理器 — REST / WebSocket 行情数据接入
@@ -10,11 +15,15 @@ export class DataSourceManager {
   private connections = new Map<string, DataSourceConnection>();
   private wsInstances = new Map<string, WebSocket>();
   private reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private eventBus: EventBus;
+  private eventBus: NonNullable<DataSourceManagerOptions['eventBus']>;
   private readonly maxReconnectAttempts = 5;
 
-  constructor() {
-    this.eventBus = EventBus.getInstance();
+  constructor(options: DataSourceManagerOptions = {}) {
+    if (!options.eventBus) {
+      throw new Error('eventBus is required');
+    }
+
+    this.eventBus = options.eventBus;
   }
 
   /**

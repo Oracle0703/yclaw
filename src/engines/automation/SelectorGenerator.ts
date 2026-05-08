@@ -1,4 +1,4 @@
-import type { WebContents } from 'electron';
+import type { AutomationPage } from './types';
 
 /**
  * 选择器生成器 — 从页面元素生成唯一 CSS 选择器
@@ -8,7 +8,7 @@ export class SelectorGenerator {
    * 在页面中运行选择器生成器，为指定坐标位置的元素生成唯一选择器
    */
   async generateFromPoint(
-    wc: WebContents,
+    wc: AutomationPage,
     x: number,
     y: number,
   ): Promise<string> {
@@ -61,8 +61,8 @@ export class SelectorGenerator {
   /**
    * 校验选择器是否能唯一匹配元素
    */
-  async validate(wc: WebContents, selector: string): Promise<{ count: number; valid: boolean }> {
-    const count = await wc.executeJavaScript(`
+  async validate(wc: AutomationPage, selector: string): Promise<{ count: number; valid: boolean }> {
+    const count = await wc.executeJavaScript<number>(`
       document.querySelectorAll(${JSON.stringify(selector)}).length
     `);
     return { count, valid: count === 1 };

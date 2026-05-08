@@ -1,19 +1,32 @@
 import { Tray, Menu, nativeImage, app } from 'electron';
 import path from 'path';
-import { EventBus } from '../ipc/EventBus';
+import type { EventBus } from '../ipc/EventBus';
 import { WindowManager } from '../windows/WindowManager';
+
+interface TrayServiceOptions {
+  eventBus?: Pick<EventBus, 'emit'>;
+  windowManager?: WindowManager;
+}
 
 /**
  * 系统托盘服务
  */
 export class TrayService {
   private tray: Tray | null = null;
-  private eventBus: EventBus;
+  private eventBus: Pick<EventBus, 'emit'>;
   private windowManager: WindowManager;
 
-  constructor(windowManager: WindowManager) {
-    this.eventBus = EventBus.getInstance();
-    this.windowManager = windowManager;
+  constructor(options: TrayServiceOptions = {}) {
+    if (!options.eventBus) {
+      throw new Error('eventBus is required');
+    }
+
+    if (!options.windowManager) {
+      throw new Error('windowManager is required');
+    }
+
+    this.eventBus = options.eventBus;
+    this.windowManager = options.windowManager;
   }
 
   create(): void {
@@ -49,6 +62,7 @@ export class TrayService {
       {
         label: '退出',
         click: () => {
+          this.windowManager.allowQuit();
           app.quit();
         },
       },

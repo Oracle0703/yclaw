@@ -2,39 +2,53 @@
 
 ## Project Structure & Module Organization
 
-This repository is currently a planning workspace. The only committed content lives in `docs/`:
+This repository is an active Electron + React + Vite + TypeScript codebase, not a planning-only workspace.
 
-- `docs/prd.md`: product scope and user scenarios
-- `docs/plan.md`: feasibility, milestones, and success metrics
-- `docs/architecture.md`: process model and system design
-- `docs/structure.md`: target directory layout
-- `docs/specs.md`: implementation specs and acceptance criteria
+Core code and docs currently live in:
 
-When code is scaffolded, follow the planned layout in `docs/structure.md`: `src/main/` for Electron main-process code, `src/renderer/entries/` for Vite multi-entry apps, `src/shared/` for cross-process types/utilities, `src/engines/` for automation and analytics engines, `plugins/` for plugin packages, `resources/` for app assets, `scripts/` for tooling, and `tests/` for unit, integration, and e2e coverage.
+- `src/main/`: Electron main-process bootstrap, IPC, browser/session management, services, repositories
+- `src/renderer/entries/`: Vite multi-entry renderer apps (`workbench`, `stock`, `automation`, `browser`, `data-center`, `plugin-center`, `hot-monitor`, `comment-monitor`, `signin`)
+- `src/renderer/shared/`: shared renderer components, hooks, styles, API wrappers
+- `src/renderer/plugin-host/`: plugin host renderer entry and bridge
+- `src/shared/`: cross-process types, constants, serialization, utilities
+- `src/cli/`: `yclaw` CLI entrypoints
+- `src/mcp/`: MCP server/client and shared protocol definitions
+- `src/runner/`: headless runner CLI, browser adapter, daemon runtime
+- `src/engines/`: automation and analytics engines
+- `scripts/`: dev/build/dist helper scripts
+- `tests/`: unit, integration, fixtures, and e2e coverage
+- `docs/`: overview, product, architecture, specs, plans, design, reviews
+
+Follow the actual layout documented in `docs/architecture/structure.md` and the implementation audit in `docs/overview/implementation-audit.md`.
 
 ## Build, Test, and Development Commands
 
-No runnable build or test scripts are committed yet; there is no `package.json` in this checkout. Until the scaffold lands, treat the docs as the source of truth and keep changes internally consistent.
+The repository contains a committed `package.json` with runnable scripts. Use only commands that actually exist in the repo.
 
-Once SPEC-001 is implemented, expected commands are:
+Common commands:
 
-- `npm run dev`: start Electron + Vite development flow
-- `npm run build`: produce production renderer bundles and app artifacts
-- `npm run lint`: run ESLint and formatting checks
-- `npm test`: run automated tests
-
-Only document commands that actually exist in the repo.
+- `npm run dev`: start the Electron + Vite + TypeScript watch-based dev flow
+- `npm run build`: build core renderer, feature packs, and main process
+- `npm run lint`: run ESLint
+- `npm run typecheck`: run TypeScript type checking
+- `npm test`: run Vitest
+- `npm run test:e2e`: run Playwright end-to-end tests
+- `npm run yclaw -- ...`: invoke the project CLI (Task-as-Code, MCP, runner commands)
 
 ## Coding Style & Naming Conventions
 
-Write new docs in concise Markdown with clear headings and short paragraphs. For planned TypeScript code, follow the naming already defined in `docs/structure.md`: PascalCase for classes and React components (`WindowManager.ts`, `PluginCard.tsx`), camelCase for functions/hooks/stores (`useIpc.ts`, `stockStore.ts`), and kebab-case for directory names such as `plugin-center/`.
+Write new docs in concise Markdown with clear headings and short paragraphs. For TypeScript code, follow the naming already used in the repo: PascalCase for classes and React components (`WindowManager.ts`, `PluginCard.tsx`), camelCase for functions/hooks/stores (`useIpc.ts`, `stockStore.ts`), and kebab-case for directory names such as `plugin-center/`.
+
+## UI Component Guidelines
+
+For renderer UI, prefer the project design system over native HTML controls. When a reusable component exists in Ant Design Pro,优先使用 Ant Design Pro 组件；otherwise, use Ant Design before falling back to native HTML. In short: Pro components first,其次使用 Ant Design 组件, native controls only when neither library provides a suitable component or when a browser primitive is explicitly required.
 
 ## Testing Guidelines
 
-Use `docs/specs.md` acceptance criteria as the baseline for review. Planned test layout is `tests/unit/`, `tests/integration/`, and `tests/e2e/`. Name end-to-end specs `*.spec.ts` and keep test scope aligned to one module or service per file.
+Use the relevant spec in `docs/specs/` plus `docs/overview/current-status.md` as the baseline for review. Current test layout includes `tests/unit/`, `tests/integration/`, `tests/e2e/`, and `tests/fixtures/`. Name end-to-end specs `*.spec.ts` and keep test scope aligned to one module or service per file.
 
 ## Commit & Pull Request Guidelines
 
-This directory is not a Git checkout, so no local history is available to infer conventions. Use short, imperative commit messages with an optional scope, such as `docs: refine architecture flow` or `specs: add ipc validation criteria`.
+This directory is a Git checkout. Use short, imperative commit messages with an optional scope, such as `docs: refine architecture flow` or `specs: add ipc validation criteria`.
 
 Pull requests should summarize intent, list affected docs or modules, link the relevant spec/plan section, and include screenshots or diagrams when updating architecture or UX flows.

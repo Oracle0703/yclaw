@@ -6,9 +6,7 @@
  * - #5: IPC 硬编码字符串
  * - #9: Tab 接口重复定义
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 
 // ---- 回归-001: IPC 通道常量必须包含 browser 系列 ----

@@ -1,0 +1,464 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import React from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { IPC_CHANNELS } from '@shared/constants';
+
+const { invokeMock, confirmOptionsRef } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  confirmOptionsRef: {
+    current: null as null | {
+      onOk?: () => void | Promise<void>;
+    },
+  },
+}));
+
+const { messageSuccessMock, messageErrorMock, messageWarningMock } = vi.hoisted(() => ({
+  messageSuccessMock: vi.fn(),
+  messageErrorMock: vi.fn(),
+  messageWarningMock: vi.fn(),
+}));
+
+vi.mock('antd', () => ({
+  App: {
+    useApp: () => ({
+      message: {
+        error: messageErrorMock,
+        success: messageSuccessMock,
+        warning: messageWarningMock,
+      },
+    }),
+  },
+  Button: ({
+    children,
+    onClick,
+    disabled,
+  }: {
+    children?: React.ReactNode;
+    onClick?: (event?: { stopPropagation?: () => void }) => void;
+    disabled?: boolean;
+  }) => (
+    <button type="button" onClick={() => onClick?.({ stopPropagation: () => {} })} disabled={disabled}>
+      {children}
+    </button>
+  ),
+  Drawer: ({
+    children,
+    open,
+    title,
+  }: {
+    children?: React.ReactNode;
+    open?: boolean;
+    title?: React.ReactNode;
+  }) => (open ? <section><h2>{title}</h2>{children}</section> : null),
+  Modal: {
+    confirm: (options: { onOk?: () => void | Promise<void> }) => {
+      confirmOptionsRef.current = options;
+    },
+  },
+  Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
+  message: {
+    error: messageErrorMock,
+    success: messageSuccessMock,
+    warning: messageWarningMock,
+  },
+}));
+
+vi.mock('@ant-design/icons', () => ({
+  PlusOutlined: () => <span>plus</span>,
+  ReloadOutlined: () => <span>reload</span>,
+}));
+
+vi.mock('@ant-design/pro-components', () => ({
+  ProCard: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  ProTable: ({
+    dataSource = [],
+    columns = [],
+    onRow,
+  }: {
+    dataSource?: Array<Record<string, unknown>>;
+    columns?: Array<Record<string, unknown>>;
+    onRow?: (record: Record<string, unknown>) => { onClick?: () => void };
+  }) => (
+    <table>
+      <tbody>
+        {dataSource.map((record, rowIndex) => (
+          <tr
+            key={String(record.id ?? rowIndex)}
+            onClick={() => onRow?.(record)?.onClick?.()}
+          >
+            {columns.map((column, columnIndex) => {
+              const key = String(column.key ?? column.dataIndex ?? columnIndex);
+              const value =
+                typeof column.dataIndex === 'string' ? record[column.dataIndex] : undefined;
+              const content =
+                typeof column.render === 'function'
+                  ? column.render(value, record, rowIndex)
+                  : value;
+              return <td key={key}>{content as React.ReactNode}</td>;
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  ),
+}));
+
+vi.mock('@renderer/shared/components/PageShell', () => ({
+  PageShell: ({
+    children,
+    extra,
+    title,
+  }: {
+    children: React.ReactNode;
+    extra?: React.ReactNode;
+    title?: React.ReactNode;
+  }) => (
+    <div>
+      <h1>{title}</h1>
+      <div>{extra}</div>
+      <div>{children}</div>
+    </div>
+  ),
+}));
+
+vi.mock('@renderer/entries/automation/components/WorkspaceSwitcher', () => ({
+  WorkspaceSwitcher: () => <div>WorkspaceSwitcher</div>,
+}));
+
+vi.mock('@renderer/entries/automation/components/SigninTaskPanel', () => ({
+  SigninTaskPanel: ({
+    initialTaskName,
+    initialValue,
+    onSubmit,
+    taskId,
+    onCaptureLogin,
+  }: {
+    initialTaskName?: string;
+    initialValue?: {
+      entryUrl?: string;
+      sessionId?: string | null;
+      enabled?: boolean;
+      signin?: {
+        site: 'jd';
+        mode: 'browser-first-api-fallback' | 'api-first-browser-fallback';
+        fallbackApiEnabled: boolean;
+        maxRetryPerDay: number;
+        manualInterventionEnabled: true;
+      } | null;
+    } | null;
+    taskId?: string | null;
+    onSubmit: (payload: {
+      taskId: string | null;
+      name: string;
+      entryUrl: string;
+      sessionId: string | null;
+      enabled: boolean;
+      signin: {
+        site: 'jd';
+        mode: 'api-first-browser-fallback';
+        fallbackApiEnabled: boolean;
+        maxRetryPerDay: number;
+        manualInterventionEnabled: true;
+      };
+    }) => void | Promise<void>;
+    onCaptureLogin?: (payload: {
+      taskId: string | null;
+      name: string;
+      entryUrl: string;
+      sessionId: string | null;
+      enabled: boolean;
+      signin: {
+        site: 'jd';
+        mode: 'browser-first-api-fallback' | 'api-first-browser-fallback';
+        fallbackApiEnabled: boolean;
+        maxRetryPerDay: number;
+        manualInterventionEnabled: true;
+      };
+    }) => Promise<unknown>;
+  }) => (
+    <div>
+      <span>SigninTaskPanel:{initialTaskName}</span>
+      {typeof onCaptureLogin === 'function' ? (
+        <button
+          type="button"
+          onClick={() =>
+            void onCaptureLogin({
+              taskId: taskId ?? null,
+              name: initialTaskName ?? '京东签到',
+              entryUrl: initialValue?.entryUrl ?? 'https://interact.jd.com/',
+              sessionId: initialValue?.sessionId ?? null,
+              enabled: initialValue?.enabled ?? true,
+              signin: {
+                site: 'jd',
+                mode: initialValue?.signin?.mode ?? 'api-first-browser-fallback',
+                fallbackApiEnabled: initialValue?.signin?.fallbackApiEnabled ?? true,
+                maxRetryPerDay: initialValue?.signin?.maxRetryPerDay ?? 1,
+                manualInterventionEnabled: true,
+              },
+            })
+          }
+        >
+          采集登录态
+        </button>
+      ) : null}
+      <button
+        type="button"
+        onClick={() =>
+          onSubmit({
+            taskId: taskId ?? null,
+            name: initialTaskName ?? '京东签到',
+            entryUrl: 'https://interact.jd.com/',
+            sessionId: null,
+            enabled: true,
+            signin: {
+              site: 'jd',
+              mode: 'api-first-browser-fallback',
+              fallbackApiEnabled: true,
+              maxRetryPerDay: 1,
+              manualInterventionEnabled: true,
+            },
+          })
+        }
+      >
+        保存签到任务
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock('@renderer/entries/automation/components/SigninRunStatusCard', () => ({
+  SigninRunStatusCard: ({
+    taskId,
+    summary,
+    history,
+    onRunNow,
+  }: {
+    taskId?: string | null;
+    summary?: { status?: string } | null;
+    history?: Array<unknown>;
+    onRunNow: (taskId: string) => void;
+  }) => (
+    <div>
+      <span>SigninResultCard:{taskId ?? 'empty'}</span>
+      <span>SigninStatus:{summary?.status ?? 'none'}</span>
+      <span>SigninHistoryCount:{history?.length ?? 0}</span>
+      {taskId ? (
+        <button type="button" onClick={() => onRunNow(taskId)}>
+          立即执行
+        </button>
+      ) : null}
+    </div>
+  ),
+}));
+
+vi.mock('@renderer/shared/hooks', () => ({
+  useIpc: () => ({
+    invoke: invokeMock,
+  }),
+  useIpcEvent: vi.fn(),
+}));
+
+import SigninApp from '@renderer/entries/signin/App';
+
+describe('SigninApp', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    messageSuccessMock.mockReset();
+    messageErrorMock.mockReset();
+    messageWarningMock.mockReset();
+    confirmOptionsRef.current = null;
+    invokeMock.mockImplementation((channel: string, payload?: { taskId?: string }) => {
+      if (channel === IPC_CHANNELS.SESSION_LIST) {
+        return Promise.resolve([]);
+      }
+      if (channel === IPC_CHANNELS.TASK_LIST) {
+        return Promise.resolve([
+          {
+            id: 'task-signin-1',
+            name: '京东签到',
+            kind: 'jd-signin',
+            enabled: true,
+            signin: { site: 'jd' },
+            updatedAt: '2026-04-28 10:00:00',
+          },
+          {
+            id: 'task-signin-2',
+            name: '京东签到-失败',
+            kind: 'jd-signin',
+            enabled: true,
+            signin: { site: 'jd' },
+            updatedAt: '2026-04-28 11:00:00',
+          },
+        ]);
+      }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_STATUS) {
+        if (payload?.taskId === 'task-signin-2') {
+          return Promise.resolve({
+            taskId: 'task-signin-2',
+            status: 'needs_intervention',
+            runAt: '2026-04-28T08:10:00.000Z',
+            retryCount: 0,
+          });
+        }
+        return Promise.resolve({
+          taskId: payload?.taskId ?? 'task-signin-1',
+          status: 'success',
+          runAt: '2026-04-28T08:00:00.000Z',
+          retryCount: 0,
+        });
+      }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_HISTORY) {
+        return Promise.resolve([
+          {
+            taskId: payload?.taskId ?? 'task-signin-1',
+            status: 'success',
+            runAt: '2026-04-28T08:00:00.000Z',
+            retryCount: 0,
+          },
+        ]);
+      }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_GET) {
+        return Promise.resolve({
+          id: payload?.taskId ?? 'task-signin-1',
+          name: payload?.taskId === 'task-signin-2' ? '京东签到-失败' : '京东签到',
+          kind: 'jd-signin',
+          steps: [],
+          entryUrl: 'https://interact.jd.com/',
+          sessionId: null,
+          enabled: true,
+          signin: {
+            site: 'jd',
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
+            maxRetryPerDay: 1,
+            manualInterventionEnabled: true,
+          },
+          createdAt: '2026-04-28T00:00:00.000Z',
+          updatedAt: '2026-04-28T00:00:00.000Z',
+        });
+      }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_SAVE) {
+        return Promise.resolve({
+          id: payload?.taskId ?? 'task-signin-new',
+          name: '京东签到',
+          kind: 'jd-signin',
+          steps: [],
+          entryUrl: 'https://interact.jd.com/',
+          sessionId: null,
+          enabled: true,
+          signin: {
+            site: 'jd',
+            mode: 'api-first-browser-fallback',
+            fallbackApiEnabled: true,
+            maxRetryPerDay: 1,
+            manualInterventionEnabled: true,
+          },
+          createdAt: '2026-04-28T00:00:00.000Z',
+          updatedAt: '2026-04-28T00:00:00.000Z',
+        });
+      }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE) {
+        return Promise.resolve({
+          userName: '测试账号',
+          userId: 'uid-1',
+          timedOut: false,
+        });
+      }
+      if (channel === IPC_CHANNELS.SIGNIN_TASK_RUN_NOW) {
+        return Promise.resolve({
+          taskId: payload?.taskId ?? 'task-signin-1',
+          status: 'success',
+          runAt: '2026-04-28T09:00:00.000Z',
+          retryCount: 0,
+        });
+      }
+      if (channel === IPC_CHANNELS.TASK_DELETE) {
+        return Promise.resolve({ taskId: payload?.taskId ?? 'task-signin-1' });
+      }
+      return Promise.resolve(null);
+    });
+  });
+
+  it('renders a pro table, opens drawer for create/edit, supports delete, and updates the fixed result card', async () => {
+    render(<SigninApp />);
+
+    expect(await screen.findByText('京东签到')).toBeDefined();
+    expect(screen.getByText('京东签到-失败')).toBeDefined();
+    expect(screen.getByText('请选择任务查看上一次结果。')).toBeDefined();
+    expect(screen.getByText('成功')).toBeDefined();
+    expect(screen.getByText('失败')).toBeDefined();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '新建签到任务' }));
+    });
+    expect(screen.getByText('SigninTaskPanel:京东签到')).toBeDefined();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '采集登录态' }));
+    });
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_SAVE, expect.objectContaining({
+        taskId: null,
+        name: '京东签到',
+      }));
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, {
+        taskId: 'task-signin-new',
+      });
+    });
+    await waitFor(() => {
+      expect(messageSuccessMock).toHaveBeenCalledWith(expect.stringContaining('已获取登录态'));
+      expect(messageSuccessMock).toHaveBeenCalledWith(expect.stringContaining('已自动关闭窗口'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: '编辑' })[0]);
+    });
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_GET, {
+        taskId: 'task-signin-1',
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '采集登录态' }));
+    });
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, {
+        taskId: 'task-signin-1',
+      });
+    });
+    await waitFor(() => {
+      expect(messageSuccessMock).toHaveBeenCalledWith(expect.stringContaining('已获取登录态'));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('京东签到-失败'));
+    });
+    await waitFor(() => {
+      expect(screen.getByText('SigninResultCard:task-signin-2')).toBeDefined();
+      expect(screen.getByText('SigninStatus:needs_intervention')).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: '立即执行' }).at(-1)!);
+    });
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.SIGNIN_TASK_RUN_NOW, {
+        taskId: 'task-signin-2',
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: '删除' })[1]);
+    });
+    expect(confirmOptionsRef.current).not.toBeNull();
+    await act(async () => {
+      await confirmOptionsRef.current?.onOk?.();
+    });
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.TASK_DELETE, {
+        taskId: 'task-signin-2',
+      });
+    });
+  });
+});

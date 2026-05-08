@@ -28,34 +28,41 @@ describe('withRetry', () => {
   });
 
   it('should use exponential backoff delay', async () => {
-    const timestamps: number[] = [];
+    const delays: number[] = [];
     let attempt = 0;
     const fn = async () => {
-      timestamps.push(Date.now());
       attempt++;
       if (attempt < 3) throw new Error('fail');
       return 'done';
     };
-    await withRetry(fn, { maxRetries: 3, baseDelay: 50 });
-    // The delay between retries should be increasing
-    if (timestamps.length >= 3) {
-      const delay1 = timestamps[1] - timestamps[0];
-      const delay2 = timestamps[2] - timestamps[1];
-      expect(delay2).toBeGreaterThanOrEqual(delay1);
-    }
+    await withRetry(fn, {
+      maxRetries: 3,
+      baseDelay: 50,
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+    });
+    expect(delays).toEqual([50, 100]);
   });
 
   it('should respect maxDelay cap', async () => {
     let attempt = 0;
-    const timestamps: number[] = [];
+    const delays: number[] = [];
     const fn = async () => {
-      timestamps.push(Date.now());
       attempt++;
       if (attempt < 4) throw new Error('fail');
       return 'done';
     };
-    await withRetry(fn, { maxRetries: 5, baseDelay: 100, maxDelay: 150 });
+    await withRetry(fn, {
+      maxRetries: 5,
+      baseDelay: 100,
+      maxDelay: 150,
+      sleep: async (ms) => {
+        delays.push(ms);
+      },
+    });
     expect(attempt).toBe(4);
+    expect(delays).toEqual([100, 150, 150]);
   });
 
   it('should handle non-Error throws', async () => {

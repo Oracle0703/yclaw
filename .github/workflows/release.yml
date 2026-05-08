@@ -44,11 +44,7 @@ jobs:
           registry-url: https://registry.npmjs.org/
 
       - name: Install dependencies
-        shell: bash
-        run: |
-          # Work around npm optional dependency lockfile corruption for Rollup native packages.
-          rm -rf node_modules package-lock.json
-          npm install --no-audit
+        run: npm ci --no-audit --ignore-scripts
 
       - name: Verify build inputs
         run: npm run build
@@ -88,7 +84,7 @@ jobs:
         run: node .github/scripts/extract-release-notes.mjs "${GITHUB_REF_NAME}" release-notes.md
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: YClaw ${{ github.ref_name }}
           body_path: release-notes.md

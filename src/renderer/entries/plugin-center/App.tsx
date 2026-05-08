@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Col, Descriptions, Modal, Row, Space, Tag, Typography } from 'antd';
+import { Button, Col, Descriptions, Modal, Row, Space, Tag, Typography, message } from 'antd';
 import { DownloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { ProCard } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { PluginRegistryEntry } from '@shared/types';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc } from '../../shared/hooks';
+import './styles.css';
 import { PermissionDialog } from './components/PermissionDialog';
 import { PluginCard } from './components/PluginCard';
 
@@ -19,11 +20,17 @@ export default function App() {
     level: number;
   } | null>(null);
 
+  const reportActionError = (error: unknown, fallbackMessage: string) => {
+    message.error(error instanceof Error ? error.message : fallbackMessage);
+  };
+
   const fetchPlugins = useCallback(async () => {
     try {
       const list = await invoke<PluginRegistryEntry[]>(IPC_CHANNELS.PLUGIN_LIST);
       setPlugins(list ?? []);
-    } catch { /* ignore */ }
+    } catch (error) {
+      reportActionError(error, '读取插件列表失败');
+    }
   }, [invoke]);
 
   useEffect(() => {
@@ -32,39 +39,66 @@ export default function App() {
 
   const handleToggle = async (name: string, active: boolean) => {
     const channel = active ? IPC_CHANNELS.PLUGIN_ENABLE : IPC_CHANNELS.PLUGIN_DISABLE;
-    await invoke(channel, { name });
-    await fetchPlugins();
+    try {
+      await invoke(channel, { name });
+      await fetchPlugins();
+    } catch (error) {
+      reportActionError(error, '切换插件状态失败');
+    }
   };
 
-  const handleUninstall = async (name: string) => {
-    await invoke(IPC_CHANNELS.PLUGIN_UNINSTALL, { name });
-    await fetchPlugins();
+  const handleUninstall = (name: string) => {
+    Modal.confirm({
+      title: '确认卸载插件？',
+      content: `卸载 ${name} 会移除本地插件文件，此操作不可直接撤销。`,
+      okText: '卸载',
+      cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await invoke(IPC_CHANNELS.PLUGIN_UNINSTALL, { name, confirmed: true });
+          await fetchPlugins();
+        } catch (error) {
+          reportActionError(error, '卸载插件失败');
+        }
+      },
+    });
   };
 
   const handleInstallLocal = async () => {
     try {
-      const result = await invoke<{ name: string; permissions: string[]; level: number }>(
+      const result = await invoke<{
+        name: string;
+        permissions: string[];
+        level: number;
+        requiresConfirmation?: boolean;
+      } | null>(
         IPC_CHANNELS.PLUGIN_INSTALL,
         { source: 'local' },
       );
-      if (result && result.level >= 2) {
+      if (result?.requiresConfirmation) {
         setDialog(result);
       } else {
         await fetchPlugins();
       }
-    } catch {
+    } catch (error) {
+      reportActionError(error, '安装插件失败');
       await fetchPlugins();
     }
   };
 
   const confirmInstall = async () => {
     if (dialog) {
-      await invoke(IPC_CHANNELS.PLUGIN_PERMISSION_CHECK, {
-        name: dialog.name,
-        confirmed: true,
-      });
-      setDialog(null);
-      await fetchPlugins();
+      try {
+        await invoke(IPC_CHANNELS.PLUGIN_PERMISSION_CHECK, {
+          name: dialog.name,
+          confirmed: true,
+        });
+        setDialog(null);
+        await fetchPlugins();
+      } catch (error) {
+        reportActionError(error, '确认插件权限失败');
+      }
     }
   };
 

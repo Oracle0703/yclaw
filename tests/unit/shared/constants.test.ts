@@ -32,6 +32,11 @@ describe('IPC_CHANNELS', () => {
     expect(IPC_CHANNELS.PLUGIN_UNINSTALL).toBe('plugin:uninstall');
   });
 
+  it('should define feature package channels', () => {
+    expect(IPC_CHANNELS.FEATURE_PACKAGE_LIST).toBe('feature:list');
+    expect(IPC_CHANNELS.FEATURE_PACKAGE_INSTALL).toBe('feature:install');
+  });
+
   it('should follow naming convention {module}:{action}', () => {
     const allChannels = Object.values(IPC_CHANNELS);
     for (const channel of allChannels) {
@@ -116,6 +121,7 @@ describe('EVENTS', () => {
     expect(EVENTS.TASK_COMPLETED).toBe('task:completed');
     expect(EVENTS.TASK_FAILED).toBe('task:failed');
     expect(EVENTS.TASK_PAUSED).toBe('task:paused');
+    expect(EVENTS.TASK_STATUS_CHANGED).toBe('task:status:changed');
   });
 
   it('should define plugin events', () => {

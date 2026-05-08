@@ -1,0 +1,36 @@
+{
+  "packages": [
+    {
+      "id": "stock",
+      "module": "stock",
+      "displayName": "股票分析",
+      "version": "1.0.0",
+      "description": "K 线图、指标和行情分析功能包。",
+      "sourceDirectory": "feature-packs/stock"
+    },
+    {
+      "id": "automation",
+      "module": "automation",
+      "displayName": "自动化采集",
+      "version": "1.0.0",
+      "description": "任务编排、执行监控和结果导出功能包。",
+      "sourceDirectory": "feature-packs/automation"
+    },
+    {
+      "id": "data-center",
+      "module": "data-center",
+      "displayName": "数据中心",
+      "version": "1.0.0",
+      "description": "结果资产、导出任务、数据集与开放接口功能包。",
+      "sourceDirectory": "feature-packs/data-center"
+    },
+    {
+      "id": "plugin-center",
+      "module": "plugin-center",
+      "displayName": "插件中心",
+      "version": "1.0.0",
+      "description": "插件安装、审核和启停管理功能包。",
+      "sourceDirectory": "feature-packs/plugin-center"
+    }
+  ]
+}

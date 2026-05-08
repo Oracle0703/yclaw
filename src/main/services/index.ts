@@ -1,3 +1,17 @@
 export { DatabaseService } from './DatabaseService';
 export { ConfigService } from './ConfigService';
 export { LogService } from './LogService';
+export { BatchService } from './BatchService';
+export { SchedulerService } from './SchedulerService';
+export { SessionRegistry } from './SessionRegistry';
+export { TemplateService } from './TemplateService';
+export { AlertService } from './AlertService';
+export { ReviewService } from './ReviewService';
+export { WorkspaceService } from './WorkspaceService';
+export { TaskRevisionService } from './TaskRevisionService';
+export { OperationsMetricsService } from './OperationsMetricsService';
+export { DataCenterService } from './data-center/DataCenterService';
+export { DataQualityService } from './data-center/DataQualityService';
+export { DatasetService } from './data-center/DatasetService';
+export { WebhookTargetService } from './data-center/WebhookTargetService';
+export { ApiTokenService } from './data-center/ApiTokenService';

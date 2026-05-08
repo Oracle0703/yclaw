@@ -126,4 +126,11 @@ describe('PermissionChecker', () => {
       expect(checker.requiresUserConfirmation(manifest)).toBe(true);
     });
   });
+
+  describe('requiresUninstallConfirmation', () => {
+    it('should require explicit confirmation before uninstalling a plugin', () => {
+      const manifest = createManifest();
+      expect(checker.requiresUninstallConfirmation(manifest)).toBe(true);
+    });
+  });
 });
