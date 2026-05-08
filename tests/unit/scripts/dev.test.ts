@@ -90,12 +90,12 @@ describe('scripts/dev.ts', () => {
     expect(spawned[3]?.args).toEqual(['src/main/index.ts']);
     expect(ensureElectronNativeDepsMock).toHaveBeenCalledTimes(1);
     const powershellCall = spawnSyncMock.mock.calls.find((call) => call[0] === 'powershell');
-    expect((powershellCall?.[1] as string[] | undefined)?.[2]).toContain(
-      String.raw`e:\allsite\yclaw`,
-    );
-    expect((powershellCall?.[1] as string[] | undefined)?.[2]).not.toContain(
-      String.raw`e:\\allsite\\yclaw`,
-    );
+    const expectedRepoTag = process.cwd().toLowerCase();
+    expect((powershellCall?.[1] as string[] | undefined)?.[2]).toContain(expectedRepoTag);
+    const doubleEscapedTag = expectedRepoTag.replace(/\\/g, '\\\\');
+    if (doubleEscapedTag !== expectedRepoTag) {
+      expect((powershellCall?.[1] as string[] | undefined)?.[2]).not.toContain(doubleEscapedTag);
+    }
 
     const firstElectron = spawned[3]?.process;
 
