@@ -19,11 +19,15 @@ describe('HotReportService', () => {
     saveReport: vi.fn(),
     listReports: vi.fn(),
     getReportByBatchId: vi.fn(),
+    getReport: vi.fn(),
+    deleteReport: vi.fn(),
   };
   const writeFile = vi.fn();
+  const unlinkFile = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    reportRepository.getReport.mockReturnValue(null);
     sourceRepository.getSource.mockReturnValue({
       id: 'source-1',
       taskId: 'task-1',
@@ -57,6 +61,59 @@ describe('HotReportService', () => {
         createdAt: '2026-04-27T00:02:00.000Z',
       },
     ]);
+  });
+
+  it('deletes report metadata and removes the generated report file when present', () => {
+    reportRepository.getReport.mockReturnValue({
+      id: 'report-1',
+      sourceId: 'source-1',
+      batchId: 'batch-1',
+      title: '抖音热榜 报告',
+      format: 'html',
+      filePath: '/tmp/hot-reports/html/2026-04-27/08-05.html',
+      createdAt: '2026-04-27T00:05:00.000Z',
+    });
+    reportRepository.deleteReport.mockReturnValue(true);
+    const service = new HotReportService({
+      sourceRepository: sourceRepository as never,
+      batchService: batchService as never,
+      resultService: resultService as never,
+      executionLogService: executionLogService as never,
+      reportRepository: reportRepository as never,
+      unlinkFile,
+    });
+
+    const result = service.deleteReport('report-1');
+
+    expect(unlinkFile).toHaveBeenCalledWith('/tmp/hot-reports/html/2026-04-27/08-05.html');
+    expect(reportRepository.deleteReport).toHaveBeenCalledWith('report-1');
+    expect(result).toEqual({ deleted: true });
+  });
+
+  it('reveals the generated report file in the system file manager', () => {
+    const revealFile = vi.fn();
+    reportRepository.getReport.mockReturnValue({
+      id: 'report-1',
+      sourceId: 'source-1',
+      batchId: 'batch-1',
+      title: '抖音热榜 报告',
+      format: 'html',
+      filePath: '/tmp/hot-reports/html/2026-04-27/08-05.html',
+      createdAt: '2026-04-27T00:05:00.000Z',
+    });
+    const service = new HotReportService({
+      sourceRepository: sourceRepository as never,
+      batchService: batchService as never,
+      resultService: resultService as never,
+      executionLogService: executionLogService as never,
+      reportRepository: reportRepository as never,
+      revealFile,
+    });
+
+    const result = service.revealReport('report-1');
+
+    expect(revealFile).toHaveBeenCalledWith('/tmp/hot-reports/html/2026-04-27/08-05.html');
+    expect(result).toEqual({ revealed: true });
   });
 
   it('generates a markdown report file and persists the report metadata', () => {
@@ -295,6 +352,71 @@ describe('HotReportService', () => {
       'E:/allsite/yclaw/output/html/latest/current.html',
       expect.any(String),
     );
+  });
+
+  it('applies a single source keyword filter when generating the report without losing raw crawl results', () => {
+    sourceRepository.getSource.mockReturnValue({
+      id: 'source-1',
+      taskId: 'task-1',
+      name: '知乎热榜',
+      siteKey: 'zhihu',
+      parserKey: 'newsnow.hot',
+      entryUrl: 'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+      filter: {
+        keywordGroups: [{ name: '游戏', include: ['暗黑4'] }],
+      },
+    });
+    resultService.listResults.mockReturnValue([
+      {
+        id: 'result-1',
+        taskId: 'task-1',
+        batchId: 'batch-1',
+        data: {
+          title: '暗黑4 新赛季更新',
+          url: 'https://example.com/diablo',
+          rank: 1,
+          sourceId: 'zhihu',
+        },
+        status: 'normal',
+        createdAt: '2026-05-06T08:14:00.000Z',
+      },
+      {
+        id: 'result-2',
+        taskId: 'task-1',
+        batchId: 'batch-1',
+        data: {
+          title: '普通社会新闻',
+          url: 'https://example.com/news',
+          rank: 2,
+          sourceId: 'zhihu',
+        },
+        status: 'normal',
+        createdAt: '2026-05-06T08:14:00.000Z',
+      },
+    ]);
+    const service = new HotReportService({
+      sourceRepository: sourceRepository as never,
+      batchService: batchService as never,
+      resultService: resultService as never,
+      executionLogService: executionLogService as never,
+      reportRepository: reportRepository as never,
+      writeFile,
+      outputDir: 'E:/allsite/yclaw/output',
+      now: () => new Date('2026-05-06T10:00:00.000Z'),
+      createId: () => 'report-html-filtered',
+    });
+
+    service.generateReport({
+      sourceId: 'source-1',
+      batchId: 'batch-1',
+      format: 'html',
+    });
+
+    const html = writeFile.mock.calls[0][1] as string;
+    expect(resultService.listResults).toHaveBeenCalledWith({ batchId: 'batch-1' });
+    expect(html).toContain('暗黑4 新赛季更新');
+    expect(html).toContain('游戏');
+    expect(html).not.toContain('普通社会新闻');
   });
 
   it('projects TrendRadar config into keyword hotlist and standalone sections while keeping total count', () => {

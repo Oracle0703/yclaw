@@ -216,3 +216,23 @@ export type {
   HotTimelineWindow,
   HotWorkspaceMode,
 } from './hot';
+export type {
+  CommentCrawlLimits,
+  CommentEntryKind,
+  CommentAiReplyDraft,
+  CommentFilterConfig,
+  CommentItem,
+  CommentPlatform,
+  CommentReplyTone,
+  CommentReportFormat,
+  CommentReportSummary,
+  CommentRunDetail,
+  CommentRunSummary,
+  CommentSource,
+  CommentSourceDraft,
+  MediaCrawlerConfig,
+  MediaCrawlerLoginType,
+  MediaCrawlerPlatform,
+  MediaCrawlerRunRequest,
+  MediaCrawlerRunResult,
+} from './comment';

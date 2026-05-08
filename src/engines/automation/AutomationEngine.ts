@@ -1,8 +1,6 @@
 import type { ActionDefinition, ActionResult, AutomationPage } from './types';
 import type { ResultService } from '@main/services/ResultService';
-import { HotFilterService } from '@main/services/hot/HotFilterService';
 import { HotRssParser } from '@main/services/hot/HotRssParser';
-import type { HotFilterConfig } from '@shared/types';
 
 export interface ActionExecutionContext {
   taskId: string;
@@ -74,7 +72,8 @@ export class AutomationEngine {
     const createdAt = new Date().toISOString();
     const sourceUrl = context.sourceUrl ?? (isApiExtract ? action.selector : undefined);
 
-    if (isApiExtract && Array.isArray(result.data)) {
+    const isCommentExtract = resolveCommentParserPlatform(action.params?.parserKey) !== null;
+    if ((isApiExtract || isCommentExtract) && Array.isArray(result.data)) {
       for (const item of result.data) {
         this.resultService.saveResult({
           taskId: context.taskId,
@@ -138,6 +137,12 @@ export class AutomationEngine {
   }
 
   private async clickAction(wc: AutomationPage, action: ActionDefinition): Promise<void> {
+    const entryUrl = typeof action.params?.entryUrl === 'string' ? action.params.entryUrl.trim() : '';
+    if (entryUrl) {
+      await wc.executeJavaScript(`window.location.assign(${JSON.stringify(entryUrl)})`);
+      return;
+    }
+
     await wc.executeJavaScript(`
       (() => {
         const el = document.querySelector('${escapeCssSelector(action.selector)}');
@@ -179,6 +184,12 @@ export class AutomationEngine {
       return this.extractApiAction(action);
     }
 
+    const commentPlatform = resolveCommentParserPlatform(action.params?.parserKey);
+    if (commentPlatform) {
+      const payload = await wc.executeJavaScript(buildCommentExtractionScript(commentPlatform, action.selector));
+      return parseVisibleComments(payload, action.params, commentPlatform);
+    }
+
     const attr = (action.params?.attribute as string) ?? 'textContent';
     return wc.executeJavaScript(`
       (() => {
@@ -209,15 +220,12 @@ export class AutomationEngine {
 
     if (parserKey === 'rss.feed') {
       const xml = await response.text();
-      return this.applyHotFilter(
-        new HotRssParser().parse(xml, action.selector),
-        action.params?.filter,
-      );
+      return new HotRssParser().parse(xml, action.selector);
     }
 
     const payload = await response.json();
     if (parserKey === 'newsnow.hot') {
-      return this.applyHotFilter(parseNewsNowHot(payload, action.selector), action.params?.filter);
+      return parseNewsNowHot(payload, action.selector);
     }
 
     throw new Error(`Unsupported API parser: ${parserKey || 'unknown'}`);
@@ -256,22 +264,12 @@ export class AutomationEngine {
       throw new Error(`API request failed: ${failures.join('; ')}`);
     }
 
-    return this.applyHotFilter(items, action.params?.filter);
+    return items;
   }
 
   private async screenshotAction(wc: AutomationPage): Promise<string> {
     const image = await wc.capturePage();
     return image.toDataURL();
-  }
-
-  private applyHotFilter(
-    items: Array<Record<string, unknown>>,
-    filter: unknown,
-  ): Array<Record<string, unknown>> {
-    if (!filter || typeof filter !== 'object' || Array.isArray(filter)) {
-      return items;
-    }
-    return new HotFilterService().apply(items, filter as HotFilterConfig);
   }
 }
 
@@ -280,6 +278,51 @@ export class AutomationEngine {
  */
 function escapeCssSelector(selector: string): string {
   return selector.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+}
+
+function buildCommentExtractionScript(platform: 'xhs' | 'douyin', selector: string): string {
+  if (platform === 'xhs') {
+    return `
+      (() => {
+        const commentSelectors = [
+          '.comments-el .comment-item',
+          '.comments-container .comment-item',
+          '.comment-list .comment-item',
+          '[class*="comments"] [class*="comment-item"]',
+          '[class*="comment"] [class*="content"]'
+        ];
+        const els = commentSelectors.flatMap((item) => Array.from(document.querySelectorAll(item)));
+        const uniqueEls = Array.from(new Set(els));
+        return uniqueEls.map((el, index) => {
+          const textEl = el.querySelector('.content, .comment-content, [class*="content"]') || el;
+          const authorEl = el.querySelector('.author, .nickname, .name, [class*="author"], [class*="nickname"]');
+          const likeEl = el.querySelector('.like, [class*="like"]');
+          const anchor = el.closest('a') || el.querySelector('a');
+          return {
+            id: el.getAttribute('data-id') || el.getAttribute('id') || 'xhs-comment-node-' + (index + 1),
+            text: (textEl.textContent || '').trim(),
+            nickname: authorEl ? (authorEl.textContent || '').trim() : '',
+            likes: likeEl ? (likeEl.textContent || '').trim() : '',
+            contentUrl: anchor ? anchor.href : window.location.href
+          };
+        });
+      })()
+    `;
+  }
+
+  return `
+    (() => {
+      const els = document.querySelectorAll('${escapeCssSelector(selector)}');
+      return Array.from(els).map(el => {
+        const text = el.textContent || '';
+        const anchor = el.closest('a') || el.querySelector('a');
+        return {
+          content: text.trim(),
+          contentUrl: anchor ? anchor.href : window.location.href
+        };
+      });
+    })()
+  `;
 }
 
 const DEFAULT_API_REQUEST_TIMEOUT_MS = 30_000;
@@ -351,6 +394,101 @@ function toStringList(value: unknown): string[] {
     return [];
   }
   return value.map((item) => String(item).trim()).filter(Boolean);
+}
+
+function resolveCommentParserPlatform(parserKey: unknown): 'xhs' | 'douyin' | null {
+  if (parserKey === 'xhs.comment') return 'xhs';
+  if (parserKey === 'douyin.comment') return 'douyin';
+  return null;
+}
+
+function parseVisibleComments(
+  payload: unknown,
+  params: ActionDefinition['params'],
+  platform: 'xhs' | 'douyin',
+): Array<Record<string, unknown>> {
+  const rows = Array.isArray(payload) ? payload : [payload];
+  const sourceId = typeof params?.sourceId === 'string' ? params.sourceId : undefined;
+  return rows
+    .map((row, index) => normalizeVisibleComment(row, index, platform, sourceId))
+    .filter((row): row is Record<string, unknown> => row !== null);
+}
+
+function normalizeVisibleComment(
+  value: unknown,
+  index: number,
+  platform: 'xhs' | 'douyin',
+  sourceId?: string,
+): Record<string, unknown> | null {
+  if (typeof value === 'string') {
+    const content = value.trim();
+    if (!isValidVisibleCommentContent(content, platform)) return null;
+    return {
+      platform,
+      ...(sourceId ? { sourceId } : {}),
+      commentId: `${platform}-visible-comment-${index + 1}`,
+      parentCommentId: null,
+      content,
+    };
+  }
+
+  if (!isRecord(value)) return null;
+  const content = toNullableString(value.content)
+    ?? toNullableString(value.text)
+    ?? toNullableString(value.comment)
+    ?? '';
+  if (!isValidVisibleCommentContent(content, platform)) return null;
+  const commentId = toNullableString(value.commentId)
+    ?? toNullableString(value.id)
+    ?? `${platform}-visible-comment-${index + 1}`;
+
+  return {
+    platform,
+    ...(sourceId ? { sourceId } : {}),
+    ...(toNullableString(value.contentId) ? { contentId: toNullableString(value.contentId) } : {}),
+    ...(toNullableString(value.contentUrl) ? { contentUrl: toNullableString(value.contentUrl) } : {}),
+    ...(toNullableString(value.contentTitle) ? { contentTitle: toNullableString(value.contentTitle) } : {}),
+    commentId,
+    parentCommentId: toNullableString(value.parentCommentId),
+    content: content.trim(),
+    ...(toNullableString(value.authorId) ? { authorId: toNullableString(value.authorId) } : {}),
+    ...(toNullableString(value.authorName) ?? toNullableString(value.nickname)
+      ? { authorName: toNullableString(value.authorName) ?? toNullableString(value.nickname) }
+      : {}),
+    ...(toNullableString(value.avatar) ? { avatar: toNullableString(value.avatar) } : {}),
+    ...(toNullableString(value.createdAt) ? { createdAt: toNullableString(value.createdAt) } : {}),
+    ...(toNumber(value.likeCount ?? value.likes) !== undefined
+      ? { likeCount: toNumber(value.likeCount ?? value.likes) }
+      : {}),
+    ...(toNullableString(value.ipLocation) ? { ipLocation: toNullableString(value.ipLocation) } : {}),
+    ...(toNumber(value.subCommentCount) !== undefined ? { subCommentCount: toNumber(value.subCommentCount) } : {}),
+  };
+}
+
+function isValidVisibleCommentContent(value: string, platform: 'xhs' | 'douyin'): boolean {
+  const content = value.trim();
+  if (!content) return false;
+  if (platform === 'xhs' && content.length > 300) return false;
+  if (content.includes('window.__INITIAL_STATE__') || content.includes('window.__SSR__')) return false;
+  if (content.includes('沪ICP备') || content.includes('营业执照') || content.includes('增值电信业务经营许可证')) {
+    return false;
+  }
+  if (content.includes('广告屏蔽插件') || content.includes('您的浏览器似乎开启了广告屏蔽插件')) {
+    return false;
+  }
+  if (content.includes('创作中心') && content.includes('业务合作') && content.includes('直播')) {
+    return false;
+  }
+  return true;
+}
+
+function toNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
 }
 
 interface NewsNowItem {

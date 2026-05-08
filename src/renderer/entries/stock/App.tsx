@@ -6,6 +6,7 @@ import { EVENTS, IPC_CHANNELS } from '@shared/constants';
 import type { OHLCVData, IndicatorType, IndicatorResult } from '@shared/types';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
+import './styles.css';
 
 const KLineChart = lazy(async () => {
   const module = await import('./components/KLineChart');

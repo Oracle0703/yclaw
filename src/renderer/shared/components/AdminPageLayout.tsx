@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import {
-  AppstoreOutlined,
   BarsOutlined,
   CheckCircleOutlined,
   DatabaseOutlined,
   DeploymentUnitOutlined,
   FireOutlined,
+  MessageOutlined,
   FundOutlined,
   GlobalOutlined,
   HomeOutlined,
@@ -21,7 +21,13 @@ import { Badge, Button, Layout, Menu, Space, Tag, Typography } from 'antd';
 import type { MenuProps } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const MODULE_MENU: NonNullable<MenuProps['items']> = [
+interface ModuleMenuItem {
+  key: string;
+  label: string;
+  icon: React.ReactNode;
+}
+
+const MODULE_MENU: ModuleMenuItem[] = [
   {
     key: '/',
     label: '总览',
@@ -53,6 +59,11 @@ const MODULE_MENU: NonNullable<MenuProps['items']> = [
     icon: <FireOutlined />,
   },
   {
+    key: '/comment-monitor',
+    label: '评论监控',
+    icon: <MessageOutlined />,
+  },
+  {
     key: '/browser',
     label: '浏览器',
     icon: <GlobalOutlined />,
@@ -70,18 +81,51 @@ const MODULE_MENU: NonNullable<MenuProps['items']> = [
 ];
 
 function getSelectedMenuKey(pathname: string) {
-  const matchedKey = MODULE_MENU.map((item) => String(item?.key ?? ''))
+  const matchedKey = MODULE_MENU.map((item) => item.key)
     .filter((key) => key !== '/')
     .find((key) => pathname === key || pathname.startsWith(`${key}/`));
 
   return matchedKey ?? '/';
 }
 
+function getSelectedMenuLabel(selectedKey: string): string {
+  return MODULE_MENU.find((menuItem) => menuItem.key === selectedKey)?.label ?? '总览';
+}
+
+function formatLocalTime(date: Date): string {
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function formatLocalDateTime(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day} ${formatLocalTime(date)}`;
+}
+
 export function AdminPageLayout({ children }: PropsWithChildren) {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   const selectedKey = useMemo(() => getSelectedMenuKey(location.pathname), [location.pathname]);
+  const selectedTitle = useMemo(() => getSelectedMenuLabel(selectedKey), [selectedKey]);
+  const visibleLocalTime = collapsed ? formatLocalTime(now) : formatLocalDateTime(now);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const handleMenuJump = (path?: string) => {
     if (!path) {
@@ -95,82 +139,47 @@ export function AdminPageLayout({ children }: PropsWithChildren) {
       <Layout className="yclaw-admin-layout">
         <Layout.Sider
           theme="light"
-          width={232}
+          width={204}
           collapsible
           trigger={null}
           collapsed={collapsed}
-          collapsedWidth={80}
+          collapsedWidth={64}
           onCollapse={setCollapsed}
         >
           <div className="yclaw-admin-sider">
-            <button
-              type="button"
-              className="yclaw-admin-brand"
-              onClick={() => {
-                handleMenuJump('/');
-              }}
-            >
-              <div className="yclaw-brand-logo">Y</div>
-              {!collapsed ? (
-                <div>
-                  <Typography.Text strong>YClaw Ops</Typography.Text>
-                  <Typography.Text type="secondary" className="yclaw-brand-subtitle">
-                    桌面运营台
-                  </Typography.Text>
-                </div>
-              ) : null}
-            </button>
-
             <Menu
               mode="inline"
               theme="light"
               className="yclaw-admin-menu"
               selectedKeys={[selectedKey]}
-              items={MODULE_MENU}
+              items={MODULE_MENU as MenuProps['items']}
               onClick={({ key }) => {
                 handleMenuJump(String(key));
               }}
             />
 
-            {collapsed ? (
-              <div
-                className="yclaw-menu-footer-collapsed"
-                aria-label="Ops Cockpit"
-                title="Ops Cockpit"
-              >
-                <AppstoreOutlined />
-              </div>
-            ) : (
-              <div className="yclaw-menu-footer">
-                <div className="yclaw-menu-footer-eyebrow">Ops Cockpit</div>
-                <div className="yclaw-menu-footer-title">统一调度台</div>
-                <div className="yclaw-menu-footer-text">流程、数据、插件统一编排</div>
-                <div className="yclaw-menu-footer-meta">
-                  <span>6 Modules</span>
-                  <span>12 Runbooks</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </Layout.Sider>
-
-        <Layout className="yclaw-admin-main">
-          <Layout.Header className="yclaw-admin-header">
-            <Space size={12} className="yclaw-admin-header-left">
+            <div className="yclaw-admin-sider-footer">
               <Button
                 type="text"
-                className="yclaw-admin-trigger"
+                className="yclaw-admin-trigger yclaw-admin-sider-trigger"
                 icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
                 onClick={() => {
                   setCollapsed((value) => !value);
                 }}
                 aria-label={collapsed ? '展开导航' : '收起导航'}
               />
-              <div>
-                <Typography.Text strong>YClaw Ops</Typography.Text>
-                <Typography.Text type="secondary" className="yclaw-brand-subtitle">
-                  桌面运营台
-                </Typography.Text>
+              <div className="yclaw-local-time" aria-label={visibleLocalTime}>
+                <span className="yclaw-local-time-value">{visibleLocalTime}</span>
+              </div>
+            </div>
+          </div>
+        </Layout.Sider>
+
+        <Layout className="yclaw-admin-main">
+          <Layout.Header className="yclaw-admin-header">
+            <Space size={12} className="yclaw-admin-header-left">
+              <div className="yclaw-brand-title">
+                <Typography.Text strong>{selectedTitle}</Typography.Text>
               </div>
             </Space>
 

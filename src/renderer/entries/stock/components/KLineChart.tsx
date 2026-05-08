@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Button } from 'antd';
 import type { OHLCVData, IndicatorResult } from '@shared/types';
 
 interface KLineChartProps {
@@ -190,13 +191,13 @@ export function KLineChart({
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setCrosshair(null)}
       />
-      <button
+      <Button
         className="kline-fullscreen-btn"
         onClick={() => setIsFullscreen((v) => !v)}
         title={isFullscreen ? '退出全屏' : '全屏'}
       >
         {isFullscreen ? '✕ 退出全屏' : '⛶ 全屏'}
-      </button>
+      </Button>
     </div>
   );
 }

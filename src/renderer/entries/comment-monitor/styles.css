@@ -1,0 +1,121 @@
+.comment-monitor-app {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.comment-monitor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.comment-monitor-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--yclaw-text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.comment-monitor-subtitle {
+  margin-top: 4px;
+  color: var(--yclaw-text-secondary);
+  font-size: 12px;
+}
+
+.comment-monitor-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(320px, 1.2fr) minmax(280px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.comment-monitor-form,
+.comment-monitor-form.ant-space {
+  width: 100%;
+}
+
+.comment-monitor-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.comment-monitor-config-grid label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.comment-monitor-config-grid label > span {
+  color: var(--yclaw-text-secondary);
+  font-size: 12px;
+}
+
+.comment-monitor-list,
+.comment-monitor-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.comment-monitor-list button,
+.comment-monitor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.56);
+  color: var(--yclaw-text);
+}
+
+.comment-monitor-list button {
+  cursor: pointer;
+  text-align: left;
+}
+
+.comment-monitor-list button.is-active {
+  border-color: rgba(15, 91, 216, 0.35);
+  background: rgba(15, 91, 216, 0.08);
+}
+
+.comment-monitor-list button span,
+.comment-monitor-row span {
+  color: var(--yclaw-text-secondary);
+  font-size: 12px;
+}
+
+.comment-monitor-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.comment-monitor-empty {
+  padding: 16px;
+  color: var(--yclaw-text-secondary);
+  text-align: center;
+}
+
+@media (max-width: 1180px) {
+  .comment-monitor-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .comment-monitor-config-grid {
+    grid-template-columns: 1fr;
+  }
+}

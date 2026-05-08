@@ -36,7 +36,9 @@ display:
 [WORD_GROUPS]
 [AI 相关]
 /AI|OpenAI/ => AI
++芯片
 !广告
+@5
 
 [中国]
 中国
@@ -67,7 +69,9 @@ display:
           {
             name: 'AI 相关',
             include: ['/AI|OpenAI/'],
+            required: ['芯片'],
             exclude: ['广告'],
+            maxItems: 5,
           },
           {
             name: '中国',
@@ -90,5 +94,37 @@ display:
     });
 
     expect(service.loadProfile()).toBeNull();
+  });
+
+  it('writes config.yaml, frequency_words.txt and timeline.yaml into the config directory', () => {
+    const written = new Map<string, string>();
+    const service = new TrendRadarConfigService({
+      configDir: 'E:/allsite/TrendRadar/config',
+      exists: vi.fn(() => true),
+      readFile: vi.fn(),
+      mkdir: vi.fn(),
+      writeFile: vi.fn((filePath: string, content: string) => {
+        written.set(filePath, content);
+      }),
+    });
+
+    const result = service.saveFiles({
+      config: 'platforms:\n  enabled: true\n',
+      frequency: '[WORD_GROUPS]\nAI\n',
+      timeline: 'presets: {}\n',
+    });
+
+    expect(result.configDir).toBe('E:/allsite/TrendRadar/config');
+    expect(result.files.map((filePath) => filePath.replace(/\\/g, '/'))).toEqual([
+      'E:/allsite/TrendRadar/config/config.yaml',
+      'E:/allsite/TrendRadar/config/frequency_words.txt',
+      'E:/allsite/TrendRadar/config/timeline.yaml',
+    ]);
+    const normalizedWritten = new Map(
+      [...written.entries()].map(([filePath, content]) => [filePath.replace(/\\/g, '/'), content]),
+    );
+    expect(normalizedWritten.get('E:/allsite/TrendRadar/config/config.yaml')).toContain('platforms:');
+    expect(normalizedWritten.get('E:/allsite/TrendRadar/config/frequency_words.txt')).toContain('[WORD_GROUPS]');
+    expect(normalizedWritten.get('E:/allsite/TrendRadar/config/timeline.yaml')).toContain('presets:');
   });
 });

@@ -87,12 +87,29 @@ describe('HotTaskCompiler', () => {
         params: {
           parserKey: 'rss.feed',
           mode: 'api',
-          filter: {
-            keywordGroups: [{ name: 'AI', include: ['AI', '芯片'] }],
-          },
         },
       },
     });
     expect(flow.tags).toContain('hot:rss');
+  });
+
+  it('keeps hot keyword filters out of extraction steps so crawls retain full source data', () => {
+    const compiler = new HotTaskCompiler();
+
+    const flow = compiler.compile({
+      name: '知乎热榜',
+      sourceKind: 'api',
+      siteKey: 'zhihu',
+      entryUrl: 'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+      parserKey: 'newsnow.hot',
+      filter: {
+        keywordGroups: [{ name: '游戏', include: ['暗黑4'] }],
+      },
+    });
+
+    expect(flow.steps[0].action.params).toEqual({
+      parserKey: 'newsnow.hot',
+      mode: 'api',
+    });
   });
 });

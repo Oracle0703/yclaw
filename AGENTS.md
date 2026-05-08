@@ -7,7 +7,7 @@ This repository is an active Electron + React + Vite + TypeScript codebase, not 
 Core code and docs currently live in:
 
 - `src/main/`: Electron main-process bootstrap, IPC, browser/session management, services, repositories
-- `src/renderer/entries/`: Vite multi-entry renderer apps (`workbench`, `stock`, `automation`, `browser`, `data-center`, `plugin-center`)
+- `src/renderer/entries/`: Vite multi-entry renderer apps (`workbench`, `stock`, `automation`, `browser`, `data-center`, `plugin-center`, `hot-monitor`, `comment-monitor`, `signin`)
 - `src/renderer/shared/`: shared renderer components, hooks, styles, API wrappers
 - `src/renderer/plugin-host/`: plugin host renderer entry and bridge
 - `src/shared/`: cross-process types, constants, serialization, utilities
@@ -38,6 +38,10 @@ Common commands:
 ## Coding Style & Naming Conventions
 
 Write new docs in concise Markdown with clear headings and short paragraphs. For TypeScript code, follow the naming already used in the repo: PascalCase for classes and React components (`WindowManager.ts`, `PluginCard.tsx`), camelCase for functions/hooks/stores (`useIpc.ts`, `stockStore.ts`), and kebab-case for directory names such as `plugin-center/`.
+
+## UI Component Guidelines
+
+For renderer UI, prefer the project design system over native HTML controls. When a reusable component exists in Ant Design Pro,优先使用 Ant Design Pro 组件；otherwise, use Ant Design before falling back to native HTML. In short: Pro components first,其次使用 Ant Design 组件, native controls only when neither library provides a suitable component or when a browser primitive is explicitly required.
 
 ## Testing Guidelines
 

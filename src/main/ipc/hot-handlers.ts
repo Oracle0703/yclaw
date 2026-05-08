@@ -23,6 +23,8 @@ export function registerHotHandlers(options: {
     listReports(query?: unknown): unknown;
     getReportDetail(reportId: string): unknown;
     generateReport(payload: { sourceId: string; batchId: string; format: HotReportFormat }): unknown;
+    deleteReport(reportId: string): unknown;
+    revealReport(reportId: string): unknown;
   };
   hotTimelineService: {
     listPresets(): unknown;
@@ -40,6 +42,9 @@ export function registerHotHandlers(options: {
   hotResultService: {
     listResults(query?: { batchId?: string }): ExtractionResult[];
   };
+  hotConfigService?: {
+    saveFiles(payload: { config: string; frequency: string; timeline: string }): unknown;
+  };
 }): void {
   const {
     ipcController,
@@ -50,6 +55,7 @@ export function registerHotHandlers(options: {
     hotAiInsightService,
     hotNotificationService,
     hotResultService,
+    hotConfigService,
   } = options;
 
   ipcController.handle(IPC_CHANNELS.HOT_SOURCE_LIST, () => hotSourceService.listSources());
@@ -101,6 +107,12 @@ export function registerHotHandlers(options: {
       format: assertFormat(body.format),
     });
   });
+  ipcController.handle(IPC_CHANNELS.HOT_REPORT_DELETE, (payload) =>
+    hotReportService.deleteReport(assertStringField(payload, 'reportId')),
+  );
+  ipcController.handle(IPC_CHANNELS.HOT_REPORT_REVEAL, (payload) =>
+    hotReportService.revealReport(assertStringField(payload, 'reportId')),
+  );
 
   ipcController.handle(IPC_CHANNELS.HOT_TIMELINE_PRESETS, () => hotTimelineService.listPresets());
   ipcController.handle(IPC_CHANNELS.HOT_AI_SUMMARIZE, (payload) => {
@@ -124,6 +136,17 @@ export function registerHotHandlers(options: {
       results: hotResultService.listResults({ batchId: report.batchId }),
     });
   });
+
+  if (hotConfigService) {
+    ipcController.handle(IPC_CHANNELS.HOT_CONFIG_SAVE, (payload) => {
+      const body = assertObject(payload);
+      return hotConfigService.saveFiles({
+        config: assertStringField(body, 'config'),
+        frequency: assertStringField(body, 'frequency'),
+        timeline: assertStringField(body, 'timeline'),
+      });
+    });
+  }
 }
 
 function assertObject(payload: unknown): Record<string, unknown> {

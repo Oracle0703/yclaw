@@ -1,6 +1,8 @@
 export { AIRepository } from './AIRepository';
 export { AlertRepository } from './AlertRepository';
 export { BatchRepository } from './BatchRepository';
+export { CommentReportRepository } from './CommentReportRepository';
+export { CommentSourceRepository } from './CommentSourceRepository';
 export { DataApiTokenRepository } from './DataApiTokenRepository';
 export { DataQualityBatchInsightRepository } from './DataQualityBatchInsightRepository';
 export { DataQualityFindingRepository } from './DataQualityFindingRepository';

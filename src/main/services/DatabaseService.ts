@@ -960,6 +960,49 @@ export class DatabaseService {
 
       this.db!.exec('INSERT INTO migrations (version) VALUES (24);');
     }
+
+    if (currentDbVersion < 25) {
+      this.db!.exec(`
+        CREATE TABLE IF NOT EXISTS comment_sources (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL UNIQUE,
+          name TEXT NOT NULL,
+          platform TEXT NOT NULL,
+          entry_kind TEXT NOT NULL,
+          entry_value TEXT NOT NULL,
+          parser_key TEXT NOT NULL,
+          session_id TEXT,
+          schedule_json TEXT,
+          limits_json TEXT NOT NULL,
+          filter_json TEXT,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          tags_json TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS comment_reports (
+          id TEXT PRIMARY KEY,
+          source_id TEXT NOT NULL,
+          batch_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          format TEXT NOT NULL,
+          file_path TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (source_id) REFERENCES comment_sources(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_comment_sources_task
+          ON comment_sources(task_id, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_comment_reports_source_created
+          ON comment_reports(source_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_comment_reports_batch
+          ON comment_reports(batch_id, created_at DESC);
+
+        INSERT INTO migrations (version) VALUES (25);
+      `);
+    }
   }
 
   private hasTable(tableName: string): boolean {

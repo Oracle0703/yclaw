@@ -24,6 +24,21 @@ vi.mock('antd', () => {
   );
 
   return {
+    Button: ({
+      children,
+      onClick,
+      title,
+      'aria-label': ariaLabel,
+    }: {
+      children?: React.ReactNode;
+      onClick?: () => void;
+      title?: string;
+      'aria-label'?: string;
+    }) => (
+      <button type="button" onClick={onClick} title={title} aria-label={ariaLabel}>
+        {children}
+      </button>
+    ),
     Drawer: ({
       children,
       open,
@@ -62,6 +77,7 @@ describe('TitleBar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     invokeMock.mockResolvedValue(null);
+    window.location.hash = '#/';
   });
 
   it('shows an error when minimizing the window fails', async () => {
@@ -92,5 +108,13 @@ describe('TitleBar', () => {
     await waitFor(() => {
       expect(messageErrorMock).toHaveBeenCalledWith('load settings failed');
     });
+  });
+
+  it('renders a plain hot shortcut in the global toolbar', () => {
+    render(<TitleBar />);
+
+    fireEvent.click(screen.getByRole('button', { name: '热点' }));
+
+    expect(window.location.hash).toBe('#/hot-monitor');
   });
 });

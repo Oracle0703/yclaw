@@ -26,6 +26,8 @@ describe('registerHotHandlers', () => {
       listReports: vi.fn(() => [{ id: 'report-1' }]),
       getReportDetail: vi.fn((reportId) => ({ id: reportId, batchId: 'batch-1' })),
       generateReport: vi.fn((payload) => ({ id: 'report-2', ...payload })),
+      deleteReport: vi.fn((reportId) => ({ reportId, deleted: true })),
+      revealReport: vi.fn((reportId) => ({ reportId, revealed: true })),
     };
     const hotTimelineService = {
       listPresets: vi.fn(() => [{ preset: 'workday', schedule: { type: 'cron', cron: '*/30 9-18 * * 1-5' } }]),
@@ -39,6 +41,12 @@ describe('registerHotHandlers', () => {
     const hotResultService = {
       listResults: vi.fn(() => [{ id: 'result-1', data: { title: 'AI 芯片投资升温' } }]),
     };
+    const hotConfigService = {
+      saveFiles: vi.fn((payload) => ({
+        configDir: 'E:/allsite/TrendRadar/config',
+        files: Object.keys(payload),
+      })),
+    };
 
     registerHotHandlers({
       ipcController,
@@ -49,14 +57,18 @@ describe('registerHotHandlers', () => {
       hotAiInsightService,
       hotNotificationService,
       hotResultService,
+      hotConfigService,
     });
 
     expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_SOURCE_LIST, expect.any(Function));
     expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_RUN_START, expect.any(Function));
     expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_REPORT_GENERATE, expect.any(Function));
+    expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_REPORT_DELETE, expect.any(Function));
+    expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_REPORT_REVEAL, expect.any(Function));
     expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_TIMELINE_PRESETS, expect.any(Function));
     expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_AI_SUMMARIZE, expect.any(Function));
     expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_NOTIFICATION_SEND, expect.any(Function));
+    expect(ipcController.handle).toHaveBeenCalledWith(IPC_CHANNELS.HOT_CONFIG_SAVE, expect.any(Function));
 
     expect(await handlers.get(IPC_CHANNELS.HOT_SOURCE_LIST)?.({})).toEqual([{ id: 'source-1' }]);
     expect(
@@ -86,6 +98,14 @@ describe('registerHotHandlers', () => {
       batchId: 'batch-1',
       format: 'html',
     });
+    expect(await handlers.get(IPC_CHANNELS.HOT_REPORT_DELETE)?.({ reportId: 'report-1' })).toEqual({
+      reportId: 'report-1',
+      deleted: true,
+    });
+    expect(await handlers.get(IPC_CHANNELS.HOT_REPORT_REVEAL)?.({ reportId: 'report-1' })).toEqual({
+      reportId: 'report-1',
+      revealed: true,
+    });
     expect(await handlers.get(IPC_CHANNELS.HOT_TIMELINE_PRESETS)?.({})).toEqual([
       { preset: 'workday', schedule: { type: 'cron', cron: '*/30 9-18 * * 1-5' } },
     ]);
@@ -109,6 +129,16 @@ describe('registerHotHandlers', () => {
       attempts: 1,
       report: { id: 'report-1' },
       results: [{ id: 'result-1', data: { title: 'AI 芯片投资升温' } }],
+    });
+    expect(
+      await handlers.get(IPC_CHANNELS.HOT_CONFIG_SAVE)?.({
+        config: 'platforms:\n',
+        frequency: '[WORD_GROUPS]\n',
+        timeline: 'presets: {}\n',
+      }),
+    ).toEqual({
+      configDir: 'E:/allsite/TrendRadar/config',
+      files: ['config', 'frequency', 'timeline'],
     });
   });
 });

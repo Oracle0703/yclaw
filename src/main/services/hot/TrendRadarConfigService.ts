@@ -19,12 +19,27 @@ interface TrendRadarConfigServiceOptions {
   configDir?: string;
   exists?: (filePath: string) => boolean;
   readFile?: (filePath: string) => string;
+  mkdir?: (dirPath: string) => void;
+  writeFile?: (filePath: string, content: string) => void;
+}
+
+export interface TrendRadarConfigFiles {
+  config: string;
+  frequency: string;
+  timeline: string;
+}
+
+export interface TrendRadarConfigSaveResult {
+  configDir: string;
+  files: string[];
 }
 
 export class TrendRadarConfigService {
   private readonly configDir: string;
   private readonly exists: (filePath: string) => boolean;
   private readonly readFile: (filePath: string) => string;
+  private readonly mkdir: (dirPath: string) => void;
+  private readonly writeFile: (filePath: string, content: string) => void;
 
   constructor(options: TrendRadarConfigServiceOptions = {}) {
     this.configDir = options.configDir
@@ -32,6 +47,9 @@ export class TrendRadarConfigService {
       ?? path.resolve(process.cwd(), '..', 'TrendRadar', 'config');
     this.exists = options.exists ?? ((filePath) => fs.existsSync(filePath));
     this.readFile = options.readFile ?? ((filePath) => fs.readFileSync(filePath, 'utf8'));
+    this.mkdir = options.mkdir ?? ((dirPath) => fs.mkdirSync(dirPath, { recursive: true }));
+    this.writeFile = options.writeFile ?? ((filePath, content) =>
+      fs.writeFileSync(filePath, content, 'utf8'));
   }
 
   loadProfile(): TrendRadarProfile | null {
@@ -55,6 +73,25 @@ export class TrendRadarConfigService {
         ? parseFrequencyWords(this.readFile(frequencyWordsPath))
         : null,
       standalone: readStandaloneConfig(config),
+    };
+  }
+
+  saveFiles(files: TrendRadarConfigFiles): TrendRadarConfigSaveResult {
+    this.mkdir(this.configDir);
+
+    const targets = [
+      [path.join(this.configDir, 'config.yaml'), files.config],
+      [path.join(this.configDir, 'frequency_words.txt'), files.frequency],
+      [path.join(this.configDir, 'timeline.yaml'), files.timeline],
+    ] as const;
+
+    for (const [filePath, content] of targets) {
+      this.writeFile(filePath, content);
+    }
+
+    return {
+      configDir: this.configDir,
+      files: targets.map(([filePath]) => filePath),
     };
   }
 }
@@ -169,6 +206,8 @@ function parseWordGroup(lines: string[]): HotKeywordGroup | null {
   let name = '';
   const include: string[] = [];
   const exclude: string[] = [];
+  const required: string[] = [];
+  let maxItems = 0;
   const displayParts: string[] = [];
 
   for (const line of lines) {
@@ -179,6 +218,10 @@ function parseWordGroup(lines: string[]): HotKeywordGroup | null {
     }
 
     if (line.startsWith('@')) {
+      const value = Number.parseInt(line.slice(1).trim(), 10);
+      if (Number.isFinite(value) && value > 0) {
+        maxItems = value;
+      }
       continue;
     }
 
@@ -193,8 +236,8 @@ function parseWordGroup(lines: string[]): HotKeywordGroup | null {
     if (line.startsWith('+')) {
       const value = line.slice(1).trim();
       if (value) {
-        include.push(value);
-        displayParts.push(value);
+        required.push(value);
+        displayParts.push(`+${value}`);
       }
       continue;
     }
@@ -214,7 +257,9 @@ function parseWordGroup(lines: string[]): HotKeywordGroup | null {
   return {
     name: name || displayParts.join(' / '),
     include,
+    ...(required.length > 0 ? { required } : {}),
     ...(exclude.length > 0 ? { exclude } : {}),
+    ...(maxItems > 0 ? { maxItems } : {}),
   };
 }
 

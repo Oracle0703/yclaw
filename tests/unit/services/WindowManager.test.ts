@@ -165,6 +165,18 @@ describe('WindowManager', () => {
     });
   });
 
+  it('routes comment monitor module openWindow into the workbench window', async () => {
+    const win1 = manager.openWindow({ module: 'workbench' });
+    await Promise.resolve();
+    const win2 = manager.openWindow({ module: 'comment-monitor' });
+
+    expect(win2).toBe(win1);
+    expect(manager.getOpenModules()).not.toContain('comment-monitor');
+    expect(win1.webContents.send).toHaveBeenCalledWith('app:navigate', {
+      module: 'comment-monitor',
+    });
+  });
+
   it('should create distinct windows for the same module when instanceId differs', () => {
     const win1 = manager.openWindow({ module: 'custom-mod', instanceId: 'left' });
     const win2 = manager.openWindow({ module: 'custom-mod', instanceId: 'right' });

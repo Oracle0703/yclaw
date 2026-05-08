@@ -16,10 +16,12 @@ interface HotReportServiceOptions {
   batchService?: Pick<BatchService, 'getBatch'>;
   resultService?: Pick<ResultService, 'listResults'>;
   executionLogService?: Pick<ExecutionLogService, 'query'>;
-  reportRepository?: Pick<HotReportRepository, 'saveReport' | 'listReports' | 'getReport' | 'getReportByBatchId'>;
+  reportRepository?: Pick<HotReportRepository, 'saveReport' | 'listReports' | 'getReport' | 'getReportByBatchId' | 'deleteReport'>;
   outputDir?: string;
   writeFile?: (filePath: string, content: string) => void;
   readFile?: (filePath: string) => string;
+  unlinkFile?: (filePath: string) => void;
+  revealFile?: (filePath: string) => void;
   now?: () => Date;
   createId?: () => string;
   trendRadarConfigService?: {
@@ -32,10 +34,12 @@ export class HotReportService {
   private readonly batchService: Pick<BatchService, 'getBatch'>;
   private readonly resultService: Pick<ResultService, 'listResults'>;
   private readonly executionLogService: Pick<ExecutionLogService, 'query'>;
-  private readonly reportRepository: Pick<HotReportRepository, 'saveReport' | 'listReports' | 'getReport' | 'getReportByBatchId'>;
+  private readonly reportRepository: Pick<HotReportRepository, 'saveReport' | 'listReports' | 'getReport' | 'getReportByBatchId' | 'deleteReport'>;
   private readonly outputDir: string;
   private readonly writeFile: (filePath: string, content: string) => void;
   private readonly readFile: (filePath: string) => string;
+  private readonly unlinkFile: (filePath: string) => void;
+  private readonly revealFile: (filePath: string) => void;
   private readonly now: () => Date;
   private readonly createId: () => string;
   private readonly trendRadarConfigService?: {
@@ -67,6 +71,14 @@ export class HotReportService {
     this.outputDir = options.outputDir ?? path.join(process.cwd(), 'outputs', 'hot-reports');
     this.writeFile = options.writeFile ?? ((filePath, content) => fs.writeFileSync(filePath, content, 'utf8'));
     this.readFile = options.readFile ?? ((filePath) => fs.readFileSync(filePath, 'utf8'));
+    this.unlinkFile = options.unlinkFile ?? ((filePath) => {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    });
+    this.revealFile = options.revealFile ?? (() => {
+      throw new Error('revealFile is required');
+    });
     this.now = options.now ?? (() => new Date());
     this.createId = options.createId ?? (() => randomUUID());
     this.trendRadarConfigService = options.trendRadarConfigService;
@@ -90,6 +102,31 @@ export class HotReportService {
     } catch {
       return report;
     }
+  }
+
+  deleteReport(reportId: string): { deleted: boolean } {
+    const report = this.reportRepository.getReport(reportId);
+    if (!report) {
+      return { deleted: false };
+    }
+
+    try {
+      this.unlinkFile(report.filePath);
+    } catch {
+      // 文件删除失败不阻断元数据清理，避免失效路径导致报告列表无法整理。
+    }
+
+    return { deleted: this.reportRepository.deleteReport(reportId) };
+  }
+
+  revealReport(reportId: string): { revealed: boolean } {
+    const report = this.reportRepository.getReport(reportId);
+    if (!report) {
+      return { revealed: false };
+    }
+
+    this.revealFile(report.filePath);
+    return { revealed: true };
   }
 
   generateReport(input: { sourceId: string; batchId: string; format: HotReportFormat }): HotReportSummary {
@@ -116,6 +153,7 @@ export class HotReportService {
     const { filePath, content, latestFilePath } = input.format === 'html'
       ? this.buildHtmlOutput({
         outputDir: normalizedOutputDir,
+        sourceId: source.id,
         sourceName: source.name,
         siteKey: source.siteKey,
         parserKey: source.parserKey,
@@ -158,6 +196,7 @@ export class HotReportService {
 
   private buildHtmlOutput(input: {
     outputDir: string;
+    sourceId: string;
     sourceName: string;
     siteKey: string;
     parserKey: string;
@@ -186,6 +225,7 @@ export class HotReportService {
   }
 
   private buildTrendRadarProjection(input: {
+    sourceId: string;
     sourceName: string;
     siteKey: string;
     parserKey: string;
@@ -199,9 +239,13 @@ export class HotReportService {
     standaloneGroups?: Array<{ name: string; items: Array<{ id: string; data: Record<string, unknown> }> }>;
   } {
     const totalCount = input.results.length;
+    const source = this.sourceRepository.getSource(input.sourceId);
     const isTrendRadarBatch = input.siteKey === 'trendradar' && input.parserKey === 'newsnow.batch';
     if (!isTrendRadarBatch || !this.trendRadarConfigService) {
-      return { results: input.results, totalCount };
+      const results = source?.filter
+        ? this.applyTrendRadarKeywordProjection(input.results, source.filter)
+        : input.results;
+      return { results, totalCount };
     }
 
     const profile = this.trendRadarConfigService.loadProfile();

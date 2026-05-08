@@ -34,6 +34,7 @@ const WORKBENCH_HOSTED_MODULES = new Set<string>([
   'automation',
   'data-center',
   'hot-monitor',
+  'comment-monitor',
   'plugin-center',
   'browser',
   'signin',

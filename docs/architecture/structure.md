@@ -60,13 +60,14 @@ yclaw/
 | `src/main/bootstrap.ts` | 主进程启动编排，统一处理单实例、ready、activate、quit 生命周期 |
 | `src/main/single-instance.ts` | 单实例抢锁与二开实例回到主窗口逻辑 |
 | `src/main/windows/` | 窗口管理与 preload 入口 |
-| `src/main/ipc/` | IPC 通道路由、事件总线、消息边界控制；包含 `remote-runner-handlers.ts`、`runner-scheduler-handlers.ts`、`hot-handlers.ts`、`data-center-handlers.ts` 等专项 handler |
+| `src/main/ipc/` | IPC 通道路由、事件总线、消息边界控制；包含 `remote-runner-handlers.ts`、`runner-scheduler-handlers.ts`、`hot-handlers.ts`、`comment-handlers.ts`、`data-center-handlers.ts` 等专项 handler |
 | `src/main/browser/` | WebContentsView 标签与会话管理 |
 | `src/main/plugin-loader/` | 插件扫描、加载、权限校验 |
 | `src/main/ai/` | AI 服务层、工具注册、上下文收集、Provider 抽象 |
 | `src/main/services/` | 配置、数据库、日志、调度、批次、结果、模板、告警、Remote Runner 等系统服务；并按子域继续拆分 |
 | `src/main/services/data-center/` | 导出任务、Webhook、API Token、本地只读 API、数据质量与洞察 |
 | `src/main/services/hot/` | `HOT` 源管理、运行投影、报告生成、任务编译 |
+| `src/main/services/comment/` | 评论源管理、运行投影、报告生成、AI 回复、MediaCrawler 外部执行器与结果导入 |
 | `src/main/services/repositories/` | 数据仓储层，承接具体表与持久化读写 |
 | `src/main/services/runner-scheduler/` | 容量评分、Runner 注册、队列、dispatch、lease、reconcile 等调度子模块 |
 | `src/main/services/task-as-code/` | YAML Persistence、watch bootstrap 与仓库同步 |
@@ -74,7 +75,7 @@ yclaw/
 
 ### `src/renderer/entries/` — 业务模块入口
 
-当前有 **6 个业务入口**：
+当前有 **8 个业务入口**：
 
 | 入口 | 说明 |
 | --- | --- |
@@ -84,6 +85,8 @@ yclaw/
 | `browser/` | 浏览器会话控制台、干预面板、录制面板、抖音分析台、`HOT` 采集工作台 |
 | `data-center/` | 结果资产、导出任务、Webhook / Token / 本地 API、质量与洞察 |
 | `plugin-center/` | 插件安装、启停、卸载、权限确认 |
+| `hot-monitor/` | 热点监控配置、运行与报告（在 workbench 内部以 `/hot-monitor` 路由懒加载） |
+| `comment-monitor/` | 评论监控配置、运行、AI 回复与报告（在 workbench 内部以 `/comment-monitor` 路由懒加载） |
 
 ### `src/renderer/plugin-host/` — 插件宿主页
 
@@ -110,7 +113,7 @@ yclaw/
 
 | 目录 | 说明 |
 | --- | --- |
-| `types/` | IPC、AI、插件、浏览器、股票、任务、`HOT`、Data Center、Remote Runner、Runner Scheduler、配置、特性包等类型定义 |
+| `types/` | IPC、AI、插件、浏览器、股票、任务、`HOT`、`Comment`、Data Center、Remote Runner、Runner Scheduler、配置、特性包等类型定义 |
 | `constants/` | IPC 通道、事件、权限常量、Task-as-Code 常量与 Runner 调度默认值 |
 | `serialization/` | Task-as-Code YAML schema、loader、watcher、mapping、migrate、secrets |
 | `utils/` | 校验、日志等共享工具 |

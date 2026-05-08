@@ -39,6 +39,24 @@ describe('AutomationEngine', () => {
       expect(script).toContain('.click()');
     });
 
+    it('navigates to entryUrl when click action provides one', async () => {
+      const action: ActionDefinition = {
+        type: 'click',
+        selector: 'body',
+        params: {
+          entryUrl: 'https://www.xiaohongshu.com/search_result?keyword=AI',
+        },
+      };
+
+      const result = await engine.execute(wc, action);
+
+      expect(result.success).toBe(true);
+      const script = wc.executeJavaScript.mock.calls[0][0] as string;
+      expect(script).toContain('window.location.assign');
+      expect(script).toContain('https://www.xiaohongshu.com/search_result?keyword=AI');
+      expect(script).not.toContain('document.querySelector');
+    });
+
     it('should return failure when element not found', async () => {
       wc.executeJavaScript.mockRejectedValueOnce(new Error('Element not found: #missing'));
       const action: ActionDefinition = { type: 'click', selector: '#missing' };
@@ -120,6 +138,139 @@ describe('AutomationEngine', () => {
       expect(script).toContain('href');
     });
 
+    it('normalizes Xiaohongshu visible comments with xhs.comment parser', async () => {
+      wc.executeJavaScript.mockResolvedValueOnce([
+        {
+          commentId: 'comment-1',
+          content: '这个 AI 工具很实用',
+          authorName: '用户A',
+          likeCount: '12',
+          contentUrl: 'https://www.xiaohongshu.com/explore/abc',
+        },
+        {
+          id: 'comment-2',
+          text: '价格虚假需要退款',
+          nickname: '用户B',
+          likes: 3,
+        },
+      ]);
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'body',
+        params: {
+          parserKey: 'xhs.comment',
+          sourceId: 'source-1',
+          entryValue: 'AI',
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([
+        {
+          platform: 'xhs',
+          sourceId: 'source-1',
+          contentUrl: 'https://www.xiaohongshu.com/explore/abc',
+          commentId: 'comment-1',
+          parentCommentId: null,
+          content: '这个 AI 工具很实用',
+          authorName: '用户A',
+          likeCount: 12,
+        },
+        {
+          platform: 'xhs',
+          sourceId: 'source-1',
+          commentId: 'comment-2',
+          parentCommentId: null,
+          content: '价格虚假需要退款',
+          authorName: '用户B',
+          likeCount: 3,
+        },
+      ]);
+    });
+
+    it('does not treat Xiaohongshu page chrome and SSR state as a comment', async () => {
+      wc.executeJavaScript.mockResolvedValueOnce([
+        {
+          text: [
+            '创作中心业务合作发现直播发布通知我我',
+            '沪ICP备13030189号 | 营业执照 | 2024沪公网安备31010102002533号',
+            '温馨提示 您的浏览器似乎开启了广告屏蔽插件',
+            'window.__SSR__=truewindow.__INITIAL_STATE__={"user":{"loggedIn":true}}',
+            '创作服务直播管理电脑直播助手专业号推广合作蒲公英商家入驻MCN入驻',
+          ].join(' '),
+          contentUrl: 'https://www.xiaohongshu.com/search_result?keyword=AI',
+        },
+      ]);
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'body',
+        params: {
+          parserKey: 'xhs.comment',
+          sourceId: 'source-1',
+          entryValue: 'AI',
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([]);
+    });
+
+    it('uses Xiaohongshu comment selectors instead of extracting the whole body text', async () => {
+      wc.executeJavaScript.mockResolvedValueOnce([]);
+
+      await engine.execute(wc, {
+        type: 'extract',
+        selector: 'body',
+        params: {
+          parserKey: 'xhs.comment',
+          sourceId: 'source-1',
+        },
+      });
+
+      const script = wc.executeJavaScript.mock.calls[0][0] as string;
+      expect(script).toContain('commentSelectors');
+      expect(script).toContain('.comments-el');
+      expect(script).not.toContain("document.querySelectorAll('body')");
+    });
+
+    it('normalizes Douyin visible comments with douyin.comment parser', async () => {
+      wc.executeJavaScript.mockResolvedValueOnce([
+        {
+          id: 'douyin-comment-1',
+          text: '这个教程很有用',
+          nickname: '抖音用户',
+          likes: '8',
+          contentUrl: 'https://www.douyin.com/video/123',
+        },
+      ]);
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'body',
+        params: {
+          parserKey: 'douyin.comment',
+          sourceId: 'source-douyin',
+          entryValue: 'AI工具',
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([
+        {
+          platform: 'douyin',
+          sourceId: 'source-douyin',
+          contentUrl: 'https://www.douyin.com/video/123',
+          commentId: 'douyin-comment-1',
+          parentCommentId: null,
+          content: '这个教程很有用',
+          authorName: '抖音用户',
+          likeCount: 8,
+        },
+      ]);
+    });
+
     it('persists extraction results after successful extract step', async () => {
       const saveResult = vi.fn();
       wc.executeJavaScript.mockResolvedValueOnce(['text1', 'text2']);
@@ -145,6 +296,52 @@ describe('AutomationEngine', () => {
           data: expect.any(Object),
         }),
       );
+    });
+
+    it('persists xhs.comment extraction arrays as individual comment results', async () => {
+      const saveResult = vi.fn();
+      wc.executeJavaScript.mockResolvedValueOnce([
+        {
+          commentId: 'comment-1',
+          content: '这个 AI 工具很实用',
+          authorName: '用户A',
+        },
+        {
+          commentId: 'comment-2',
+          content: '价格虚假需要退款',
+          authorName: '用户B',
+        },
+      ]);
+      engine = new AutomationEngine({
+        resultService: {
+          saveResult,
+        } as never,
+      });
+
+      await engine.execute(
+        wc,
+        {
+          type: 'extract',
+          selector: 'body',
+          params: { parserKey: 'xhs.comment', sourceId: 'source-1' },
+        },
+        {
+          taskId: 'task-1',
+          batchId: 'batch-1',
+          sourceUrl: 'https://www.xiaohongshu.com/explore/abc',
+        },
+      );
+
+      expect(saveResult).toHaveBeenCalledTimes(2);
+      expect(saveResult).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        taskId: 'task-1',
+        batchId: 'batch-1',
+        data: expect.objectContaining({
+          commentId: 'comment-1',
+          content: '这个 AI 工具很实用',
+        }),
+        sourceUrl: 'https://www.xiaohongshu.com/explore/abc',
+      }));
     });
 
     it('fetches and parses NewsNow API extracts without running a DOM selector', async () => {
@@ -239,6 +436,39 @@ describe('AutomationEngine', () => {
           }),
         }),
       );
+    });
+
+    it('keeps NewsNow source data unfiltered even when legacy task steps contain keyword filters', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id: 'zhihu',
+            items: [
+              { title: '暗黑4 新赛季更新', url: 'https://www.zhihu.com/question/1' },
+              { title: '普通社会新闻', url: 'https://www.zhihu.com/question/2' },
+            ],
+          }),
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const result = await engine.execute(wc, {
+        type: 'extract',
+        selector: 'https://newsnow.busiyi.world/api/s?id=zhihu&latest',
+        params: {
+          mode: 'api',
+          parserKey: 'newsnow.hot',
+          filter: {
+            keywordGroups: [{ name: '游戏', include: ['暗黑4'] }],
+          },
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([
+        expect.objectContaining({ title: '暗黑4 新赛季更新' }),
+        expect.objectContaining({ title: '普通社会新闻' }),
+      ]);
     });
 
     it('fetches and merges NewsNow batch extracts for multiple TrendRadar platforms', async () => {
@@ -408,7 +638,7 @@ describe('AutomationEngine', () => {
       );
     });
 
-    it('fetches RSS feeds and applies keyword filtering before persistence', async () => {
+    it('fetches RSS feeds without applying legacy keyword filters before persistence', async () => {
       const saveResult = vi.fn();
       vi.stubGlobal(
         'fetch',
@@ -461,11 +691,13 @@ describe('AutomationEngine', () => {
         expect.objectContaining({
           title: 'AI 芯片投资升温',
           url: 'https://example.com/ai-chip',
-          keywordGroups: ['AI'],
-          isNew: true,
+        }),
+        expect.objectContaining({
+          title: '娱乐热点',
+          url: 'https://example.com/fun',
         }),
       ]);
-      expect(saveResult).toHaveBeenCalledTimes(1);
+      expect(saveResult).toHaveBeenCalledTimes(2);
       expect(wc.executeJavaScript).not.toHaveBeenCalled();
     });
 

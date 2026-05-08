@@ -5,10 +5,11 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 
 const requireFromHere = createRequire(import.meta.url);
-const { getDevRuntimeFailure } = requireFromHere(
+const { getDevRuntimeFailure, buildRepoElectronProcessQuery } = requireFromHere(
   '../../../scripts/ensure-dev-runtime-utils.js',
 ) as {
   getDevRuntimeFailure: (options: { rootDir: string; nodeVersion?: string }) => string | null;
+  buildRepoElectronProcessQuery: (rootDir: string) => string;
 };
 
 const tempRoots: string[] = [];
@@ -118,5 +119,20 @@ describe('getDevRuntimeFailure', () => {
     const rootDir = createTempRoot();
 
     expect(getDevRuntimeFailure({ rootDir, nodeVersion: 'v20.0.0' })).toContain('22.22.0');
+  });
+});
+
+describe('buildRepoElectronProcessQuery', () => {
+  it('传给 PowerShell 的仓库路径保持 Windows 单反斜杠格式', () => {
+    const command = buildRepoElectronProcessQuery('E:\\allsite\\yclaw');
+
+    expect(command).toContain(`.Contains('${String.raw`e:\allsite\yclaw`}')`);
+    expect(command).not.toContain(String.raw`e:\\allsite\\yclaw`);
+  });
+
+  it('转义路径中的 PowerShell 单引号', () => {
+    const command = buildRepoElectronProcessQuery("E:\\allsite\\yc'law");
+
+    expect(command).toContain(String.raw`e:\allsite\yc''law`);
   });
 });

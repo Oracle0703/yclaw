@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Drawer, Descriptions, Tag, Typography, Divider, Space, message } from 'antd';
+import { Button, Drawer, Descriptions, Tag, Typography, Divider, Space, message } from 'antd';
 import { MinusOutlined, CloseOutlined, SettingOutlined, BorderOutlined } from '@ant-design/icons';
 import { useIpc } from '../hooks';
 import { IPC_CHANNELS } from '@shared/constants/channels';
@@ -34,6 +34,10 @@ export function TitleBar() {
     });
   }, [invoke]);
 
+  const handleOpenHotMonitor = useCallback(() => {
+    window.location.hash = '#/hot-monitor';
+  }, []);
+
   useEffect(() => {
     if (!settingsOpen) return;
     setConfig(null);
@@ -54,24 +58,51 @@ export function TitleBar() {
   return (
     <>
       <div className="yclaw-titlebar" style={{ height: TITLE_BAR_HEIGHT }}>
+        <div className="yclaw-titlebar-left">
+          <Button
+            className="yclaw-titlebar-hot"
+            type="text"
+            onClick={handleOpenHotMonitor}
+            aria-label="热点"
+          >
+            热点
+          </Button>
+        </div>
         <div className="yclaw-titlebar-drag" />
         <div className="yclaw-titlebar-actions">
-          <button className="yclaw-titlebar-btn" onClick={handleMinimize} title="最小化">
-            <MinusOutlined />
-          </button>
-          <button className="yclaw-titlebar-btn" onClick={handleMaximize} title="最大化">
-            <BorderOutlined />
-          </button>
-          <button className="yclaw-titlebar-btn" onClick={() => setSettingsOpen(true)} title="设置">
-            <SettingOutlined />
-          </button>
-          <button
+          <Button
+            type="text"
+            className="yclaw-titlebar-btn"
+            icon={<MinusOutlined />}
+            onClick={handleMinimize}
+            title="最小化"
+            aria-label="最小化"
+          />
+          <Button
+            type="text"
+            className="yclaw-titlebar-btn"
+            icon={<BorderOutlined />}
+            onClick={handleMaximize}
+            title="最大化"
+            aria-label="最大化"
+          />
+          <Button
+            type="text"
+            className="yclaw-titlebar-btn"
+            icon={<SettingOutlined />}
+            onClick={() => setSettingsOpen(true)}
+            title="设置"
+            aria-label="设置"
+          />
+          <Button
+            type="text"
+            danger
             className="yclaw-titlebar-btn yclaw-titlebar-btn-close"
+            icon={<CloseOutlined />}
             onClick={handleClose}
             title="关闭"
-          >
-            <CloseOutlined />
-          </button>
+            aria-label="关闭"
+          />
         </div>
       </div>
 

@@ -6,6 +6,7 @@ import { IPC_CHANNELS } from '@shared/constants/channels';
 import type { PluginRegistryEntry } from '@shared/types';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc } from '../../shared/hooks';
+import './styles.css';
 import { PermissionDialog } from './components/PermissionDialog';
 import { PluginCard } from './components/PluginCard';
 

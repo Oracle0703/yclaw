@@ -549,6 +549,33 @@ describe('App IPC integration', () => {
         }));
       }
 
+      if (sql.includes('FROM comment_sources')) {
+        return [
+          {
+            id: 'comment-source-1',
+            task_id: 'task-1',
+            name: '小红书评论',
+            platform: 'xhs',
+            entry_kind: 'keyword',
+            entry_value: 'AI',
+            parser_key: 'xhs.comment',
+            session_id: null,
+            schedule_json: JSON.stringify({ type: 'manual' }),
+            limits_json: JSON.stringify({
+              maxContents: 5,
+              maxCommentsPerContent: 20,
+              includeSubComments: false,
+              crawlIntervalSeconds: 2,
+            }),
+            filter_json: null,
+            enabled: 1,
+            tags_json: JSON.stringify(['小红书']),
+            created_at: '2026-05-08T00:00:00.000Z',
+            updated_at: '2026-05-08T00:00:00.000Z',
+          },
+        ];
+      }
+
       if (sql.includes('FROM tasks')) {
         return mockDbGetTasks();
       }
@@ -557,9 +584,32 @@ describe('App IPC integration', () => {
     });
 
     mockDbGet.mockImplementation((sql: string, params?: unknown[]) => {
-      if (!sql.includes('FROM tasks')) {
-        return undefined;
+      if (sql.includes('FROM comment_sources')) {
+        return {
+          id: 'comment-source-1',
+          task_id: 'task-1',
+          name: '小红书评论',
+          platform: 'xhs',
+          entry_kind: 'keyword',
+          entry_value: 'AI',
+          parser_key: 'xhs.comment',
+          session_id: null,
+          schedule_json: JSON.stringify({ type: 'manual' }),
+          limits_json: JSON.stringify({
+            maxContents: 5,
+            maxCommentsPerContent: 20,
+            includeSubComments: false,
+            crawlIntervalSeconds: 2,
+          }),
+          filter_json: null,
+          enabled: 1,
+          tags_json: JSON.stringify(['小红书']),
+          created_at: '2026-05-08T00:00:00.000Z',
+          updated_at: '2026-05-08T00:00:00.000Z',
+        };
       }
+
+      if (!sql.includes('FROM tasks')) return undefined;
 
       const taskId = String(params?.[0] ?? '');
       const flow = mockDbGetTaskFlow(taskId);
@@ -1510,6 +1560,143 @@ describe('App IPC integration', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('creates a browser tab before starting comment collection when no active tab exists', async () => {
+    mockGetView.mockReturnValueOnce(null);
+    const createdView = {
+      setBounds: vi.fn(),
+      webContents: {
+        id: 88,
+        executeJavaScript: vi.fn(async () => undefined),
+        capturePage: vi.fn(async () => ({ toDataURL: () => 'data:image/png;base64,' })),
+      },
+    };
+    mockCreateTab.mockReturnValueOnce(createdView);
+    mockGetTabInfo.mockReturnValueOnce({
+      id: 88,
+      title: 'Comment Tab',
+      url: 'about:blank',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      sessionPartition: 'default',
+    });
+
+    const app = new App();
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.COMMENT_RUN_START);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, { sourceId: 'comment-source-1' });
+
+    expect(response).toEqual({
+      success: true,
+      data: {
+        sourceId: 'comment-source-1',
+        taskId: 'task-1',
+        started: true,
+      },
+    });
+    expect(mockCreateTab).toHaveBeenCalledWith('about:blank');
+    expect(mockBrowserRecorderChildren).toContain(createdView);
+  });
+
+  it('reuses the bound persistent session when starting Xiaohongshu comment collection', async () => {
+    mockSessionList.mockReturnValue([
+      {
+        id: 'xhs-session-1',
+        name: '小红书账号',
+        domain: 'xiaohongshu.com',
+        partition: 'persist:xhs_account_1',
+        createdAt: '2026-05-08T00:00:00.000Z',
+        updatedAt: '2026-05-08T00:00:00.000Z',
+      },
+    ]);
+    mockDbGet.mockImplementation((sql: string, params?: unknown[]) => {
+      if (sql.includes('FROM comment_sources')) {
+        return {
+          id: 'comment-source-1',
+          task_id: 'task-1',
+          name: '小红书评论',
+          platform: 'xhs',
+          entry_kind: 'keyword',
+          entry_value: 'AI',
+          parser_key: 'xhs.comment',
+          session_id: 'xhs-session-1',
+          schedule_json: JSON.stringify({ type: 'manual' }),
+          limits_json: JSON.stringify({
+            maxContents: 5,
+            maxCommentsPerContent: 20,
+            includeSubComments: false,
+            crawlIntervalSeconds: 2,
+          }),
+          filter_json: null,
+          enabled: 1,
+          tags_json: JSON.stringify(['小红书']),
+          created_at: '2026-05-08T00:00:00.000Z',
+          updated_at: '2026-05-08T00:00:00.000Z',
+        };
+      }
+
+      if (!sql.includes('FROM tasks')) return undefined;
+      const taskId = String(params?.[0] ?? '');
+      const flow = mockDbGetTaskFlow(taskId);
+      if (!flow) return undefined;
+      return {
+        id: flow.id,
+        name: flow.name,
+        description: flow.description ?? null,
+        flowJson: JSON.stringify({
+          steps: flow.steps,
+          entryUrl: flow.entryUrl,
+          kind: flow.kind,
+          signin: flow.signin ?? null,
+        }),
+        createdAt: flow.createdAt,
+        updatedAt: flow.updatedAt,
+        sessionId: 'xhs-session-1',
+      };
+    });
+    const sessionView = {
+      setBounds: vi.fn(),
+      webContents: {
+        id: 89,
+        executeJavaScript: vi.fn(async () => undefined),
+        capturePage: vi.fn(async () => ({ toDataURL: () => 'data:image/png;base64,' })),
+      },
+    };
+    mockGetOrCreateTabBySession.mockReturnValueOnce(sessionView);
+    mockGetTabInfo.mockReturnValueOnce({
+      id: 89,
+      title: 'XHS Comment Tab',
+      url: 'about:blank',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      sessionPartition: 'persist:xhs_account_1',
+    });
+
+    const app = new App();
+    await app.start();
+
+    const handler = handlers.get(IPC_CHANNELS.COMMENT_RUN_START);
+    expect(handler).toBeDefined();
+
+    const response = await handler!({}, { sourceId: 'comment-source-1' });
+
+    expect(response).toEqual({
+      success: true,
+      data: {
+        sourceId: 'comment-source-1',
+        taskId: 'task-1',
+        started: true,
+      },
+    });
+    expect(mockGetOrCreateTabBySession).toHaveBeenCalledWith('persist:xhs_account_1', 'about:blank');
+    expect(mockCreateTab).not.toHaveBeenCalledWith('about:blank');
+    expect(mockBrowserRecorderChildren).toContain(sessionView);
   });
 
   it('closes signin preview window during shutdown', () => {

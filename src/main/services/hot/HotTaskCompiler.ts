@@ -61,7 +61,6 @@ export class HotTaskCompiler {
             parserKey: source.parserKey,
             mode: 'api',
             ...(isBatch ? { platformIds: source.platformIds ?? [] } : {}),
-            ...(source.filter ? { filter: source.filter } : {}),
           },
         },
       },

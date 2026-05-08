@@ -9,6 +9,7 @@ import { AddressBar } from './components/AddressBar';
 import { RecorderPanel } from './components/RecorderPanel';
 import { TabBar } from './components/TabBar';
 import type { Tab } from '@shared/types/browser';
+import './styles.css';
 
 const DEFAULT_RECORDER_URL = 'https://www.jd.com/';
 

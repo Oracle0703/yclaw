@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Button } from 'antd';
 
 export function AddressBar({
   url,
@@ -31,9 +32,15 @@ export function AddressBar({
 
   return (
     <div className="address-bar">
-      <button onClick={onBack} disabled={!canGoBack} title="后退">←</button>
-      <button onClick={onForward} disabled={!canGoForward} title="前进">→</button>
-      <button onClick={onReload} title="刷新">↻</button>
+      <Button onClick={onBack} disabled={!canGoBack} title="后退" aria-label="后退">
+        ←
+      </Button>
+      <Button onClick={onForward} disabled={!canGoForward} title="前进" aria-label="前进">
+        →
+      </Button>
+      <Button onClick={onReload} title="刷新" aria-label="刷新">
+        ↻
+      </Button>
       <input
         className="address-input"
         value={input}

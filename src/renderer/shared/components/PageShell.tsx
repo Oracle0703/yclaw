@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Button, Result, Skeleton, Typography } from 'antd';
+import { Button, Result, Skeleton } from 'antd';
 
 interface PageShellProps extends PropsWithChildren {
   title: string;
@@ -15,10 +15,6 @@ interface PageShellProps extends PropsWithChildren {
 }
 
 export function PageShell({
-  title,
-  subTitle,
-  content,
-  extra,
   loading,
   error,
   onRetry,
@@ -48,24 +44,6 @@ export function PageShell({
   return (
     <div className="yclaw-page-container">
       <div className="yclaw-page-shell yclaw-panel-card">
-        <div className="yclaw-page-shell-header">
-          <div className="yclaw-page-shell-main">
-            <Typography.Title level={2} className="yclaw-page-shell-title">
-              {title}
-            </Typography.Title>
-            {subTitle ? (
-              <Typography.Paragraph className="yclaw-page-shell-subtitle">
-                {subTitle}
-              </Typography.Paragraph>
-            ) : null}
-            {content ? (
-              <Typography.Paragraph className="yclaw-page-shell-content">
-                {content}
-              </Typography.Paragraph>
-            ) : null}
-          </div>
-          {extra ? <div className="yclaw-page-shell-extra">{extra}</div> : null}
-        </div>
         <div className="yclaw-page-shell-body">
           {loading ? <Skeleton active paragraph={{ rows: 6 }} /> : children}
         </div>

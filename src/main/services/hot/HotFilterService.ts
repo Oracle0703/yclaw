@@ -44,8 +44,9 @@ export class HotFilterService {
     return (config.keywordGroups ?? [])
       .filter((group) => {
         const includeMatched = group.include.some((keyword) => this.matchesAny(item, [keyword]));
+        const requiredMatched = (group.required ?? []).every((keyword) => this.matchesAny(item, [keyword]));
         const excludeMatched = (group.exclude ?? []).some((keyword) => this.matchesAny(item, [keyword]));
-        return includeMatched && !excludeMatched;
+        return includeMatched && requiredMatched && !excludeMatched;
       })
       .map((group) => group.name);
   }

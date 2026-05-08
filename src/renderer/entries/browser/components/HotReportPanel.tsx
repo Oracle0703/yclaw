@@ -1,12 +1,17 @@
+import { Button, Input, Space } from 'antd';
 import type { HotReportSummary } from '@shared/types';
 
 interface HotReportPanelProps {
   reports: HotReportSummary[];
   searchText?: string;
-  previewReport?: HotReportSummary | null;
+  maxItems?: number;
+  showMoreLabel?: string;
   onSearchChange?: (value: string) => void;
   onPreview?: (report: HotReportSummary) => void;
-  onOpen?: (report: HotReportSummary) => void;
+  onReveal?: (report: HotReportSummary) => void;
+  onDelete?: (report: HotReportSummary) => void;
+  onShowMore?: () => void;
+  formatTime?: (value?: string | null) => string;
 }
 
 export function HotReportPanel(props: HotReportPanelProps) {
@@ -18,44 +23,55 @@ export function HotReportPanel(props: HotReportPanelProps) {
     const keyword = searchText.trim().toLowerCase();
     return `${report.title} ${report.filePath}`.toLowerCase().includes(keyword);
   });
+  const visibleReports = typeof props.maxItems === 'number'
+    ? reports.slice(0, props.maxItems)
+    : reports;
+  const hiddenCount = reports.length - visibleReports.length;
 
   return (
     <section className="browser-workspace-section">
-      <div className="browser-workspace-section-title">HOT报告</div>
-      <input
+      <div className="browser-workspace-section-title">报告</div>
+      <Input
         className="browser-workspace-input"
         value={searchText}
         onChange={(event) => props.onSearchChange?.(event.target.value)}
         placeholder="搜索报告"
       />
       <div className="browser-workspace-list">
-        {reports.map((report) => (
-          <div key={report.id} className="browser-review-queue-card">
-            <div className="browser-workspace-action-title">{report.title}</div>
-            <div className="browser-workspace-action-meta">
-              {report.format} · {report.createdAt}
+        {visibleReports.length === 0 ? (
+          <div className="browser-workspace-action-description">暂无报告</div>
+        ) : null}
+        {visibleReports.map((report) => (
+          <div key={report.id} className="browser-review-queue-card hot-report-row">
+            <div className="hot-report-row-main">
+              <div className="browser-workspace-action-title">{report.title}</div>
+              <div className="browser-workspace-action-meta">
+                {report.format} · {props.formatTime?.(report.createdAt) ?? report.createdAt}
+              </div>
             </div>
-            <div className="browser-workspace-action-description">{report.filePath}</div>
-            <div className="browser-review-queue-actions">
-              <button type="button" onClick={() => props.onPreview?.(report)}>
+            <Space wrap>
+              <Button onClick={() => props.onPreview?.(report)}>
                 预览报告
-              </button>
-              <button type="button" onClick={() => props.onOpen?.(report)}>
-                打开报告
-              </button>
-            </div>
+              </Button>
+              <Button onClick={() => props.onReveal?.(report)}>
+                打开存储位置
+              </Button>
+              <Button
+                danger
+                onClick={() => props.onDelete?.(report)}
+              >
+                删除报告
+              </Button>
+            </Space>
           </div>
         ))}
       </div>
-      {props.previewReport?.content ? (
-        <div className="browser-review-queue-card">
-          <div className="browser-workspace-section-title">报告预览</div>
-          <div className="browser-workspace-action-description">
-            {props.previewReport.content.split('\n').map((line, index) => (
-              <div key={`${index}-${line}`}>{line || ' '}</div>
-            ))}
-          </div>
-        </div>
+      {hiddenCount > 0 && props.onShowMore ? (
+        <Space wrap>
+          <Button onClick={props.onShowMore}>
+            {props.showMoreLabel ?? '查看更多报告'}
+          </Button>
+        </Space>
       ) : null}
     </section>
   );

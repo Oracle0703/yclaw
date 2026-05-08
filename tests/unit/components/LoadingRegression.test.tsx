@@ -97,8 +97,24 @@ describe('Regression: LoadingProvider export', () => {
 describe('Regression: PageShell clean imports', () => {
   it('should render correctly without Spin dependency', () => {
     render(<PageShell title="Test">Content</PageShell>);
-    expect(screen.getByText('Test')).toBeDefined();
+    expect(screen.queryByText('Test')).toBeNull();
     expect(screen.getByText('Content')).toBeDefined();
+  });
+
+  it('should not render per-page header chrome inside the content area', () => {
+    render(
+      <PageShell
+        title="当前页面"
+        subTitle="这段菜单解释不应该占用头部空间"
+        content="这段详细说明也不应该显示"
+      >
+        Content
+      </PageShell>,
+    );
+
+    expect(screen.queryByText('当前页面')).toBeNull();
+    expect(screen.queryByText('这段菜单解释不应该占用头部空间')).toBeNull();
+    expect(screen.queryByText('这段详细说明也不应该显示')).toBeNull();
   });
 
   it('should show skeleton when loading', () => {

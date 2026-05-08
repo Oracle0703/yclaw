@@ -5,6 +5,7 @@ import { ProCard } from '@ant-design/pro-components';
 import { EVENTS, IPC_CHANNELS } from '@shared/constants';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
+import './styles.css';
 import type {
   BrowserSession,
   OperationsAcceptanceMetric,

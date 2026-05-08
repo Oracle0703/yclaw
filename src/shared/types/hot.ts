@@ -9,6 +9,8 @@ export interface HotKeywordGroup {
   name: string;
   include: string[];
   exclude?: string[];
+  required?: string[];
+  maxItems?: number;
 }
 
 export interface HotFilterConfig {

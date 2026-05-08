@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, session } from 'electron';
+import { app, BrowserWindow, dialog, session, shell } from 'electron';
 import type { WebContents } from 'electron';
 import { WindowManager } from './windows/WindowManager';
 import { IpcController } from './ipc/IpcController';
@@ -39,6 +39,14 @@ import { HotSourceService } from './services/hot/HotSourceService';
 import { HotTaskCompiler } from './services/hot/HotTaskCompiler';
 import { HotTimelineScheduler } from './services/hot/HotTimelineScheduler';
 import { TrendRadarConfigService } from './services/hot/TrendRadarConfigService';
+import { CommentAiReplyService } from './services/comment/CommentAiReplyService';
+import { CommentReportService } from './services/comment/CommentReportService';
+import { CommentRunProjectionService } from './services/comment/CommentRunProjectionService';
+import { CommentSourceService } from './services/comment/CommentSourceService';
+import { CommentTaskCompiler } from './services/comment/CommentTaskCompiler';
+import { MediaCrawlerExternalExecutor } from './services/comment/MediaCrawlerExternalExecutor';
+import { MediaCrawlerResultImporter } from './services/comment/MediaCrawlerResultImporter';
+import { MediaCrawlerService } from './services/comment/MediaCrawlerService';
 import { TabManager } from './browser/TabManager';
 import { EVENTS, IPC_CHANNELS, RUNNER_SCHEDULER_DEFAULTS } from '@shared/constants';
 import { AIService } from './ai/AIService';
@@ -76,6 +84,8 @@ import {
   AIRepository,
   AlertRepository,
   BatchRepository,
+  CommentReportRepository,
+  CommentSourceRepository,
   ExecutionLogRepository,
   HotReportRepository,
   HotSourceRepository,
@@ -103,6 +113,7 @@ import { registerRunnerSchedulerHandlers } from './ipc/runner-scheduler-handlers
 import { registerTaskOperationsHandlers } from './ipc/task-operations-handlers';
 import { registerDataCenterHandlers } from './ipc/data-center-handlers';
 import { registerHotHandlers } from './ipc/hot-handlers';
+import { registerCommentHandlers } from './ipc/comment-handlers';
 import { registerSigninHandlers } from './ipc/signin-handlers';
 import type {
   AIChatRequest,
@@ -173,9 +184,15 @@ export class App {
   private hotSourceService: HotSourceService;
   private hotRunService: HotRunProjectionService;
   private hotReportService: HotReportService;
+  private trendRadarConfigService: TrendRadarConfigService;
   private hotTimelineService: HotTimelineScheduler;
   private hotAiInsightService: HotAiInsightService;
   private hotNotificationService: HotNotificationService;
+  private commentSourceService: CommentSourceService;
+  private commentRunService: CommentRunProjectionService;
+  private commentReportService: CommentReportService;
+  private commentAiReplyService: CommentAiReplyService;
+  private mediaCrawlerService: MediaCrawlerService;
   private notificationService: NotificationService;
   private signinTaskService: SigninTaskService;
   private signinPreviewWindow: BrowserWindow | null = null;
@@ -219,6 +236,8 @@ export class App {
     const signinRunRepository = new SigninRunRepository(this.databaseService);
     const hotSourceRepository = new HotSourceRepository(this.databaseService);
     const hotReportRepository = new HotReportRepository(this.databaseService);
+    const commentSourceRepository = new CommentSourceRepository(this.databaseService);
+    const commentReportRepository = new CommentReportRepository(this.databaseService);
     const workspaceRepository = new WorkspaceRepository(this.databaseService);
     const taskRevisionRepository = new TaskRevisionRepository(this.databaseService);
     const reviewRepository = new ReviewRepository(this.databaseService);
@@ -405,6 +424,7 @@ export class App {
       reportRepository: hotReportRepository,
       startTask: (source) => this.startHotRunTask(source),
     });
+    this.trendRadarConfigService = new TrendRadarConfigService();
     this.hotReportService = new HotReportService({
       sourceRepository: hotSourceRepository,
       batchService,
@@ -412,9 +432,42 @@ export class App {
       executionLogService: this.executionLogService,
       reportRepository: hotReportRepository,
       outputDir: path.join(process.cwd(), 'output'),
-      trendRadarConfigService: new TrendRadarConfigService(),
+      revealFile: (filePath) => shell.showItemInFolder(filePath),
+      trendRadarConfigService: this.trendRadarConfigService,
     });
     this.hotTimelineService = new HotTimelineScheduler();
+    this.commentSourceService = new CommentSourceService({
+      sourceRepository: commentSourceRepository,
+      taskService: this.taskService,
+      taskCompiler: new CommentTaskCompiler(),
+    });
+    this.commentRunService = new CommentRunProjectionService({
+      sourceRepository: commentSourceRepository,
+      batchService,
+      resultService: this.resultService,
+      reportRepository: commentReportRepository,
+      startTask: (source) => this.startCommentRunTask(source),
+    });
+    this.commentReportService = new CommentReportService({
+      sourceRepository: commentSourceRepository,
+      batchService,
+      resultService: this.resultService,
+      reportRepository: commentReportRepository,
+      outputDir: path.join(process.cwd(), 'output', 'comment-reports'),
+      revealFile: (filePath) => shell.showItemInFolder(filePath),
+    });
+    const mediaCrawlerImporter = new MediaCrawlerResultImporter({
+      resultService: this.resultService,
+    });
+    const mediaCrawlerExecutor = new MediaCrawlerExternalExecutor({
+      configProvider: () => this.mediaCrawlerService.getConfig(),
+      executionLogService: this.executionLogService,
+      importer: mediaCrawlerImporter,
+    });
+    this.mediaCrawlerService = new MediaCrawlerService({
+      configService: this.configService,
+      executor: mediaCrawlerExecutor,
+    });
     this.datasetService = new DatasetService({
       repository: dataDatasetRepository,
     });
@@ -523,6 +576,14 @@ export class App {
         },
       },
     });
+    this.commentAiReplyService = new CommentAiReplyService({
+      aiClient: {
+        generate: async ({ prompt }) => {
+          const response = await this.aiService.chat({ message: prompt });
+          return response.message.content;
+        },
+      },
+    });
     this.hotNotificationService = new HotNotificationService({
       deliver: async ({ url, headers, timeoutMs, payload }) => {
         const result = await webhookDeliveryService.deliver({
@@ -615,6 +676,16 @@ export class App {
       hotAiInsightService: this.hotAiInsightService,
       hotNotificationService: this.hotNotificationService,
       hotResultService: this.resultService,
+      hotConfigService: this.trendRadarConfigService,
+    });
+    registerCommentHandlers({
+      ipcController: this.ipcController,
+      commentSourceService: this.commentSourceService as never,
+      commentRunService: this.commentRunService as never,
+      commentResultService: this.resultService,
+      commentReportService: this.commentReportService as never,
+      commentAiReplyService: this.commentAiReplyService,
+      mediaCrawlerService: this.mediaCrawlerService,
     });
     registerSigninHandlers({
       ipcController: this.ipcController,
@@ -1258,6 +1329,19 @@ export class App {
     }
 
     return this.taskService.startTask(source.taskId, createHeadlessAutomationPage());
+  }
+
+  private startCommentRunTask(source: { taskId: string; sessionId?: string | null }): unknown {
+    const sessionPartition = this.resolveTaskSessionPartition(source.sessionId);
+    let view = sessionPartition
+      ? this.tabManager.getOrCreateTabBySession(sessionPartition, 'about:blank')
+      : this.tabManager.getView();
+    if (!view) {
+      view = this.tabManager.createTab('about:blank');
+    }
+    this.attachToBrowserRecorderWindow(view);
+
+    return this.taskService.startTask(source.taskId, view.webContents);
   }
 
   /**

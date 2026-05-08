@@ -43,13 +43,13 @@ export function createNewsNowDraft(preset: NewsNowPreset): HotSourceDraft {
 
 export function createTrendRadarBatchDraft(): HotSourceDraft {
   return {
-    name: 'TrendRadar 多平台热榜',
+    name: '多平台热榜',
     sourceKind: 'api',
     siteKey: 'trendradar',
     entryUrl: NEWSNOW_API_BASE,
     parserKey: 'newsnow.batch',
     platformIds: TRENDRADAR_PLATFORM_IDS,
     enabled: true,
-    tags: ['TrendRadar', '多平台', '热榜'],
+    tags: ['多平台', '热榜'],
   };
 }

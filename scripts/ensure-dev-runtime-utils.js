@@ -46,6 +46,16 @@ function getDevRuntimeFailure(options) {
   return null;
 }
 
+function escapePowerShellSingleQuotedString(value) {
+  return String(value).toLowerCase().replace(/'/g, "''");
+}
+
+function buildRepoElectronProcessQuery(rootDir) {
+  const repoTag = escapePowerShellSingleQuotedString(rootDir);
+  return `Get-CimInstance Win32_Process -Filter "Name='electron.exe'" | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.ToLower().Contains('${repoTag}') } | ForEach-Object { $_.ProcessId }`;
+}
+
 module.exports = {
+  buildRepoElectronProcessQuery,
   getDevRuntimeFailure,
 };

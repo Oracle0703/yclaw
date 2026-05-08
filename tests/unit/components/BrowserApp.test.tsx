@@ -623,7 +623,7 @@ describe('Browser App', () => {
       expect(screen.getByText('HOT采集源')).toBeDefined();
       expect(screen.getAllByText('抖音热榜').length).toBeGreaterThan(0);
       expect(screen.getByText('最近运行')).toBeDefined();
-      expect(screen.getByText('HOT报告')).toBeDefined();
+      expect(screen.getByText('报告')).toBeDefined();
       expect(screen.getByText('抖音热榜 报告')).toBeDefined();
     });
   });

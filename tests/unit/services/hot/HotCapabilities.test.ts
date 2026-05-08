@@ -83,6 +83,48 @@ describe('hot capabilities P2-P7', () => {
     ]);
   });
 
+  it('supports required keywords and maxItems on keyword groups', () => {
+    const service = new HotFilterService();
+
+    const filtered = service.apply(
+      [
+        { title: 'AI 芯片投资升温', url: 'https://example.com/ai-chip' },
+        { title: 'AI 产品发布', url: 'https://example.com/ai-product' },
+      ],
+      {
+        keywordGroups: [{ name: 'AI 基建', include: ['AI'], required: ['芯片'], maxItems: 5 }],
+      },
+    );
+
+    expect(filtered).toEqual([
+      expect.objectContaining({
+        title: 'AI 芯片投资升温',
+        keywordGroups: ['AI 基建'],
+      }),
+    ]);
+  });
+
+  it('requires mandatory keywords inside a keyword group before matching', () => {
+    const service = new HotFilterService();
+
+    const filtered = service.apply(
+      [
+        { title: 'AI 芯片投资升温', url: 'https://example.com/ai-chip' },
+        { title: 'AI 产品发布', url: 'https://example.com/ai-product' },
+      ],
+      {
+        keywordGroups: [{ name: 'AI 基建', include: ['AI'], required: ['芯片'] }],
+      },
+    );
+
+    expect(filtered).toEqual([
+      expect.objectContaining({
+        title: 'AI 芯片投资升温',
+        keywordGroups: ['AI 基建'],
+      }),
+    ]);
+  });
+
   it('P4 resolves TrendRadar-style timeline presets to schedule windows', () => {
     const scheduler = new HotTimelineScheduler();
 

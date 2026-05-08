@@ -94,6 +94,14 @@ export class HotReportRepository {
     );
     return row ? mapHotReportRow(row) : null;
   }
+
+  deleteReport(reportId: string): boolean {
+    const result = this.executor.run(
+      'DELETE FROM hot_reports WHERE id = ?',
+      [reportId],
+    );
+    return (result.changes ?? 0) > 0;
+  }
 }
 
 function mapHotReportRow(row: HotReportRow): HotReportSummary {

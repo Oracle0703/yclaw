@@ -1,6 +1,9 @@
 const path = require('path');
 const process = require('process');
-const { getDevRuntimeFailure } = require('./ensure-dev-runtime-utils.js');
+const {
+  buildRepoElectronProcessQuery,
+  getDevRuntimeFailure,
+} = require('./ensure-dev-runtime-utils.js');
 const { ensureElectronNativeDeps } = require('./ensure-electron-native-deps.cjs');
 
 function fail(message) {
@@ -13,13 +16,12 @@ function reapStrayElectronProcesses(rootDir) {
   // 启动新 dev 之前清理本仓库路径下残留的 electron.exe。
   if (process.platform !== 'win32') return;
   try {
-    const repoTag = rootDir.replace(/\\/g, '\\\\').toLowerCase();
     const result = require('child_process').spawnSync(
       'powershell',
       [
         '-NoProfile',
         '-Command',
-        `Get-CimInstance Win32_Process -Filter \"Name='electron.exe'\" | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.ToLower().Contains('${repoTag}') } | ForEach-Object { $_.ProcessId }`,
+        buildRepoElectronProcessQuery(rootDir),
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
     );

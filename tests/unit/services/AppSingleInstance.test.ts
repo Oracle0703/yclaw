@@ -287,6 +287,8 @@ vi.mock('@main/services/repositories', () => {
     ExecutionLogRepository: makeClass(),
     HotReportRepository: makeClass(),
     HotSourceRepository: makeClass(),
+    CommentReportRepository: makeClass(),
+    CommentSourceRepository: makeClass(),
     DataApiTokenRepository: makeClass(),
     DataQualityBatchInsightRepository: makeClass(),
     DataQualityFindingRepository: makeClass(),

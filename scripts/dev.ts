@@ -47,6 +47,7 @@ let viteOrigin = 'http://localhost:5173';
 let electronStderrFilter: ReturnType<typeof createElectronStderrFilter> | null = null;
 const expectedElectronExits = new WeakSet<ChildProcess>();
 const RESTART_DEBOUNCE_MS = 250;
+const ELECTRON_CRASH_RESTART_MS = 500;
 
 const viteProcess = spawnProcess(getBin('vite'), [], {
   NODE_ENV: 'development',
@@ -93,7 +94,7 @@ function reapStrayElectronProcesses(): void {
   if (!isWindows) return;
   try {
     // wmic 查询 ExecutablePath 包含本仓库子串的 electron.exe，限定范围避免误杀。
-    const repoTag = rootDir.replace(/\\/g, '\\\\').toLowerCase();
+    const repoTag = rootDir.toLowerCase().replace(/'/g, "''");
     const result = spawnSync(
       'powershell',
       [
@@ -196,6 +197,11 @@ function spawnElectron(): void {
     }
     if (!isShuttingDown && !expectedExit && signal !== 'SIGTERM' && code !== 0) {
       console.error(`[electron] exited with code ${code ?? 'null'}`);
+      setTimeout(() => {
+        if (!isShuttingDown && !electronProcess) {
+          maybeStartElectron();
+        }
+      }, ELECTRON_CRASH_RESTART_MS);
     }
   });
 }
