@@ -205,3 +205,42 @@
   border-radius: 16px;
   background: var(--yclaw-surface-muted);
 }
+
+.yclaw-ops-metric .ant-card-body {
+  min-height: 132px;
+}
+
+.yclaw-ops-metric-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(22, 119, 255, 0.08);
+  flex: none;
+}
+
+.yclaw-ops-metric h3.ant-typography {
+  margin: 2px 0;
+  font-size: 26px;
+}
+
+.yclaw-ops-metric-blue {
+  border-color: rgba(22, 119, 255, 0.22);
+}
+
+.yclaw-ops-metric-green {
+  border-color: rgba(22, 163, 74, 0.22);
+}
+
+.yclaw-ops-metric-orange {
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.yclaw-ops-metric-red {
+  border-color: rgba(239, 68, 68, 0.22);
+}
+
+.yclaw-resource-block {
+  margin-bottom: 16px;
+}
