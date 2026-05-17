@@ -17,6 +17,7 @@
 | [`design/`](design/) | 设计草案与方案建议 | 早于 spec 的设计探索、模块/页面优化建议 | `<主题>.md`，例如 `ai-assistant.md`、`page-container-optimization.md` |
 | [`plans/`](plans/) | 命名实施计划 | 把 spec 拆成阶段/里程碑的实施路线 | `<主题>-v<N>.md`，例：`automation-browser-ops-v1.md` |
 | [`reviews/`](reviews/) | 评审报告与修复记录 | 代码评审、PR 分析、未提交改动审查、修复回写 | `<主题>.md` 或带日期 `YYYY-MM-DD-<主题>.md` |
+| [`signin/`](signin/) | 自动签到取证材料 | 保存真实站点录制分析、接口字段与风险复查 | `<站点>-signin-investigation.md` |
 | [`superpowers/`](superpowers/) | Agent 工作流过程产物 | 由 superpowers/agent 生成的 specs / plans / reviews | 内部已分 `specs/`、`plans/`、`reviews/`，命名带日期 |
 
 > ⚠️ **不要在 `docs/` 根目录新增文档**。根目录只保留本 `README.md`。所有新文档必须落到上述子目录之一。
@@ -36,6 +37,7 @@
 | 想了解 V1 要交付什么 | [specs/v1.0-baseline.md](specs/v1.0-baseline.md) → [specs/v1.1-enhancements.md](specs/v1.1-enhancements.md) |
 | 想了解自动化主路线 | [specs/automation-browser-ops-v1.md](specs/automation-browser-ops-v1.md) → [plans/automation-browser-ops-v1.md](plans/automation-browser-ops-v1.md) |
 | 想了解 Runner 主线 | [specs/remote-runner-control-plane-v1.md](specs/remote-runner-control-plane-v1.md) → [specs/capacity-aware-runner-scheduler-v1.md](specs/capacity-aware-runner-scheduler-v1.md) |
+| 想了解热点/评论/签到专项 | [specs/hot-monitor-v1.md](specs/hot-monitor-v1.md) → [specs/comment-monitor-v1.md](specs/comment-monitor-v1.md) → [specs/signin-v1.md](specs/signin-v1.md) |
 
 ### 2.2 现状与规划（overview / product）
 
@@ -59,6 +61,9 @@
 - [specs/v1.1-enhancements.md](specs/v1.1-enhancements.md)：V1.1 增强规格
 - [specs/automation-browser-ops-v1.md](specs/automation-browser-ops-v1.md)：自动化采集 V1 规格
 - [specs/browser-hot-workspace-v1.md](specs/browser-hot-workspace-v1.md)：浏览器 `HOT` 工作台与抖音分析台 V1 规格
+- [specs/hot-monitor-v1.md](specs/hot-monitor-v1.md)：独立热点监控入口、TrendRadar 风格能力、报告、通知与 MCP 查询 V1 规格
+- [specs/comment-monitor-v1.md](specs/comment-monitor-v1.md)：评论监控、AI 回复与 MediaCrawler 外部执行器 V1 规格
+- [specs/signin-v1.md](specs/signin-v1.md)：自动签到与京东签到 V1 规格
 - [specs/data-center-v1.md](specs/data-center-v1.md)：数据中心 / 数据出口中心 V1 规格
 - [specs/stock-analysis-v1.md](specs/stock-analysis-v1.md)：股票分析模块 V1 规格
 - [specs/headless-runner-v1.md](specs/headless-runner-v1.md)：Headless Runner / CLI V1 规格
@@ -93,6 +98,7 @@
 
 ### 2.7 Agent 过程产物（superpowers）
 
+- [superpowers/README.md](superpowers/README.md)：过程产物定位与稳定文档映射
 - [superpowers/specs/](superpowers/specs/)：agent 输出的设计规格
 - [superpowers/plans/](superpowers/plans/)：agent 输出的实施计划
 - [superpowers/reviews/](superpowers/reviews/)：agent 评审模板与材料

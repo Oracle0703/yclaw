@@ -75,7 +75,7 @@ yclaw/
 
 ### `src/renderer/entries/` — 业务模块入口
 
-当前有 **8 个业务入口**：
+当前有 **9 个业务入口**：
 
 | 入口               | 说明                                                                                   |
 | ------------------ | -------------------------------------------------------------------------------------- |
@@ -87,6 +87,7 @@ yclaw/
 | `plugin-center/`   | 插件安装、启停、卸载、权限确认                                                         |
 | `hot-monitor/`     | 热点监控配置、运行与报告（在 workbench 内部以 `/hot-monitor` 路由懒加载）              |
 | `comment-monitor/` | 评论监控配置、运行、AI 回复与报告（在 workbench 内部以 `/comment-monitor` 路由懒加载） |
+| `signin/`          | 自动签到任务、京东登录态采集、运行状态与历史记录（在 workbench 内部以 `/signin` 路由懒加载） |
 
 ### `src/renderer/plugin-host/` — 插件宿主页
 
@@ -204,10 +205,10 @@ yclaw/
 | 项目         | 当前情况                                                                                      |
 | ------------ | --------------------------------------------------------------------------------------------- |
 | 文档背景     | 仓库最初以规划文档起步，现已演进为真实工程仓库                                                |
-| 渲染入口数量 | 当前是 6 个业务入口 + 1 个 `plugin-host` 宿主                                                 |
+| 渲染入口数量 | 当前是 9 个业务入口 + 1 个 `plugin-host` 宿主                                                 |
 | 服务层       | 已新增批次、结果、模板、告警、Remote Runner、Runner Scheduler、特性包等服务，不止基础系统服务 |
 | 数据访问层   | 当前采用 `services/` + `repositories/` 分层，而不是单一服务文件结构                           |
-| 业务子域     | 已继续拆出 `data-center/`、`hot/`、`task-as-code/` 等明确子域                                 |
+| 业务子域     | 已继续拆出 `data-center/`、`hot/`、`comment/`、`signin/`、`task-as-code/` 等明确子域           |
 | CLI / MCP    | 当前已包含 `src/cli/` 与 `src/mcp/`，不再只服务 Electron 窗口内场景                           |
 | Runner 形态  | 已包含 `src/runner/cli` 与 `src/runner/daemon`，不再只有 Electron 内部执行路径                |
 | 测试结构     | 已扩展为组件、服务、仓储、IPC、runner、脚本、e2e 多层测试                                     |

@@ -10,8 +10,9 @@
 | 结论 | 状态 | 说明 |
 | --- | --- | --- |
 | 仓库已是完整工程，不再是纯规划工作区 | `✅ 已做` | 已存在 `package.json`、Electron + Vite + TypeScript 主体代码、测试、构建与打包脚本 |
-| 主线能力已有稳定文档承接 | `🟡 部分已做` | 自动化、Data Center、Task-as-Code、MCP、Headless Runner、Remote Runner、Runner Scheduler 均有 stable docs |
+| 主线能力已有稳定文档承接 | `✅ 已补齐基础承接` | 自动化、Data Center、Task-as-Code、MCP、Headless Runner、Remote Runner、Runner Scheduler、Hot Monitor、Comment Monitor、Signin 均有 stable docs |
 | 浏览器新业务承接文档不足 | `✅ 已补基础专项文档` | 已新增 `docs/specs/browser-hot-workspace-v1.md`，承接抖音分析台与 `HOT` 工作台 |
+| 新增独立业务入口承接文档不足 | `✅ 已补稳定专项文档` | 已新增 `docs/specs/hot-monitor-v1.md`、`docs/specs/comment-monitor-v1.md`、`docs/specs/signin-v1.md` |
 | 工程运行时文档不足 | `✅ 已补基础说明` | 已新增 `docs/architecture/dev-runtime.md`，说明 `predev`、端口与 Electron 启动链路 |
 | 结构类文档存在滞后 | `🟡 已校准一部分` | 本轮已补 `src/cli/`、`src/mcp/`、`tests/integration/`、`hot` / `data-center` / `task-as-code` 等结构说明 |
 | 仓库级工作说明存在过时内容 | `✅ 已修正` | `AGENTS.md` 中“仅 docs / 无 package.json / 无可运行脚本”的描述已不再成立，本轮已更新 |
@@ -37,6 +38,9 @@
 | `docs/specs/v1.1-enhancements.md` | 增强规格 | `部分齐全` | `🟡` | 能覆盖部分增强项，但不是最新实现全景 |
 | `docs/specs/automation-browser-ops-v1.md` | 自动化与浏览器主线 | `齐全` | `✅` | 浏览器子域细节已由 `docs/specs/browser-hot-workspace-v1.md` 补充承接 |
 | `docs/specs/browser-hot-workspace-v1.md` | 浏览器 `HOT` 工作台与抖音分析台 | `✅ 已补` | `✅` | 现在已有稳定专项文档，而不是只依赖过程文档 |
+| `docs/specs/hot-monitor-v1.md` | 独立热点监控入口 | `✅ 已补` | `✅` | 承接热点源、NewsNow/RSS、报告、AI 摘要、通知和 MCP 查询 |
+| `docs/specs/comment-monitor-v1.md` | 评论监控入口 | `✅ 已补` | `✅` | 承接评论源、评论结果、报告、AI 回复和 MediaCrawler 外部执行器 |
+| `docs/specs/signin-v1.md` | 自动签到入口 | `✅ 已补` | `✅` | 承接京东签到任务、登录态采集、API 优先执行、浏览器兜底和运行历史 |
 | `docs/specs/stock-analysis-v1.md` | 股票分析模块 | `✅ 已补` | `✅` | 当前已对 K 线工作台、指标与数据源边界形成稳定专项文档 |
 | `docs/specs/task-operations-center-v1.md` | 任务运营中台 | `部分齐全` | `✅` | 覆盖任务运营闭环，不覆盖浏览器 `HOT` 专项 |
 | `docs/specs/data-center-v1.md` | Data Center | `齐全` | `✅` | 有明确阶段与验收边界 |
@@ -64,7 +68,10 @@
 | Workbench / 全局框架 | `src/renderer/entries/workbench/` `src/renderer/shared/components/AppProviders.tsx` | `✅ 已做`：主页、设置、命令面板、AI 面板、全局 loading 已存在 | `README.md` `current-status.md` | 无明显缺口 |
 | 浏览器会话控制台 | `src/renderer/entries/browser/` `src/main/browser/TabManager.ts` | `✅ 已做`：标签、地址栏、干预、录制、WebView 容器已存在 | `automation-browser-ops-v1.md` `current-status.md` `architecture.md` | 仍缺更稳定的浏览器业务文档，尤其是新布局与双工作模式说明 |
 | 抖音分析台 | `src/renderer/entries/browser/douyin/` `DouyinSearchPanel.tsx` `DouyinInsightPanel.tsx` | `✅ 已做基础版`：搜索样本、当前视频、评论分析、下载授权、回流草稿已存在 | `docs/specs/browser-hot-workspace-v1.md` | 真实后端搜索与下载持久化仍未做 |
-| `HOT` 采集工作台 | `src/main/services/hot/` `src/main/ipc/hot-handlers.ts` `HotSourcePanel.tsx` `HotRunPanel.tsx` `HotReportPanel.tsx` | `✅ 已做基础版`：热榜源 CRUD、运行投影、报告生成、浏览器内嵌工作台已落地 | `docs/specs/browser-hot-workspace-v1.md` | 仍未独立为单独菜单或 renderer entry |
+| 浏览器内嵌 `HOT` 采集工作台 | `src/main/services/hot/` `src/main/ipc/hot-handlers.ts` `HotSourcePanel.tsx` `HotRunPanel.tsx` `HotReportPanel.tsx` | `✅ 已做基础版`：热榜源 CRUD、运行投影、报告生成、浏览器内嵌工作台已落地 | `docs/specs/browser-hot-workspace-v1.md` | 该工作台仍承载在 `browser` 模块内；独立运营入口见 `docs/specs/hot-monitor-v1.md` |
+| Hot Monitor 独立入口 | `src/renderer/entries/hot-monitor/` `src/main/services/hot/` | `✅ 已做基础版`：独立菜单、NewsNow/RSS、Timeline、报告、AI 摘要、通知与 MCP 查询已落地 | `docs/specs/hot-monitor-v1.md` | 时间轴编辑、通知目标选择、摘要缓存和 docx 报告仍未做完整 |
+| Comment Monitor 独立入口 | `src/renderer/entries/comment-monitor/` `src/main/services/comment/` | `✅ 已做首期闭环`：评论源、运行、结果、报告、AI 回复、MediaCrawler 外部执行器已落地 | `docs/specs/comment-monitor-v1.md` | 多平台深度适配、二级评论线程、MCP 查询和 docx 报告仍未做完整 |
+| Signin 独立入口 | `src/renderer/entries/signin/` `src/main/services/signin/` | `✅ 已做京东首期闭环`：任务、登录态采集、API 优先、浏览器兜底、运行记录和历史已落地 | `docs/specs/signin-v1.md` `docs/signin/jd-signin-investigation.md` | 历史分页筛选、SMTP 长稳验证、API 签名上下文优化和多站点仍未做完整 |
 | 自动化 / 任务运营主线 | `src/main/services/*Task*` `src/renderer/entries/automation/` | `✅ 已做基础闭环`：任务、批次、结果、模板、告警、审核、值班、远程执行面板均存在 | `automation-browser-ops-v1.md` `task-operations-center-v1.md` `roadmap.md` | 主要是持续回写完成度，而不是缺文档 |
 | Data Center | `src/main/services/data-center/` `src/renderer/entries/data-center/` | `✅ 已做 P0/P1 基础版`：结果资产、导出、Webhook、Token、本地只读 API、质量评分与洞察已在代码中 | `data-center-v1.md` `design/data-center.md` `current-status.md` | 文档整体齐全 |
 | Task-as-Code | `src/shared/serialization/` `src/main/services/task-as-code/` `src/cli/lint.ts` | `✅ 已做基础版`：YAML、lint/import/export、watcher、Persistence 已存在 | `task-as-code-v1.md` `README.md` `src/shared/serialization/README.md` | 文档整体齐全 |
@@ -92,6 +99,9 @@
 | `docs/overview/implementation-audit.md` | 新增，实现反查总表与文档齐全度结论 |
 | `docs/specs/browser-hot-workspace-v1.md` | 新增，承接浏览器 `HOT` 工作台与抖音分析台稳定规格 |
 | `docs/specs/stock-analysis-v1.md` | 新增，承接股票分析模块稳定规格 |
+| `docs/specs/hot-monitor-v1.md` | 新增，承接独立热点监控入口稳定规格 |
+| `docs/specs/comment-monitor-v1.md` | 新增，承接评论监控与 MediaCrawler 外部执行器稳定规格 |
+| `docs/specs/signin-v1.md` | 新增，承接京东自动签到稳定规格 |
 | `docs/architecture/dev-runtime.md` | 新增，承接 `npm run dev` 与运行时问题说明 |
 | `docs/architecture/feature-pack-plugin-governance.md` | 新增，承接功能包与插件分发治理说明 |
 | `docs/overview/current-status.md` | 补充文档反查结论、更新时间、浏览器 `HOT` / 抖音 / 单实例 / dev runtime 状态 |
@@ -105,7 +115,7 @@
 
 | 判断 | 结论 |
 | --- | --- |
-| 文档是否齐全 | `基本齐全，但仍有细分工程文档可继续补` |
-| 哪些主线已经有较完整文档 | 自动化、Task Ops、Data Center、Task-as-Code、MCP、Headless Runner、Remote Runner、Runner Scheduler |
+| 文档是否齐全 | `基本齐全，新增独立业务入口已有 stable docs 承接；后续以增量回写为主` |
+| 哪些主线已经有较完整文档 | 自动化、Task Ops、Data Center、Task-as-Code、MCP、Headless Runner、Remote Runner、Runner Scheduler、Hot Monitor、Comment Monitor、Signin |
 | 哪些实现仍值得继续补文档 | 以当前代码面看，主要缺口已从“无稳定文档”转为“后续增量持续回写” |
-| 本轮完成了什么 | 已把 `HOT` 工作台、抖音分析台、stock、dev runtime、功能包 / 插件治理从“缺 stable docs”状态推进到有专门文档承接 |
+| 本轮完成了什么 | 已把 `HOT` 工作台、抖音分析台、stock、dev runtime、功能包 / 插件治理、Hot Monitor、Comment Monitor、Signin 从“缺 stable docs”状态推进到有专门文档承接 |

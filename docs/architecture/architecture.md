@@ -19,9 +19,9 @@
 
 | 维度 | 当前情况 |
 | --- | --- |
-| 进程结构 | 1 个主进程 + 多业务渲染入口 + 1 个 `plugin-host` 宿主入口 |
-| 渲染入口 | `workbench`、`stock`、`automation`、`browser`、`plugin-center`，外加 `plugin-host` |
-| 主进程服务 | 配置、数据库、日志、托盘、更新、特性包、调度、批次、模板、结果、告警、Remote Runner、Runner Scheduler 等 |
+| 进程结构 | 1 个主进程 + 9 个业务渲染入口 + 1 个 `plugin-host` 宿主入口 |
+| 渲染入口 | `workbench`、`stock`、`automation`、`browser`、`data-center`、`plugin-center`、`hot-monitor`、`comment-monitor`、`signin`，外加 `plugin-host` |
+| 主进程服务 | 配置、数据库、日志、托盘、更新、特性包、调度、批次、模板、结果、告警、Data Center、HOT、Comment、Signin、Remote Runner、Runner Scheduler 等 |
 | 核心边界 | Electron IPC + `contextBridge` + 共享类型与常量 |
 | 当前重点 | 自动化 Browser Ops、Remote Runner、容量感知调度、AI 助手、插件权限、构建/打包链路 |
 
@@ -56,12 +56,16 @@ graph TB
         LLM[LLMProvider<br/>OpenAI / Ollama]
     end
 
-    subgraph RendererEntries["渲染进程 — 6 入口 (Vite MPA)"]
+    subgraph RendererEntries["渲染进程 — 9 个业务入口 + Plugin Host (Vite MPA)"]
         WB[主工作台<br/>Workbench]
         STK[股票分析<br/>Stock]
         AUTO_UI[自动化采集<br/>Automation]
         BRW[内嵌浏览器<br/>Browser]
+        DC[数据中心<br/>Data Center]
         PC[插件中心<br/>Plugin Center]
+        HOT_UI[热点监控<br/>Hot Monitor]
+        COMMENT_UI[评论监控<br/>Comment Monitor]
+        SIGNIN_UI[自动签到<br/>Signin]
         PH_UI[插件宿主<br/>Plugin Host]
     end
 
@@ -170,7 +174,23 @@ graph LR
         R5[React App<br/>Plugin Center]
     end
 
-    subgraph PluginProcess["渲染进程 #6 — Plugin Host（V1.0）"]
+    subgraph RendererProcess6["渲染进程 #6 — 数据中心"]
+        R6[React App<br/>Data Center]
+    end
+
+    subgraph RendererProcess7["渲染进程 #7 — 热点监控"]
+        R7[React App<br/>Hot Monitor]
+    end
+
+    subgraph RendererProcess8["渲染进程 #8 — 评论监控"]
+        R8[React App<br/>Comment Monitor]
+    end
+
+    subgraph RendererProcess9["渲染进程 #9 — 自动签到"]
+        R9[React App<br/>Signin]
+    end
+
+    subgraph PluginProcess["渲染进程 #10 — Plugin Host（V1.0）"]
         P1[共享 Plugin Host<br/>受限 preload]
     end
 
@@ -185,6 +205,10 @@ graph LR
     MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess3
     MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess4
     MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess5
+    MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess6
+    MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess7
+    MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess8
+    MainProcess <-->|"ipcMain/ipcRenderer"| RendererProcess9
     MainProcess <-->|"受限 IPC 通道"| PluginProcess
     MainProcess <-->|"HTTP / SSE"| RemoteRunnerProcess
 
@@ -194,6 +218,10 @@ graph LR
     MainProcess -->|"EventBus fan-out"| RendererProcess3
     MainProcess -->|"EventBus fan-out"| RendererProcess4
     MainProcess -->|"EventBus fan-out"| RendererProcess5
+    MainProcess -->|"EventBus fan-out"| RendererProcess6
+    MainProcess -->|"EventBus fan-out"| RendererProcess7
+    MainProcess -->|"EventBus fan-out"| RendererProcess8
+    MainProcess -->|"EventBus fan-out"| RendererProcess9
 ```
 
 ### 进程隔离策略
@@ -528,7 +556,7 @@ graph TB
 
 | 模块       | 技术选型   | 版本要求 | 选型理由                                        |
 | ---------- | ---------- | -------- | ----------------------------------------------- |
-| 桌面框架   | Electron   | 33       | WebContentsView 支持、Chromium 内核复用、跨平台 |
+| 桌面框架   | Electron   | 41       | WebContentsView 支持、Chromium 内核复用、跨平台 |
 | UI 框架    | React      | 18       | 生态丰富、组件化、Concurrent Mode               |
 | 构建工具   | Vite       | 6        | 原生 MPA 支持、HMR 极速、Rollup 生态            |
 | TypeScript | TypeScript | 5.7      | 类型安全、IPC 消息类型校验                      |
@@ -574,7 +602,7 @@ graph TB
 | ---------------- | ------------------------------- | ------------------------------------ |
 | 插件宿主（V1.0） | 共享 plugin-host + 受限 preload | 先收敛到单一宿主模型，降低实现复杂度 |
 | 插件通信         | IPC                             | 统一权限检查与错误处理链路           |
-| 插件包格式       | .ycplugin (zip + plugin.json)   | 自定义包格式，V1.0 不引入签名体系    |
+| 插件包格式       | 插件目录 + `plugin.json`；`.ycplugin` 属后续方向 | 先以本地插件目录收敛安装和权限边界 |
 
 ---
 

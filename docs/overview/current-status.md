@@ -22,6 +22,9 @@
 | `docs/specs/v1.1-enhancements.md`                     | 增强项规格                              | 想了解“V1.1 之后补什么”                   |
 | `docs/specs/browser-hot-workspace-v1.md`              | 浏览器 `HOT` 工作台与抖音分析台稳定规格 | 想了解浏览器采集台内部双工作模式          |
 | `docs/specs/stock-analysis-v1.md`                     | 股票分析模块稳定规格                    | 想了解 `stock` 模块当前真实边界           |
+| `docs/specs/hot-monitor-v1.md`                        | 独立热点监控稳定规格                    | 想了解热点源、报告、通知、AI 摘要与 MCP 查询 |
+| `docs/specs/comment-monitor-v1.md`                    | 评论监控稳定规格                        | 想了解评论源、评论结果、AI 回复与 MediaCrawler 外部执行器 |
+| `docs/specs/signin-v1.md`                             | 自动签到稳定规格                        | 想了解京东签到任务、登录态采集和运行记录 |
 
 ---
 
@@ -52,6 +55,9 @@
 | 主线文档覆盖          | 基本齐全           | 自动化、Task Ops、Data Center、Task-as-Code、MCP、Headless Runner、Remote Runner、Scheduler 均已有 stable docs |
 | 浏览器新业务文档      | 已补齐基础专项文档 | 已新增 `docs/specs/browser-hot-workspace-v1.md` 承接 `HOT` 工作台与抖音分析台                                  |
 | 股票分析文档          | 已补齐基础专项文档 | 已新增 `docs/specs/stock-analysis-v1.md` 承接 `stock` 模块当前真实边界                                         |
+| 热点监控文档          | 已补齐稳定专项文档 | 已新增 `docs/specs/hot-monitor-v1.md` 承接独立 `hot-monitor` 入口                                             |
+| 评论监控文档          | 已补齐稳定专项文档 | 已新增 `docs/specs/comment-monitor-v1.md` 承接 `comment-monitor`、AI 回复和 MediaCrawler 外部执行器            |
+| 自动签到文档          | 已补齐稳定专项文档 | 已新增 `docs/specs/signin-v1.md` 承接京东签到实现；接口取证保留在 `docs/signin/jd-signin-investigation.md`     |
 | 工程运行时文档        | 已补齐基础说明     | 已新增 `docs/architecture/dev-runtime.md` 说明 `predev`、端口与 Electron 启动链路                              |
 | 功能包 / 插件治理文档 | 已补齐基础说明     | 已新增 `docs/architecture/feature-pack-plugin-governance.md` 说明分发、安装落点与权限边界                      |
 | 结构说明              | 已补强             | `docs/architecture/structure.md` 已回写 `src/cli/`、`src/mcp/`、`tests/integration/` 等真实结构                |
@@ -67,7 +73,10 @@
 | `docs/specs/v1.1-enhancements.md`                     | 部分完成                           | 命令面板、AI 面板、设置页增强、多数运营/浏览器增强已进入代码                                                                                                                                                                                                                                                                                                     | 文档中的部分 UI 勾选项仍需与真实实现继续对齐                                         |
 | `docs/specs/automation-browser-ops-v1.md`             | 部分完成到基础闭环                 | 任务、批次、结果、会话、告警、执行日志、介入面板、模板等主链路已具备基础版                                                                                                                                                                                                                                                                                       | 完整 Electron 成品态验收和部分深水区交互仍待补齐                                     |
 | 京东签到能力                                          | 部分完成到可验证闭环               | 已完成共享类型、任务持久化、最新运行记录持久化、运行历史列表 UI、京东 API/浏览器补领链路、主进程 IPC/调度分流、Automation 签到面板/状态卡、Settings SMTP 配置与 SMTP 客户端接入                                                                                                                                                                                  | 真实 SMTP 服务联调、历史记录分页/筛选等增强仍未完成                                  |
-| `docs/specs/browser-hot-workspace-v1.md`              | 基础版已落地                       | 浏览器 `HOT` 工作台、抖音分析台、双工作模式、IPC 与数据模型边界已有稳定文档承接                                                                                                                                                                                                                                                                                  | 当前仍未独立成单独菜单或 renderer entry                                              |
+| `docs/specs/browser-hot-workspace-v1.md`              | 基础版已落地                       | 浏览器 `HOT` 工作台、抖音分析台、双工作模式、IPC 与数据模型边界已有稳定文档承接                                                                                                                                                                                                                                                                                  | 浏览器内嵌 `HOT` 工作台仍承载在 `browser` 模块内；独立运营入口见 `hot-monitor`       |
+| `docs/specs/hot-monitor-v1.md`                        | 基础版已落地                       | 独立 `hot-monitor` 入口、热点源、NewsNow/RSS、Timeline、报告、AI 摘要、通知出口和 MCP 查询已有稳定文档承接                                                                                                                                                                                                                                                        | 可视化时间轴、通知目标精细选择、摘要缓存和 docx 报告仍属后续增强                     |
+| `docs/specs/comment-monitor-v1.md`                    | 首期闭环已落地                     | 独立 `comment-monitor` 入口、评论源、运行投影、评论结果、报告、AI 回复与 MediaCrawler 外部执行器已有稳定文档承接                                                                                                                                                                                                                                                   | 多平台深度适配、二级评论线程视图、MCP 评论查询和 docx 报告仍属后续增强               |
+| `docs/specs/signin-v1.md`                             | 京东签到首期闭环已落地             | 独立 `signin` 入口、京东签到任务、登录态采集、API 优先执行、浏览器兜底、运行记录与历史展示已有稳定文档承接                                                                                                                                                                                                                                                         | 历史分页筛选、SMTP 长稳验证、API 签名上下文优化和多站点支持仍属后续增强              |
 | `docs/specs/stock-analysis-v1.md`                     | 基础版已落地                       | 股票分析模块的 K 线工作台、指标、数据源边界与未完成项已有稳定文档承接                                                                                                                                                                                                                                                                                            | 当前仍不是完整投研终端                                                               |
 | `docs/specs/task-as-code-v1.md`                       | 基础版已落地 / UI 待补             | 核心序列化、CLI、IPC、preload 桥接、目录监听、Persistence 适配、README quick-start 与示例已落地                                                                                                                                                                                                                                                                  | 任务中心 / 模板中心 UI 导入导出入口、shutdown 等少量防御性尾项仍待补齐               |
 | `docs/specs/mcp-integration-v1.md`                    | 基础版已落地 / 验收收尾            | MCP Server `stdio/http`、token 鉴权、dangerous 标记、外部 MCP Client、设置页、AI 工具可见性、审计面板、Claude/Cursor 示例已落地                                                                                                                                                                                                                                  | 最终逐条验收、资源/审计筛选和远程访问边界仍待收口                                    |
@@ -126,6 +135,9 @@
 | `browser`       | 地址栏、标签栏、干预面板、录制面板、抖音分析台、`HOT` 采集工作台、容器视图                                                                                                          |
 | `plugin-center` | 插件列表、权限展示、安装/启停/卸载操作                                                                                                                                              |
 | `plugin-host`   | 受限宿主环境与桥接层                                                                                                                                                                |
+| `hot-monitor`   | 热点源配置、运行、报告、AI 摘要、通知出口与 MCP 查询                                                                                                                                 |
+| `comment-monitor` | 评论源配置、运行、评论结果、AI 回复、报告和 MediaCrawler 外部执行器                                                                                                                |
+| `signin`        | 京东签到任务、登录态采集、运行状态与历史记录                                                                                                                                         |
 
 ### 3.3 引擎与业务能力
 
@@ -200,7 +212,7 @@
 | 插件隔离    | 目前仍是 V1 基础模式，尚未达到按插件独立进程隔离                                                                         |
 | e2e 范围    | Playwright 主要覆盖浏览器/自动化运营链路，尚未完全覆盖打包后的 Electron 成品                                             |
 | 打包验证    | 已有打包脚本，但各平台发行质量仍需持续验证                                                                               |
-| 文档演进    | 仓库中同时保留了规划文档、专项方案文档与实现文档，阅读时需注意区分“目标”和“现状”                                         |
+| 文档演进    | 仓库中同时保留了规划文档、专项方案文档、实现文档和 agent 过程产物；现状以 `overview/`、`architecture/`、`specs/` 为准，`superpowers/` 仅作过程归档 |
 
 ---
 
