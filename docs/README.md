@@ -99,6 +99,7 @@
 ### 2.7 Agent 过程产物（superpowers）
 
 - [superpowers/README.md](superpowers/README.md)：过程产物定位与稳定文档映射
+- [superpowers/specs/2026-05-17-task-operations-convergence-design.md](superpowers/specs/2026-05-17-task-operations-convergence-design.md)：任务运营主线收敛设计
 - [superpowers/specs/](superpowers/specs/)：agent 输出的设计规格
 - [superpowers/plans/](superpowers/plans/)：agent 输出的实施计划
 - [superpowers/reviews/](superpowers/reviews/)：agent 评审模板与材料

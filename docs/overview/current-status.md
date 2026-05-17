@@ -43,6 +43,7 @@
 | 热点监控     | 已实现基础版本       | 独立 `hot-monitor` 入口，提供热点源配置、运行与报告生成                                               |
 | 评论监控     | 已实现首期闭环       | 独立 `comment-monitor` 入口，提供评论源、运行、AI 回复与报告管理；MediaCrawler 外部执行器作为采集后端 |
 | 启动治理     | 已实现基础版本       | `bootstrapMainProcess`、单实例抢锁、`predev` 运行时检查均已落地                                       |
+| 产品收敛     | Phase 0 已启动        | Workbench 首页和导航开始从模块橱窗收敛为任务运营总览，Hot / Comment / Signin 作为任务类型承接         |
 | 测试体系     | 已建立               | 包含 Vitest 单测、回归测试、Playwright e2e                                                            |
 | 打包能力     | 已建立               | 支持 `build`、`pack`、`dist` 与多平台打包脚本                                                         |
 
