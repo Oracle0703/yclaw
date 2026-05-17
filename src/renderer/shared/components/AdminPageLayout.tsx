@@ -3,11 +3,12 @@ import type { PropsWithChildren } from 'react';
 import {
   BarsOutlined,
   CheckCircleOutlined,
+  ClusterOutlined,
   DatabaseOutlined,
   DeploymentUnitOutlined,
+  ExperimentOutlined,
   FireOutlined,
   MessageOutlined,
-  FundOutlined,
   GlobalOutlined,
   HomeOutlined,
   MenuFoldOutlined,
@@ -30,48 +31,48 @@ interface ModuleMenuItem {
 const MODULE_MENU: ModuleMenuItem[] = [
   {
     key: '/',
-    label: '总览',
+    label: '运营总览',
     icon: <HomeOutlined />,
   },
   {
-    key: '/stock',
-    label: '行情分析',
-    icon: <FundOutlined />,
-  },
-  {
     key: '/automation',
-    label: '自动化',
+    label: '任务中心',
     icon: <RobotOutlined />,
   },
   {
-    key: '/signin',
-    label: '自动签到',
-    icon: <CheckCircleOutlined />,
-  },
-  {
-    key: '/data-center',
-    label: '数据中心',
-    icon: <DatabaseOutlined />,
-  },
-  {
     key: '/hot-monitor',
-    label: '热点监控',
+    label: '热点任务',
     icon: <FireOutlined />,
   },
   {
     key: '/comment-monitor',
-    label: '评论监控',
+    label: '评论任务',
     icon: <MessageOutlined />,
   },
   {
+    key: '/signin',
+    label: '签到任务',
+    icon: <CheckCircleOutlined />,
+  },
+  {
+    key: '/data-center',
+    label: '结果中心',
+    icon: <DatabaseOutlined />,
+  },
+  {
     key: '/browser',
-    label: '浏览器',
+    label: '介入浏览器',
     icon: <GlobalOutlined />,
   },
   {
     key: '/plugin-center',
-    label: '插件',
+    label: '能力扩展',
     icon: <DeploymentUnitOutlined />,
+  },
+  {
+    key: '/stock',
+    label: 'Labs',
+    icon: <ExperimentOutlined />,
   },
   {
     key: '/settings',
@@ -184,11 +185,14 @@ export function AdminPageLayout({ children }: PropsWithChildren) {
             </Space>
 
             <Space size={12} wrap>
-              <Tag color="cyan">
-                <SafetyCertificateOutlined /> 安全
-              </Tag>
               <Tag color="geekblue">
-                <BarsOutlined /> 协同
+                <ClusterOutlined /> 任务运营
+              </Tag>
+              <Tag color="cyan">
+                <SafetyCertificateOutlined /> 本地优先
+              </Tag>
+              <Tag color="purple">
+                <BarsOutlined /> 可复盘
               </Tag>
               <Badge dot>
                 <NotificationOutlined className="yclaw-header-action" />

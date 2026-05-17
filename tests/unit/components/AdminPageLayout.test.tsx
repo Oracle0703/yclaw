@@ -8,11 +8,12 @@ const { navigateMock, locationState } = vi.hoisted(() => ({
 }));
 
 vi.mock('@ant-design/icons', () => ({
-  AppstoreOutlined: () => <span>appstore</span>,
   BarsOutlined: () => <span>bars</span>,
   CheckCircleOutlined: () => <span>check-circle</span>,
+  ClusterOutlined: () => <span>cluster</span>,
   DatabaseOutlined: () => <span>database</span>,
   DeploymentUnitOutlined: () => <span>deployment</span>,
+  ExperimentOutlined: () => <span>experiment</span>,
   FireOutlined: () => <span>fire</span>,
   FundOutlined: () => <span>fund</span>,
   GlobalOutlined: () => <span>global</span>,
@@ -101,40 +102,45 @@ describe('AdminPageLayout', () => {
     vi.useRealTimers();
   });
 
-  it('renders the auto sign-in menu and navigates to the standalone page', () => {
+  it('prioritizes task operations navigation and keeps task templates reachable', () => {
     render(
       <AdminPageLayout>
         <div>content</div>
       </AdminPageLayout>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '自动签到' }));
+    fireEvent.click(screen.getByRole('button', { name: '任务中心' }));
+    expect(navigateMock).toHaveBeenCalledWith('/automation');
+
+    fireEvent.click(screen.getByRole('button', { name: '热点任务' }));
+    expect(navigateMock).toHaveBeenCalledWith('/hot-monitor');
+
+    fireEvent.click(screen.getByRole('button', { name: '评论任务' }));
+    expect(navigateMock).toHaveBeenCalledWith('/comment-monitor');
+
+    fireEvent.click(screen.getByRole('button', { name: '签到任务' }));
 
     expect(navigateMock).toHaveBeenCalledWith('/signin');
   });
 
-  it('renders the hot monitor menu and navigates to the standalone page', () => {
+  it('keeps secondary modules reachable as operations support surfaces', () => {
     render(
       <AdminPageLayout>
         <div>content</div>
       </AdminPageLayout>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '热点监控' }));
+    fireEvent.click(screen.getByRole('button', { name: '结果中心' }));
+    expect(navigateMock).toHaveBeenCalledWith('/data-center');
 
-    expect(navigateMock).toHaveBeenCalledWith('/hot-monitor');
-  });
+    fireEvent.click(screen.getByRole('button', { name: '介入浏览器' }));
+    expect(navigateMock).toHaveBeenCalledWith('/browser');
 
-  it('renders the comment monitor menu and navigates to the standalone page', () => {
-    render(
-      <AdminPageLayout>
-        <div>content</div>
-      </AdminPageLayout>,
-    );
+    fireEvent.click(screen.getByRole('button', { name: '能力扩展' }));
+    expect(navigateMock).toHaveBeenCalledWith('/plugin-center');
 
-    fireEvent.click(screen.getByRole('button', { name: '评论监控' }));
-
-    expect(navigateMock).toHaveBeenCalledWith('/comment-monitor');
+    fireEvent.click(screen.getByRole('button', { name: 'Labs' }));
+    expect(navigateMock).toHaveBeenCalledWith('/stock');
   });
 
   it('keeps navigation chrome compact with title only', () => {
@@ -146,7 +152,7 @@ describe('AdminPageLayout', () => {
       </AdminPageLayout>,
     );
 
-    expect(screen.getAllByText('热点监控').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('热点任务').length).toBeGreaterThan(0);
     expect(screen.queryByText('YClaw Ops')).toBeNull();
     expect(screen.queryByText('桌面运营台')).toBeNull();
     expect(screen.queryByText('统一调度台')).toBeNull();
@@ -164,6 +170,8 @@ describe('AdminPageLayout', () => {
     expect(container.querySelector('.yclaw-admin-topbar')).toBeNull();
     expect(container.querySelector('.yclaw-admin-header')).toBeDefined();
     expect(screen.getByText('2026-05-07 09:08')).toBeDefined();
+    expect(screen.getByText('任务运营')).toBeDefined();
+    expect(screen.getByText('本地优先')).toBeDefined();
     expect(screen.queryByText('本地时间')).toBeNull();
     expect(screen.getByRole('button', { name: '收起导航' })).toBeDefined();
     expect(screen.queryByRole('button', { name: '热点' })).toBeNull();
