@@ -6,6 +6,10 @@ const { navigateMock } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
 }));
 
+type MockTableRecord = Record<string, React.ReactNode> & {
+  key: string;
+};
+
 vi.mock('@ant-design/icons', () => ({
   AlertOutlined: () => <span>alert</span>,
   ApiOutlined: () => <span>api</span>,
@@ -91,10 +95,10 @@ vi.mock('antd', () => ({
     columns?: Array<{
       key?: string;
       title?: React.ReactNode;
-      render?: (_: unknown, record: any) => React.ReactNode;
+      render?: (_: unknown, record: MockTableRecord) => React.ReactNode;
       dataIndex?: string;
     }>;
-    dataSource?: any[];
+    dataSource?: MockTableRecord[];
   }) => (
     <table>
       <tbody>
