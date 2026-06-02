@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { CloseOutlined, RobotOutlined, SendOutlined, UserOutlined } from '@ant-design/icons';
 import { Avatar, Badge, Button, Input, Space, Spin, Typography } from 'antd';
 import { IPC_CHANNELS } from '@shared/constants/channels';
@@ -12,8 +12,18 @@ import { useAIChatStore } from './store';
 
 const { TextArea } = Input;
 
+const AI_CHAT_THEME_STYLE = {
+  '--yclaw-ai-chat-bg': 'var(--yclaw-body-gradient)',
+  '--yclaw-ai-chat-surface': 'var(--yclaw-card-bg)',
+  '--yclaw-ai-chat-border': 'var(--yclaw-card-border)',
+  '--yclaw-ai-chat-text': 'var(--yclaw-text)',
+  '--yclaw-ai-chat-muted': 'var(--yclaw-text-secondary)',
+  '--yclaw-ai-chat-accent': 'var(--yclaw-accent)',
+  '--yclaw-ai-chat-shadow': 'var(--yclaw-shadow)',
+} as CSSProperties;
+
 /** 简易 Markdown 渲染（安全：不使用 dangerouslySetInnerHTML） */
-function renderMarkdown(text: string): React.ReactNode {
+function renderMarkdown(text: string): ReactNode {
   // Split by code blocks
   const parts = text.split(/(```[\s\S]*?```)/g);
 
@@ -23,13 +33,7 @@ function renderMarkdown(text: string): React.ReactNode {
       return (
         <pre
           key={i}
-          style={{
-            background: 'rgba(0,0,0,0.2)',
-            padding: '8px 12px',
-            borderRadius: 6,
-            fontSize: 12,
-            overflow: 'auto',
-          }}
+          className="yclaw-ai-chat-code"
         >
           <code>{code}</code>
         </pre>
@@ -55,31 +59,14 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
   return (
     <div
-      style={{
-        display: 'flex',
-        flexDirection: isUser ? 'row-reverse' : 'row',
-        gap: 8,
-        marginBottom: 12,
-      }}
+      className={`yclaw-ai-chat-message ${isUser ? 'is-user' : 'is-assistant'}`}
     >
       <Avatar
         size={28}
         icon={isUser ? <UserOutlined /> : <RobotOutlined />}
-        style={{
-          backgroundColor: isUser ? '#1677ff' : '#722ed1',
-          flexShrink: 0,
-        }}
+        className={`yclaw-ai-chat-avatar ${isUser ? 'is-user' : 'is-assistant'}`}
       />
-      <div
-        style={{
-          maxWidth: '80%',
-          padding: '8px 12px',
-          borderRadius: 8,
-          backgroundColor: isUser ? 'rgba(22, 119, 255, 0.15)' : 'rgba(114, 46, 209, 0.1)',
-          lineHeight: 1.6,
-          fontSize: 13,
-        }}
-      >
+      <div className="yclaw-ai-chat-message-bubble">
         {renderMarkdown(message.content)}
       </div>
     </div>
@@ -284,24 +271,16 @@ export default function AIChatPanel() {
   if (!isOpen) {
     return (
       <div
+        className="yclaw-ai-chat-bubble-button"
         data-testid="ai-chat-bubble"
         onClick={toggle}
-        style={{
-          position: 'fixed',
-          right: 24,
-          bottom: 24,
-          zIndex: 1000,
-          cursor: 'pointer',
-        }}
+        style={AI_CHAT_THEME_STYLE}
       >
         <Badge dot={messages.length === 0}>
           <Avatar
             size={48}
             icon={<RobotOutlined />}
-            style={{
-              backgroundColor: '#722ed1',
-              boxShadow: '0 4px 12px rgba(114, 46, 209, 0.4)',
-            }}
+            className="yclaw-ai-chat-launch-avatar"
           />
         </Badge>
       </div>
@@ -313,59 +292,39 @@ export default function AIChatPanel() {
 
   return (
     <div
+      className="yclaw-ai-chat-panel"
       data-testid="ai-chat-panel"
-      style={{
-        position: 'fixed',
-        right: 24,
-        bottom: 24,
-        width: 360,
-        maxHeight: 480,
-        zIndex: 1000,
-        display: 'flex',
-        flexDirection: 'column',
-        borderRadius: 12,
-        background: 'var(--ant-color-bg-elevated, #1a1a2e)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-        overflow: 'hidden',
-      }}
+      style={AI_CHAT_THEME_STYLE}
     >
       {/* Header */}
-      <div
-        style={{
-          padding: '12px 16px',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
+      <div className="yclaw-ai-chat-header">
         <Space>
-          <RobotOutlined style={{ color: '#722ed1' }} />
-          <Typography.Text strong>AI 运营助手</Typography.Text>
+          <RobotOutlined className="yclaw-ai-chat-title-icon" />
+          <Typography.Text strong className="yclaw-ai-chat-title">AI 运营助手</Typography.Text>
         </Space>
-        <Button type="text" size="small" icon={<CloseOutlined />} onClick={close} />
+        <Button
+          type="text"
+          size="small"
+          icon={<CloseOutlined />}
+          onClick={close}
+          className="yclaw-ai-chat-close"
+        />
       </div>
 
       {/* Messages */}
       <div
         ref={scrollRef}
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          padding: '12px 16px',
-          minHeight: 200,
-        }}
+        className="yclaw-ai-chat-messages"
       >
         {messages.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '32px 0' }}>
-            <RobotOutlined style={{ fontSize: 32, color: '#722ed1', opacity: 0.5 }} />
-            <Typography.Paragraph type="secondary" style={{ marginTop: 12 }}>
+          <div className="yclaw-ai-chat-empty">
+            <RobotOutlined className="yclaw-ai-chat-empty-icon" />
+            <Typography.Paragraph type="secondary" className="yclaw-ai-chat-empty-copy">
               你好！我是 YClaw 运营助手。
               <br />
               你可以直接问我任务状态、系统资源，或者让我帮你启动任务。
             </Typography.Paragraph>
-            <Space direction="vertical" size={4}>
+            <Space direction="vertical" size={4} className="yclaw-ai-chat-empty-actions">
               <Button
                 size="small"
                 type="dashed"
@@ -399,19 +358,13 @@ export default function AIChatPanel() {
           messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
         )}
         {isLoading && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <div className="yclaw-ai-chat-message is-assistant">
             <Avatar
               size={28}
               icon={<RobotOutlined />}
-              style={{ backgroundColor: '#722ed1', flexShrink: 0 }}
+              className="yclaw-ai-chat-avatar is-assistant"
             />
-            <div
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                backgroundColor: 'rgba(114, 46, 209, 0.1)',
-              }}
-            >
+            <div className="yclaw-ai-chat-message-bubble">
               <Spin size="small" /> <Typography.Text type="secondary">思考中...</Typography.Text>
             </div>
           </div>
@@ -419,22 +372,10 @@ export default function AIChatPanel() {
       </div>
 
       <div
-        style={{
-          padding: '8px 12px',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
+        className="yclaw-ai-chat-confirm-wrap"
       >
         {pendingToolCall ? (
-          <div
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              backgroundColor: 'rgba(220, 38, 38, 0.08)',
-            }}
-          >
+          <div className="yclaw-ai-chat-confirm">
             <Typography.Text strong>{pendingToolMeta?.title}</Typography.Text>
             <Typography.Paragraph style={{ marginBottom: 8 }}>
               {pendingToolMeta?.summary}
@@ -443,15 +384,7 @@ export default function AIChatPanel() {
               参数：
             </Typography.Paragraph>
             <pre
-              style={{
-                marginTop: 0,
-                marginBottom: 12,
-                padding: '8px 10px',
-                borderRadius: 6,
-                background: 'rgba(15, 23, 42, 0.55)',
-                overflow: 'auto',
-                fontSize: 12,
-              }}
+              className="yclaw-ai-chat-code is-tool-payload"
             >
               <code>{formatToolPayload(pendingToolCall.params)}</code>
             </pre>
@@ -481,14 +414,7 @@ export default function AIChatPanel() {
       </div>
 
       {/* Input */}
-      <div
-        style={{
-          padding: '8px 12px',
-          borderTop: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          gap: 8,
-        }}
-      >
+      <div className="yclaw-ai-chat-input-row">
         <TextArea
           data-testid="ai-chat-input"
           value={inputValue}
@@ -508,12 +434,7 @@ export default function AIChatPanel() {
       </div>
 
       {/* Footer */}
-      <div
-        style={{
-          padding: '4px 12px 8px',
-          textAlign: 'center',
-        }}
-      >
+      <div className="yclaw-ai-chat-footer">
         <Typography.Text type="secondary" style={{ fontSize: 11 }}>
           Ctrl+J 打开/关闭 · Shift+Enter 换行
         </Typography.Text>

@@ -4,10 +4,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 
 vi.mock('@ant-design/icons', () => ({
-  CloseOutlined: () => <span>close</span>,
-  RobotOutlined: () => <span>robot</span>,
-  SendOutlined: () => <span>send</span>,
-  UserOutlined: () => <span>user</span>,
+  CloseOutlined: ({ style }: { style?: React.CSSProperties }) => <span style={style}>close</span>,
+  RobotOutlined: ({ style }: { style?: React.CSSProperties }) => <span style={style}>robot</span>,
+  SendOutlined: ({ style }: { style?: React.CSSProperties }) => <span style={style}>send</span>,
+  UserOutlined: ({ style }: { style?: React.CSSProperties }) => <span style={style}>user</span>,
 }));
 
 vi.mock('antd', () => {
@@ -46,8 +46,16 @@ vi.mock('antd', () => {
   );
 
   return {
-    Avatar: ({ children, icon }: { children?: React.ReactNode; icon?: React.ReactNode }) => (
-      <div>
+    Avatar: ({
+      children,
+      icon,
+      style,
+    }: {
+      children?: React.ReactNode;
+      icon?: React.ReactNode;
+      style?: React.CSSProperties;
+    }) => (
+      <div style={style}>
         {icon}
         {children}
       </div>
@@ -100,6 +108,32 @@ describe('AIChatPanel', () => {
     expect(screen.queryByText('工具执行')).toBeNull();
     expect(screen.queryByPlaceholderText('输入工具名，例如 task_list')).toBeNull();
     expect(screen.queryByPlaceholderText('输入工具参数 JSON，可留空')).toBeNull();
+  });
+
+  it('uses YClaw theme variables instead of the old purple assistant styling', () => {
+    const { unmount } = render(<AIChatPanel />);
+
+    const panel = screen.getByTestId('ai-chat-panel');
+    const panelStyle = panel.getAttribute('style') ?? '';
+    const panelMarkup = panel.outerHTML;
+
+    expect(panelStyle).toContain('--yclaw-ai-chat-bg: var(--yclaw-body-gradient)');
+    expect(panelStyle).toContain('--yclaw-ai-chat-text: var(--yclaw-text)');
+    expect(panelStyle).toContain('--yclaw-ai-chat-accent: var(--yclaw-accent)');
+    expect(panelMarkup).toContain('--yclaw-body-gradient');
+    expect(panelMarkup).toContain('--yclaw-accent');
+    expect(panelMarkup).not.toContain('#722ed1');
+    expect(panelMarkup).not.toContain('114, 46, 209');
+
+    unmount();
+    useAIChatStore.setState({ isOpen: false });
+    render(<AIChatPanel />);
+
+    const bubbleMarkup = screen.getByTestId('ai-chat-bubble').outerHTML;
+    expect(bubbleMarkup).toContain('--yclaw-body-gradient');
+    expect(bubbleMarkup).toContain('--yclaw-accent');
+    expect(bubbleMarkup).not.toContain('#722ed1');
+    expect(bubbleMarkup).not.toContain('114, 46, 209');
   });
 
   it('shows pending task-start confirmation from chat and executes it after approval', async () => {
