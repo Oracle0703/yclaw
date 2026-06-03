@@ -103,6 +103,17 @@ describe('RunnerSchedulerPanel', () => {
     expect(await screen.findByText('2 active / orphaned leases')).toBeDefined();
   });
 
+  it('treats null scheduler list responses as empty', async () => {
+    invokeMock.mockImplementation(async () => null);
+
+    render(<RunnerSchedulerPanel />);
+
+    expect(await screen.findByText('collect: 0')).toBeDefined();
+    expect(await screen.findByText('inspect: 0')).toBeDefined();
+    expect(await screen.findByText('replay: 0')).toBeDefined();
+    expect(await screen.findByText('0 active / orphaned leases')).toBeDefined();
+  });
+
   it('refreshes pool status when clicking 刷新', async () => {
     let runnerName = 'Runner A';
     invokeMock.mockImplementation(async (channel: string) => {

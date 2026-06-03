@@ -1,30 +1,28 @@
 .yclaw-automation-split {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(720px, 1.05fr) minmax(360px, 0.95fr);
   gap: 16px;
   min-height: 480px;
 }
 
 .yclaw-automation-sidebar {
-  flex: 0 0 320px;
-  min-width: 260px;
-  max-width: 380px;
+  min-width: 0;
+  overflow-x: auto;
 }
 
 .yclaw-automation-main {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1180px) {
   .yclaw-automation-split {
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .yclaw-automation-sidebar {
-    flex: none;
-    max-width: none;
+    overflow-x: visible;
   }
 }

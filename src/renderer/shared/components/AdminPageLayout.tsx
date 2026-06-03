@@ -2,20 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import {
   BarsOutlined,
-  CheckCircleOutlined,
+  BookOutlined,
   DatabaseOutlined,
   DeploymentUnitOutlined,
-  FireOutlined,
-  MessageOutlined,
-  FundOutlined,
-  GlobalOutlined,
   HomeOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   NotificationOutlined,
+  PlayCircleOutlined,
   SafetyCertificateOutlined,
-  RobotOutlined,
-  SettingOutlined,
 } from '@ant-design/icons';
 import { Badge, Button, Layout, Menu, Space, Tag, Typography } from 'antd';
 import type { MenuProps } from 'antd';
@@ -30,53 +25,28 @@ interface ModuleMenuItem {
 const MODULE_MENU: ModuleMenuItem[] = [
   {
     key: '/',
-    label: '总览',
+    label: '任务台',
     icon: <HomeOutlined />,
   },
   {
-    key: '/stock',
-    label: '行情分析',
-    icon: <FundOutlined />,
+    key: '/tasks/editor',
+    label: '任务编辑器',
+    icon: <BookOutlined />,
   },
   {
-    key: '/automation',
-    label: '自动化',
-    icon: <RobotOutlined />,
+    key: '/runs',
+    label: '运行监控',
+    icon: <PlayCircleOutlined />,
   },
   {
-    key: '/signin',
-    label: '自动签到',
-    icon: <CheckCircleOutlined />,
-  },
-  {
-    key: '/data-center',
-    label: '数据中心',
+    key: '/results',
+    label: '结果库',
     icon: <DatabaseOutlined />,
   },
   {
-    key: '/hot-monitor',
-    label: '热点监控',
-    icon: <FireOutlined />,
-  },
-  {
-    key: '/comment-monitor',
-    label: '评论监控',
-    icon: <MessageOutlined />,
-  },
-  {
-    key: '/browser',
-    label: '浏览器',
-    icon: <GlobalOutlined />,
-  },
-  {
-    key: '/plugin-center',
-    label: '插件',
+    key: '/capabilities',
+    label: '能力中心',
     icon: <DeploymentUnitOutlined />,
-  },
-  {
-    key: '/settings',
-    label: '设置',
-    icon: <SettingOutlined />,
   },
 ];
 
@@ -89,7 +59,7 @@ function getSelectedMenuKey(pathname: string) {
 }
 
 function getSelectedMenuLabel(selectedKey: string): string {
-  return MODULE_MENU.find((menuItem) => menuItem.key === selectedKey)?.label ?? '总览';
+  return MODULE_MENU.find((menuItem) => menuItem.key === selectedKey)?.label ?? '任务台';
 }
 
 function formatLocalTime(date: Date): string {

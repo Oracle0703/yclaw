@@ -10,6 +10,10 @@ import { useIpcEvent } from '../../shared/hooks';
 import './styles.css';
 import Home from './pages/Home';
 import Settings from './pages/Settings';
+import TaskEditor from './pages/TaskEditor';
+import RunMonitor from './pages/RunMonitor';
+import ResultLibrary from './pages/ResultLibrary';
+import Capabilities from './pages/Capabilities';
 
 const StockPage = lazy(() => import('../stock/App'));
 const AutomationPage = lazy(() => import('../automation/App'));
@@ -29,14 +33,18 @@ const PageFallback = (
 /** 内置模块 → 路由映射，供主进程 APP_NAVIGATE 事件路由使用 */
 const MODULE_ROUTE_MAP: Record<string, string> = {
   workbench: '/',
-  stock: '/stock',
-  automation: '/automation',
-  'data-center': '/data-center',
-  'hot-monitor': '/hot-monitor',
-  'comment-monitor': '/comment-monitor',
-  'plugin-center': '/plugin-center',
-  browser: '/browser',
-  signin: '/signin',
+  taskbench: '/',
+  automation: '/tasks/editor',
+  signin: '/tasks/editor?templateId=jd-signin',
+  'hot-monitor': '/tasks/editor?templateId=hot-monitor',
+  'comment-monitor': '/tasks/editor?templateId=comment-monitor',
+  'data-center': '/results',
+  'plugin-center': '/capabilities',
+  browser: '/capabilities',
+  stock: '/capabilities',
+  runs: '/runs',
+  results: '/results',
+  capabilities: '/capabilities',
 };
 
 interface PendingNavigateBridge {
@@ -84,6 +92,11 @@ export default function App() {
           <Suspense fallback={PageFallback}>
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/taskbench" element={<Home />} />
+              <Route path="/tasks/editor" element={<TaskEditor />} />
+              <Route path="/runs" element={<RunMonitor />} />
+              <Route path="/results" element={<ResultLibrary />} />
+              <Route path="/capabilities" element={<Capabilities />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/stock" element={<StockPage />} />
               <Route path="/automation" element={<AutomationPage />} />

@@ -13,8 +13,15 @@ export interface TaskSummary {
   id: string;
   name: string;
   status: string;
+  kind?: TaskFlow['kind'];
   description?: string;
   entryUrl?: string;
+  signin?: TaskFlow['signin'] | null;
+  sessionId?: string | null;
+  templateId?: string | null;
+  enabled?: boolean;
+  tags?: string[];
+  currentRevisionId?: string | null;
   updatedAt: string;
   schedule?: {
     type: 'manual' | 'once' | 'cron';

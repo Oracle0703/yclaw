@@ -24,9 +24,9 @@ export function RunnerSchedulerPanel() {
       if (currentSeq !== requestSeq.current) {
         return;
       }
-      setRunners(nextRunners);
-      setQueue(nextQueue);
-      setLeases(nextLeases);
+      setRunners(Array.isArray(nextRunners) ? nextRunners : []);
+      setQueue(Array.isArray(nextQueue) ? nextQueue : []);
+      setLeases(Array.isArray(nextLeases) ? nextLeases : []);
     } catch (error) {
       if (currentSeq !== requestSeq.current) {
         return;

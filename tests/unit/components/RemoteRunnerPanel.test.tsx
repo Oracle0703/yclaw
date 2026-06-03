@@ -59,9 +59,12 @@ vi.mock('antd', () => ({
     dataSource,
     renderItem,
   }: {
-    dataSource?: Array<unknown>;
+    dataSource?: unknown;
     renderItem: (item: unknown) => React.ReactNode;
-  }) => <div>{(dataSource ?? []).map((item, index) => <div key={index}>{renderItem(item)}</div>)}</div>,
+  }) => {
+    const items = dataSource as unknown[];
+    return <div>{items.map((item, index) => <div key={index}>{renderItem(item)}</div>)}</div>;
+  },
   Select: ({
     value,
     onChange,
@@ -122,6 +125,22 @@ describe('RemoteRunnerPanel', () => {
 
     expect(await screen.findByText('Local Runner')).toBeDefined();
     expect(invokeMock).toHaveBeenCalledWith('runner:connection:list');
+  });
+
+  it('treats a null connection list response as empty', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === 'runner:connection:list') {
+        return null;
+      }
+      return {};
+    });
+
+    render(<RemoteRunnerPanel />);
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith('runner:connection:list');
+    });
+    expect(screen.getByRole('heading', { name: 'Remote Runner' })).toBeDefined();
   });
 
   it('submits a new connection and refreshes the list', async () => {

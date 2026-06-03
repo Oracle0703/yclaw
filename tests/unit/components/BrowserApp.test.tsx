@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 
-const { invokeMock, messageErrorMock, messageWarningMock } = vi.hoisted(() => ({
+const { eventHandlers, invokeMock, messageErrorMock, messageWarningMock } = vi.hoisted(() => ({
+  eventHandlers: new Map<string, (payload: unknown) => void>(),
   invokeMock: vi.fn(),
   messageErrorMock: vi.fn(),
   messageWarningMock: vi.fn(),
@@ -174,11 +175,21 @@ vi.mock('@renderer/entries/browser/components/RecorderPanel', () => ({
   ),
 }));
 
+vi.mock('@renderer/entries/browser/components/InterventionPanel', () => ({
+  InterventionPanel: ({
+    state,
+  }: {
+    state: { breakpoint?: { error?: string } | null } | null;
+  }) => <div>InterventionPanel:{state?.breakpoint?.error ?? 'none'}</div>,
+}));
+
 vi.mock('@renderer/shared/hooks', () => ({
   useIpc: () => ({
     invoke: invokeMock,
   }),
-  useIpcEvent: vi.fn(),
+  useIpcEvent: (channel: string, callback: (payload: unknown) => void) => {
+    eventHandlers.set(channel, callback);
+  },
 }));
 
 vi.mock('@renderer/shared/hooks/useLoading', () => ({
@@ -204,6 +215,7 @@ const existingTabs = [
 describe('Browser App', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    eventHandlers.clear();
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === IPC_CHANNELS.BROWSER_LIST_TABS) {
         return existingTabs;
@@ -380,6 +392,30 @@ describe('Browser App', () => {
       });
       expect(screen.getByText('RecorderPanel tab:4')).toBeDefined();
     });
+  });
+
+  it('renders intervention state from intervention step events', async () => {
+    render(<BrowserApp />);
+
+    await waitFor(() => {
+      expect(eventHandlers.get(IPC_CHANNELS.INTERVENTION_STEP_INFO)).toBeDefined();
+    });
+
+    act(() => {
+      eventHandlers.get(IPC_CHANNELS.INTERVENTION_STEP_INFO)?.({
+        taskId: 'task-1',
+        batchId: 'batch-1',
+        flowRunnerStatus: 'intervention',
+        webContentsId: 101,
+        sessionPartition: 'persist:session_a',
+        breakpoint: {
+          stepIndex: 1,
+          error: 'login expired',
+        },
+      });
+    });
+
+    expect(await screen.findByText('InterventionPanel:login expired')).toBeDefined();
   });
 
   it('closes an active tab and falls back to the previous tab', async () => {

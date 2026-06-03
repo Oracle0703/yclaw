@@ -8,6 +8,7 @@ async function settleAsyncWork(): Promise<void> {
 }
 
 describe('bootstrapMainProcess', () => {
+  const originalPlatform = process.platform;
   const handlers = new Map<string, (...args: unknown[]) => void>();
   const app = {
     requestSingleInstanceLock: vi.fn(),
@@ -27,6 +28,10 @@ describe('bootstrapMainProcess', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     handlers.clear();
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: originalPlatform,
+    });
   });
 
   it('在拿不到单实例锁时立即退出且不初始化应用', () => {
@@ -69,6 +74,10 @@ describe('bootstrapMainProcess', () => {
     handlers.get('before-quit')?.();
     expect(application.shutdown).toHaveBeenCalledTimes(1);
 
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux',
+    });
     handlers.get('window-all-closed')?.();
     expect(app.quit).toHaveBeenCalledTimes(1);
   });

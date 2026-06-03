@@ -1,3 +1,45 @@
+.taskbench-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.taskbench-page-head .ant-typography {
+  margin-bottom: 0;
+}
+
+.taskbench-empty-card .ant-result {
+  padding-block: 28px;
+}
+
+.taskbench-template-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.taskbench-template-active {
+  border-radius: 8px;
+  background: rgba(22, 119, 255, 0.08);
+}
+
+.taskbench-debug-block {
+  max-height: 320px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .taskbench-page-head {
+    flex-direction: column;
+  }
+}
+
 .yclaw-page-hero .ant-pro-card-body,
 .yclaw-page-hero .ant-card-body {
   padding: 22px;

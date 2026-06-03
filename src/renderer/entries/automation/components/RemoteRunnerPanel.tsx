@@ -20,7 +20,8 @@ export function RemoteRunnerPanel() {
   const [executionLogs, setExecutionLogs] = useState<RemoteExecutionLog[]>([]);
 
   const refresh = useCallback(async () => {
-    setConnections(await api.listConnections());
+    const nextConnections = await api.listConnections();
+    setConnections(Array.isArray(nextConnections) ? nextConnections : []);
   }, [api]);
 
   useEffect(() => {

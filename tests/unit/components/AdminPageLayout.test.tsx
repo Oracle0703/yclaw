@@ -10,6 +10,7 @@ const { navigateMock, locationState } = vi.hoisted(() => ({
 vi.mock('@ant-design/icons', () => ({
   AppstoreOutlined: () => <span>appstore</span>,
   BarsOutlined: () => <span>bars</span>,
+  BookOutlined: () => <span>book</span>,
   CheckCircleOutlined: () => <span>check-circle</span>,
   DatabaseOutlined: () => <span>database</span>,
   DeploymentUnitOutlined: () => <span>deployment</span>,
@@ -21,6 +22,7 @@ vi.mock('@ant-design/icons', () => ({
   MenuUnfoldOutlined: () => <span>unfold</span>,
   MessageOutlined: () => <span>message</span>,
   NotificationOutlined: () => <span>notification</span>,
+  PlayCircleOutlined: () => <span>play-circle</span>,
   RobotOutlined: () => <span>robot</span>,
   SafetyCertificateOutlined: () => <span>safety</span>,
   SettingOutlined: () => <span>setting</span>,
@@ -101,44 +103,28 @@ describe('AdminPageLayout', () => {
     vi.useRealTimers();
   });
 
-  it('renders the auto sign-in menu and navigates to the standalone page', () => {
+  it('renders only the five task toolbench primary entries', () => {
     render(
       <AdminPageLayout>
         <div>content</div>
       </AdminPageLayout>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '自动签到' }));
-
-    expect(navigateMock).toHaveBeenCalledWith('/signin');
-  });
-
-  it('renders the hot monitor menu and navigates to the standalone page', () => {
-    render(
-      <AdminPageLayout>
-        <div>content</div>
-      </AdminPageLayout>,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: '热点监控' }));
-
-    expect(navigateMock).toHaveBeenCalledWith('/hot-monitor');
-  });
-
-  it('renders the comment monitor menu and navigates to the standalone page', () => {
-    render(
-      <AdminPageLayout>
-        <div>content</div>
-      </AdminPageLayout>,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: '评论监控' }));
-
-    expect(navigateMock).toHaveBeenCalledWith('/comment-monitor');
+    expect(screen.getByRole('button', { name: '任务台' })).toBeDefined();
+    expect(screen.getByRole('button', { name: '任务编辑器' })).toBeDefined();
+    expect(screen.getByRole('button', { name: '运行监控' })).toBeDefined();
+    expect(screen.getByRole('button', { name: '结果库' })).toBeDefined();
+    expect(screen.getByRole('button', { name: '能力中心' })).toBeDefined();
+    expect(screen.queryByRole('button', { name: '行情分析' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '自动化' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '自动签到' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '热点监控' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '评论监控' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '插件' })).toBeNull();
   });
 
   it('keeps navigation chrome compact with title only', () => {
-    locationState.pathname = '/hot-monitor';
+    locationState.pathname = '/runs';
 
     render(
       <AdminPageLayout>
@@ -146,7 +132,7 @@ describe('AdminPageLayout', () => {
       </AdminPageLayout>,
     );
 
-    expect(screen.getAllByText('热点监控').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('运行监控').length).toBeGreaterThan(0);
     expect(screen.queryByText('YClaw Ops')).toBeNull();
     expect(screen.queryByText('桌面运营台')).toBeNull();
     expect(screen.queryByText('统一调度台')).toBeNull();
@@ -194,5 +180,23 @@ describe('AdminPageLayout', () => {
     expect(screen.getByText('09:08')).toBeDefined();
     expect(screen.queryByText('05-07')).toBeNull();
     expect(screen.queryByText('2026-05-07 09:08')).toBeNull();
+  });
+
+  it('navigates through new product routes', () => {
+    render(
+      <AdminPageLayout>
+        <div>content</div>
+      </AdminPageLayout>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '任务编辑器' }));
+    fireEvent.click(screen.getByRole('button', { name: '运行监控' }));
+    fireEvent.click(screen.getByRole('button', { name: '结果库' }));
+    fireEvent.click(screen.getByRole('button', { name: '能力中心' }));
+
+    expect(navigateMock).toHaveBeenNthCalledWith(1, '/tasks/editor');
+    expect(navigateMock).toHaveBeenNthCalledWith(2, '/runs');
+    expect(navigateMock).toHaveBeenNthCalledWith(3, '/results');
+    expect(navigateMock).toHaveBeenNthCalledWith(4, '/capabilities');
   });
 });

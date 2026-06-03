@@ -13,12 +13,14 @@ vi.mock('react-router-dom', () => ({
 
 vi.mock('@ant-design/icons', () => ({
   AppstoreOutlined: () => <span>appstore</span>,
+  BookOutlined: () => <span>book</span>,
   CheckCircleOutlined: () => <span>check</span>,
   DatabaseOutlined: () => <span>database</span>,
   FireOutlined: () => <span>fire</span>,
   FundOutlined: () => <span>fund</span>,
   GlobalOutlined: () => <span>global</span>,
   PlusOutlined: () => <span>plus</span>,
+  PlayCircleOutlined: () => <span>play</span>,
   ReloadOutlined: () => <span>reload</span>,
   RobotOutlined: () => <span>robot</span>,
   SearchOutlined: () => <span>search</span>,
@@ -101,19 +103,34 @@ describe('CommandPalette', () => {
     localStorage.clear();
   });
 
-  it('navigates to hot monitor from the command palette', async () => {
+  it('navigates to new task toolbench routes from the command palette', async () => {
     render(<CommandPalette />);
 
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
     fireEvent.change(screen.getByPlaceholderText('输入命令或搜索...'), {
-      target: { value: '热点' },
+      target: { value: '运行监控' },
     });
 
-    const item = await screen.findByTestId('command-item-nav:hot-monitor');
+    const item = await screen.findByTestId('command-item-nav:runs');
     fireEvent.click(item);
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith('/hot-monitor');
+      expect(navigateMock).toHaveBeenCalledWith('/runs');
     });
+  });
+
+  it('prioritizes task lifecycle commands over old module routes', async () => {
+    render(<CommandPalette />);
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    fireEvent.change(screen.getByPlaceholderText('输入命令或搜索...'), {
+      target: { value: '任务' },
+    });
+
+    expect(await screen.findByTestId('command-item-nav:taskbench')).toBeDefined();
+    expect(await screen.findByTestId('command-item-nav:task-editor')).toBeDefined();
+    expect(await screen.findByTestId('command-item-action:new-task-from-template')).toBeDefined();
+    expect(screen.queryByTestId('command-item-nav:automation')).toBeNull();
+    expect(screen.queryByTestId('command-item-nav:signin')).toBeNull();
   });
 });
