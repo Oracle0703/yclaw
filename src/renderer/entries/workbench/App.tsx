@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react';
-import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Skeleton } from 'antd';
 import { EVENTS } from '@shared/constants';
 import { AdminPageLayout } from '../../shared/components/AdminPageLayout';
@@ -7,6 +7,8 @@ import { ErrorBoundary } from '../../shared/components/ErrorBoundary';
 import { CommandPalette } from '../../shared/components/CommandPalette';
 import { AIChatPanel } from '../../shared/components/AIChatPanel';
 import { useIpcEvent } from '../../shared/hooks';
+import { parseBrowserInterventionRouteContext } from '../browser/routeContext';
+import { parseDataCenterRouteContext } from '../data-center/routeContext';
 import './styles.css';
 import Home from './pages/Home';
 import Settings from './pages/Settings';
@@ -75,6 +77,20 @@ function NavigationBridge() {
   return null;
 }
 
+function DataCenterRoutePage() {
+  const location = useLocation();
+  const routeContext = parseDataCenterRouteContext(location.state);
+
+  return <DataCenterPage routeContext={routeContext} />;
+}
+
+function BrowserRoutePage() {
+  const location = useLocation();
+  const interventionContext = parseBrowserInterventionRouteContext(location.state);
+
+  return <BrowserPage interventionContext={interventionContext} />;
+}
+
 export default function App() {
   return (
     <HashRouter>
@@ -88,10 +104,10 @@ export default function App() {
               <Route path="/stock" element={<StockPage />} />
               <Route path="/automation" element={<AutomationPage />} />
               <Route path="/signin" element={<SigninPage />} />
-              <Route path="/data-center" element={<DataCenterPage />} />
+              <Route path="/data-center" element={<DataCenterRoutePage />} />
               <Route path="/hot-monitor" element={<HotMonitorPage />} />
               <Route path="/comment-monitor" element={<CommentMonitorPage />} />
-              <Route path="/browser" element={<BrowserPage />} />
+              <Route path="/browser" element={<BrowserRoutePage />} />
               <Route path="/plugin-center" element={<PluginCenterPage />} />
             </Routes>
           </Suspense>

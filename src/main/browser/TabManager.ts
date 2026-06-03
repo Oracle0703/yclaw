@@ -383,14 +383,14 @@ export class TabManager {
         return;
       }
 
-      const payload = params as Record<string, any>;
+      const payload = params as Record<string, unknown>;
       const requestId = typeof payload.requestId === 'string' ? payload.requestId : null;
       if (!requestId) {
         return;
       }
 
       if (method === 'Network.requestWillBeSent') {
-        const request = payload.request as Record<string, any> | undefined;
+        const request = isRecord(payload.request) ? payload.request : undefined;
         const url = typeof request?.url === 'string' ? request.url : '';
         if (!shouldRecordUrl(url, domainAllowlist)) {
           return;
@@ -413,7 +413,7 @@ export class TabManager {
       }
 
       if (method === 'Network.responseReceived') {
-        const response = payload.response as Record<string, any> | undefined;
+        const response = isRecord(payload.response) ? payload.response : undefined;
         const resourceType = typeof payload.type === 'string' ? payload.type : undefined;
         const mimeType = typeof response?.mimeType === 'string' ? response.mimeType : undefined;
         if (filterStaticResources && isStaticResource(current.url, resourceType, mimeType)) {
@@ -718,6 +718,10 @@ function normalizeHeaders(value: unknown): Record<string, unknown> {
     return {};
   }
   return { ...(value as Record<string, unknown>) };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function shouldRecordUrl(url: string, domainAllowlist: string[]): boolean {

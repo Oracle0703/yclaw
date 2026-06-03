@@ -13,6 +13,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons';
 import { Input, List, Modal, Space, Tag, Typography } from 'antd';
+import type { InputRef } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { CommandRegistry, getCommandRegistry, type Command } from './CommandRegistry';
 
@@ -58,7 +59,7 @@ export default function CommandPalette() {
   const [results, setResults] = useState<Command[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [recent, setRecent] = useState<string[]>(loadRecent);
-  const inputRef = useRef<ReturnType<typeof Input.Search> | null>(null);
+  const inputRef = useRef<InputRef | null>(null);
   const registryRef = useRef<CommandRegistry>(getCommandRegistry());
 
   // Register default commands
@@ -258,7 +259,7 @@ export default function CommandPalette() {
       <div onKeyDown={handleKeyDown} data-testid="command-palette">
         <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <Input
-            ref={inputRef as never}
+            ref={inputRef}
             prefix={<SearchOutlined />}
             placeholder="输入命令或搜索..."
             value={query}

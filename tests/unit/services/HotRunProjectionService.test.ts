@@ -118,7 +118,10 @@ describe('HotRunProjectionService', () => {
       expect.objectContaining({
         batchId: 'batch-1',
         sourceId: 'source-1',
+        sourceName: '抖音热榜',
+        taskId: 'task-1',
         status: 'failed',
+        resultCount: 2,
         breakpoint: {
           stepIndex: 0,
           error: 'selector missing',

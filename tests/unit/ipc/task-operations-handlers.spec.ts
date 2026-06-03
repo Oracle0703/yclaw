@@ -275,4 +275,55 @@ describe('registerTaskOperationsHandlers', () => {
       status: 'draft',
     });
   });
+
+  it('rejects invalid template backflow drafts before applying them', async () => {
+    const handlers = new Map<string, (payload: unknown) => unknown>();
+    const ipcController = {
+      handle: vi.fn((channel: string, handler: (payload: unknown) => unknown) => {
+        handlers.set(channel, handler);
+      }),
+    };
+    const workspaceService = {
+      listWorkspaces: vi.fn(),
+      createWorkspace: vi.fn(),
+      updateWorkspace: vi.fn(),
+      listMembers: vi.fn(),
+      listDutyShifts: vi.fn(),
+      saveDutyShift: vi.fn(),
+      resolveDutyPolicy: vi.fn(),
+      updateMemberRole: vi.fn(),
+    };
+    const taskRevisionService = {
+      listRevisions: vi.fn(),
+      publishRevision: vi.fn(),
+      reviewRevision: vi.fn(),
+      compareRevisions: vi.fn(),
+    };
+    const templateService = {
+      linkReview: vi.fn(),
+      applyTemplateBackflowDraft: vi.fn(),
+    };
+
+    registerTaskOperationsHandlers({
+      ipcController,
+      workspaceService,
+      taskRevisionService,
+      templateService,
+    });
+
+    expect(() =>
+      handlers.get(IPC_CHANNELS.TEMPLATE_BACKFLOW_APPLY)?.({
+        draft: {
+          reviewId: 'review-1',
+          templateId: 'template-1',
+          status: 'draft',
+          riskLevel: 'medium',
+          proposedChanges: [],
+          executionSteps: [],
+          acceptanceCriteria: [],
+        },
+      }),
+    ).toThrow('title is required');
+    expect(templateService.applyTemplateBackflowDraft).not.toHaveBeenCalled();
+  });
 });

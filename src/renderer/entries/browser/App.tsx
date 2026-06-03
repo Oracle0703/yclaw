@@ -6,18 +6,44 @@ import { PageShell } from '../../shared/components/PageShell';
 import { useIpc, useIpcEvent } from '../../shared/hooks';
 import { useLoading } from '../../shared/hooks/useLoading';
 import { AddressBar } from './components/AddressBar';
+import { InterventionPanel } from './components/InterventionPanel';
 import { RecorderPanel } from './components/RecorderPanel';
 import { TabBar } from './components/TabBar';
-import type { Tab } from '@shared/types/browser';
+import type { InterventionState, Tab } from '@shared/types/browser';
+import type { BrowserInterventionRouteContext } from './routeContext';
 import './styles.css';
 
 const DEFAULT_RECORDER_URL = 'https://www.jd.com/';
 
-export default function App() {
+interface BrowserAppProps {
+  interventionContext?: BrowserInterventionRouteContext | null;
+}
+
+function buildRouteInterventionState(
+  context?: BrowserInterventionRouteContext | null,
+): InterventionState | null {
+  if (!context) {
+    return null;
+  }
+
+  return {
+    taskId: context.taskId,
+    batchId: context.batchId,
+    flowRunnerStatus: 'intervention',
+    webContentsId: 0,
+    sessionPartition: 'default',
+    breakpoint: context.breakpoint,
+  };
+}
+
+export default function App({ interventionContext = null }: BrowserAppProps) {
   const { invoke } = useIpc();
   const { withLoading } = useLoading();
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<number | null>(null);
+  const [interventionState, setInterventionState] = useState<InterventionState | null>(
+    () => buildRouteInterventionState(interventionContext),
+  );
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
 
@@ -37,6 +63,10 @@ export default function App() {
         reportActionError(error, '读取标签页失败');
       });
   }, [invoke]);
+
+  useEffect(() => {
+    setInterventionState(buildRouteInterventionState(interventionContext));
+  }, [interventionContext]);
 
   const createTab = async (url = DEFAULT_RECORDER_URL): Promise<Tab | null> => {
     try {
@@ -113,6 +143,10 @@ export default function App() {
     setTabs((prev) => prev.map((tab) => (tab.id === nextTab.id ? { ...tab, ...nextTab } : tab)));
   });
 
+  useIpcEvent(IPC_CHANNELS.INTERVENTION_STEP_INFO, (data: unknown) => {
+    setInterventionState(data as InterventionState);
+  });
+
   return (
     <PageShell
       title="API 调查录制器"
@@ -170,6 +204,7 @@ export default function App() {
           tabId={activeTabId}
           onCreateTab={async () => (await createTab())?.id ?? null}
         />
+        <InterventionPanel state={interventionState} />
       </Space>
     </PageShell>
   );

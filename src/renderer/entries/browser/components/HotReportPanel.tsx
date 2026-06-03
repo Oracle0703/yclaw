@@ -39,7 +39,9 @@ export function HotReportPanel(props: HotReportPanelProps) {
       />
       <div className="browser-workspace-list">
         {visibleReports.length === 0 ? (
-          <div className="browser-workspace-action-description">暂无报告</div>
+          <div className="browser-workspace-action-description">
+            暂无报告，成功运行后可生成 HTML 报告。
+          </div>
         ) : null}
         {visibleReports.map((report) => (
           <div key={report.id} className="browser-review-queue-card hot-report-row">
@@ -47,6 +49,11 @@ export function HotReportPanel(props: HotReportPanelProps) {
               <div className="browser-workspace-action-title">{report.title}</div>
               <div className="browser-workspace-action-meta">
                 {report.format} · {props.formatTime?.(report.createdAt) ?? report.createdAt}
+              </div>
+              <div className="browser-workspace-action-meta">
+                <span>Source：{report.sourceId}</span>
+                <span>Batch：{report.batchId}</span>
+                <span>Report：{report.id}</span>
               </div>
             </div>
             <Space wrap>

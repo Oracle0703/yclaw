@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { act, render, screen } from '@testing-library/react';
 
@@ -105,7 +105,26 @@ vi.mock('antd', () => ({
     { Item: ({ children, label }: { children?: React.ReactNode; label?: React.ReactNode }) => <label>{label}{children}</label> },
   ),
   Input: ({ placeholder }: { placeholder?: string }) => <input placeholder={placeholder} />,
-  Modal: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Modal: ({
+    children,
+    onOk,
+    open,
+    title,
+  }: {
+    children?: React.ReactNode;
+    onOk?: () => void;
+    open?: boolean;
+    title?: React.ReactNode;
+  }) =>
+    open ? (
+      <div>
+        {title ? <h4>{title}</h4> : null}
+        {children}
+        <button type="button" onClick={onOk}>
+          {title}确认
+        </button>
+      </div>
+    ) : null,
   Select: ({ children }: { children?: React.ReactNode }) => <select>{children}</select>,
   Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Statistic: ({ title, value }: { title?: React.ReactNode; value?: React.ReactNode }) => <div>{title}:{value}</div>,
@@ -180,6 +199,10 @@ vi.mock('@renderer/shared/hooks', () => ({
 import DataCenterApp from '@renderer/entries/data-center/App';
 
 describe('DataCenter App', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('renders overview, result asset and export tabs', async () => {
     await act(async () => {
       render(<DataCenterApp />);
@@ -189,6 +212,112 @@ describe('DataCenter App', () => {
     expect(screen.getAllByText('数据总览').length).toBeGreaterThan(0);
     expect(screen.getAllByText('结果资产').length).toBeGreaterThan(0);
     expect(screen.getAllByText('导出任务').length).toBeGreaterThan(0);
+    expect(dataCenterApiMock.listResults).toHaveBeenCalledWith({ page: 1, pageSize: 20 });
+    expect(screen.queryByText('来自热点监控')).toBeNull();
+  });
+
+  it('scopes result assets and export jobs to the hot-monitor batch route context', async () => {
+    await act(async () => {
+      render(
+        <DataCenterApp
+          routeContext={{
+            source: 'hot-monitor',
+            taskId: 'task-hot-1',
+            batchId: 'batch-hot-1',
+          }}
+        />,
+      );
+    });
+
+    expect(screen.getByText('来自热点监控')).toBeDefined();
+    expect(screen.getByText(/Task：task-hot-1/)).toBeDefined();
+    expect(screen.getByText(/Batch：batch-hot-1/)).toBeDefined();
+    expect(screen.getByText(/结果、新建导出和质量扫描将默认限定在该批次。/)).toBeDefined();
+    expect(dataCenterApiMock.listResults).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 20,
+      taskId: 'task-hot-1',
+      batchId: 'batch-hot-1',
+    });
+
+    await act(async () => {
+      screen.getByText('导出 JSONL').click();
+    });
+
+    expect(dataCenterApiMock.createExport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: {
+          page: 1,
+          pageSize: 500,
+          taskId: 'task-hot-1',
+          batchId: 'batch-hot-1',
+        },
+        format: 'jsonl',
+      }),
+    );
+
+    await act(async () => {
+      screen.getByText('新建导出').click();
+    });
+    await act(async () => {
+      screen.getByText('新建导出确认').click();
+    });
+
+    expect(dataCenterApiMock.createExport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: {
+          page: 1,
+          pageSize: 200,
+          taskId: 'task-hot-1',
+          batchId: 'batch-hot-1',
+        },
+      }),
+    );
+  });
+
+  it('describes task-only route context without mentioning a batch scope', async () => {
+    await act(async () => {
+      render(
+        <DataCenterApp
+          routeContext={{
+            source: 'hot-monitor',
+            taskId: 'task-hot-1',
+          }}
+        />,
+      );
+    });
+
+    expect(screen.getByText(/Task：task-hot-1/)).toBeDefined();
+    expect(screen.getByText(/结果、新建导出和质量扫描将默认限定在该任务。/)).toBeDefined();
+    expect(screen.queryByText(/结果、新建导出和质量扫描将默认限定在该批次。/)).toBeNull();
+  });
+
+  it('scopes quality scan to the hot-monitor batch route context', async () => {
+    await act(async () => {
+      render(
+        <DataCenterApp
+          routeContext={{
+            source: 'hot-monitor',
+            taskId: 'task-hot-1',
+            batchId: 'batch-hot-1',
+          }}
+        />,
+      );
+    });
+
+    expect(screen.getByText('扫描当前批次')).toBeDefined();
+
+    await act(async () => {
+      screen.getByText('扫描当前批次').click();
+    });
+
+    expect(dataCenterApiMock.scanQuality).toHaveBeenCalledWith({
+      query: {
+        taskId: 'task-hot-1',
+        batchId: 'batch-hot-1',
+      },
+      limit: 200,
+    });
   });
 
   it('renders primary data-center actions', async () => {
@@ -197,7 +326,7 @@ describe('DataCenter App', () => {
         {
           id: 'export-0',
           name: '等待导出',
-          query: { page: 1, pageSize: 20 },
+          query: { page: 1, pageSize: 20, taskId: 'task-hot-1', batchId: 'batch-hot-1' },
           targetType: 'file',
           targetConfig: {},
           format: 'jsonl',
@@ -210,7 +339,14 @@ describe('DataCenter App', () => {
         {
           id: 'export-1',
           name: '失败导出',
-          query: { page: 1, pageSize: 20 },
+          query: {
+            page: 1,
+            pageSize: 20,
+            status: ['failed', 'ignored'],
+            keyword: 'AI',
+            createdFrom: '2026-04-01T00:00:00.000Z',
+            createdTo: '2026-04-30T23:59:59.999Z',
+          },
           targetType: 'file',
           targetConfig: {},
           format: 'jsonl',
@@ -258,6 +394,8 @@ describe('DataCenter App', () => {
 
     expect(screen.getByText('保存数据集')).toBeDefined();
     expect(screen.getByText('新建导出')).toBeDefined();
+    expect(screen.getByText('Task：task-hot-1 / Batch：batch-hot-1 / 每页 20')).toBeDefined();
+    expect(screen.getByText('全部结果 / 状态：failed、ignored / 关键词：AI / 时间：2026-04-01 至 2026-04-30 / 每页 20')).toBeDefined();
     expect(screen.getByText('全部状态')).toBeDefined();
     expect(screen.getByText('取消任务')).toBeDefined();
     expect(screen.getByText('保存 Webhook')).toBeDefined();
@@ -284,7 +422,7 @@ describe('DataCenter App', () => {
       screen.getByText('立即扫描').click();
     });
 
-    expect(dataCenterApiMock.scanQuality).toHaveBeenCalled();
+    expect(dataCenterApiMock.scanQuality).toHaveBeenCalledWith({ limit: 200 });
     expect(screen.getByText('规则命中')).toBeDefined();
     expect(screen.getByText('质量评分')).toBeDefined();
     expect(screen.getByText('批次洞察')).toBeDefined();

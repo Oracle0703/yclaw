@@ -38,6 +38,8 @@ interface JdSignTaskInfo {
   continueSignDay?: number;
 }
 
+type JsonRecord = Record<string, unknown>;
+
 const DEFAULT_JD_SIGNIN_URL = 'https://interact.jd.com/';
 const JD_SIGNIN_TASK_NAME = 'PC签到领京豆';
 // 录制确认的稳定回退值；当 pc_interact_sign_query 不可用时使用。
@@ -170,19 +172,20 @@ export class JdSigninProvider {
           dataType: 0,
         }),
       ]);
-      const balanceValue = balancePayload?.data?.balance;
-      const balance = typeof balanceValue === 'number'
+      const balanceData = isRecord(balancePayload.data) ? balancePayload.data : null;
+      const balance = balanceData && typeof balanceData.balance === 'number'
         ? {
-            balance: balanceValue,
-            balanceStr: typeof balancePayload.data.balanceStr === 'string'
-              ? balancePayload.data.balanceStr
+            balance: balanceData.balance,
+            balanceStr: typeof balanceData.balanceStr === 'string'
+              ? balanceData.balanceStr
               : undefined,
           }
         : null;
-      const firstDetail = Array.isArray(detailsPayload?.data?.list)
-        ? detailsPayload.data.list[0]
+      const detailsData = isRecord(detailsPayload.data) ? detailsPayload.data : null;
+      const firstDetail = Array.isArray(detailsData?.list)
+        ? detailsData.list[0]
         : null;
-      const latestDetail = firstDetail && typeof firstDetail === 'object'
+      const latestDetail = isRecord(firstDetail)
         ? {
             detailText: typeof firstDetail.userVisibleInfo === 'string'
               ? firstDetail.userVisibleInfo
@@ -228,19 +231,20 @@ export class JdSigninProvider {
           referer: 'https://interact.jd.com/',
         },
       );
-      const list = payload?.data?.assignmentInfoList;
+      const data = isRecord(payload.data) ? payload.data : null;
+      const list = data?.assignmentInfoList;
       if (!Array.isArray(list)) {
         return null;
       }
       // 文档警告：必须严格匹配 PC签到领京豆 (extraType=sign, signType=1)，
       // 不能把 type:0 的抽奖任务当成签到。
-      const task = list.find((item: unknown) => {
-        if (!item || typeof item !== 'object') return false;
-        const it = item as Record<string, unknown>;
+      const task = list.find((item): item is JsonRecord => {
+        if (!isRecord(item)) return false;
+        const it = item;
         return it.name === JD_SIGNIN_TASK_NAME &&
           it.extraType === 'sign' &&
           (it.signType === 1 || it.signType === '1');
-      }) as Record<string, any> | undefined;
+      });
       if (!task || typeof task.id !== 'string') {
         return null;
       }
@@ -413,7 +417,7 @@ export class JdSigninProvider {
       origin?: string;
       referer?: string;
     },
-  ): Promise<Record<string, any>> {
+  ): Promise<JsonRecord> {
     if (!this.browser.fetchWithSession) {
       throw new Error('fetchWithSession is not available');
     }
@@ -437,7 +441,7 @@ export class JdSigninProvider {
       body: form.toString(),
     });
     const text = await response.text();
-    return JSON.parse(text) as Record<string, any>;
+    return JSON.parse(text) as JsonRecord;
   }
 }
 
@@ -590,8 +594,12 @@ function normalizeNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-function extractRewardBeans(payload: Record<string, any>): number | undefined {
-  const rewards = payload?.data?.assignmentRewardInfo?.jingDouRewards;
+function extractRewardBeans(payload: JsonRecord): number | undefined {
+  const data = isRecord(payload.data) ? payload.data : null;
+  const assignmentRewardInfo = isRecord(data?.assignmentRewardInfo)
+    ? data.assignmentRewardInfo
+    : null;
+  const rewards = assignmentRewardInfo?.jingDouRewards;
   if (!Array.isArray(rewards)) {
     return undefined;
   }
@@ -605,11 +613,15 @@ function extractRewardBeans(payload: Record<string, any>): number | undefined {
   return total > 0 ? total : undefined;
 }
 
-function extractJdApiErrorMessage(payload: Record<string, any>): string {
+function extractJdApiErrorMessage(payload: JsonRecord): string {
   const message = payload?.errMessage ?? payload?.message ?? payload?.msg;
   return typeof message === 'string' && message.trim().length > 0
     ? message
     : '京东签到 API 调用失败';
+}
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isToday(timestamp: number | undefined): boolean {

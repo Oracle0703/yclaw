@@ -1,27 +1,38 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Card, Checkbox, Drawer, Input, Modal, Radio, Space, Tag, message } from 'antd';
 import { FireOutlined, SyncOutlined } from '@ant-design/icons';
 import { ProTable } from '@ant-design/pro-components';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 import type {
+  DataQualityScanResult,
+  ExtractionTemplate,
   HotReportSummary,
   HotRunDetail,
   HotRunSummary,
   HotSource,
   HotSourceDraft,
   HotTimelinePresetOption,
+  TaskReviewRecord,
 } from '@shared/types';
 import { PageShell } from '../../shared/components/PageShell';
 import { useIpc } from '../../shared/hooks';
 import { HotReportPanel } from '../browser/components/HotReportPanel';
 import { HotRunDetailView, HotRunPanel } from '../browser/components/HotRunPanel';
 import { HotSourcePanel, formatHotSourceConfigSummary } from '../browser/components/HotSourcePanel';
+import { ReviewTemplateGovernancePanel } from './components/ReviewTemplateGovernancePanel';
+import {
+  ReviewVerificationPanel,
+  type ReviewVerificationState,
+} from './components/ReviewVerificationPanel';
 import {
   NEWSNOW_PRESETS,
   TRENDRADAR_PLATFORM_IDS,
   createNewsNowDraft,
   createTrendRadarBatchDraft,
 } from './newsnowPresets';
+import { buildFailureReviewDraft, summarizeFailureEvidence } from './failureReview';
+import { buildVerificationQualityScanInput, summarizeVerificationQuality } from './verification';
 import './styles.css';
 
 type TrendRadarConfigFile = 'config' | 'frequency' | 'timeline';
@@ -80,7 +91,8 @@ const RSS_DRAFT: HotSourceDraft = {
 };
 
 export default function HotMonitorApp() {
-  const { invoke } = useIpc();
+  const { invoke, automation, taskOperations, dataCenter } = useIpc();
+  const navigate = useNavigate();
   const [draft, setDraft] = useState<HotSourceDraft>(DEFAULT_DRAFT);
   const [sources, setSources] = useState<HotSource[]>([]);
   const [runs, setRuns] = useState<HotRunSummary[]>([]);
@@ -94,6 +106,19 @@ export default function HotMonitorApp() {
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [runDetail, setRunDetail] = useState<HotRunDetail | null>(null);
+  const [runReviews, setRunReviews] = useState<TaskReviewRecord[]>([]);
+  const [reviewLoadError, setReviewLoadError] = useState<string | null>(null);
+  const [reviewVerificationById, setReviewVerificationById] = useState<
+    Record<string, ReviewVerificationState>
+  >({});
+  const [templates, setTemplates] = useState<ExtractionTemplate[]>([]);
+  const [templateLoadError, setTemplateLoadError] = useState<string | null>(null);
+  const [reviewDraft, setReviewDraft] = useState({
+    reasonCategory: 'unknown',
+    conclusion: '',
+    owner: '当前值班员',
+    followUpActions: [] as string[],
+  });
   const [reportSearchText, setReportSearchText] = useState('');
   const [previewReport, setPreviewReport] = useState<HotReportSummary | null>(null);
   const [timelinePresets, setTimelinePresets] = useState<HotTimelinePresetOption[]>([]);
@@ -161,6 +186,16 @@ export default function HotMonitorApp() {
     setReports(Array.isArray(data) ? data : []);
   }, [invoke]);
 
+  const loadTemplates = useCallback(async () => {
+    setTemplateLoadError(null);
+    try {
+      const data = await automation.listTemplates();
+      setTemplates(Array.isArray(data) ? (data as ExtractionTemplate[]) : []);
+    } catch (error) {
+      setTemplateLoadError(error instanceof Error ? error.message : '加载模板失败');
+    }
+  }, [automation]);
+
   const sortedSources = [...sources].sort(
     (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
   );
@@ -179,6 +214,26 @@ export default function HotMonitorApp() {
   );
   const latestSource = sortedSources[0] ?? null;
   const recentReports = sortedReports.slice(0, 3);
+  const getReportContext = (report: HotReportSummary | null) => {
+    if (!report) {
+      return null;
+    }
+
+    const source = sources.find((item) => item.id === report.sourceId) ?? null;
+    const run =
+      runs.find((item) => item.sourceId === report.sourceId && item.batchId === report.batchId) ??
+      null;
+
+    return {
+      sourceId: report.sourceId,
+      sourceName: source?.name ?? run?.sourceName ?? report.sourceId,
+      taskId: source?.taskId,
+      batchId: report.batchId,
+      reportId: report.id,
+      format: report.format,
+      createdAt: report.createdAt,
+    };
+  };
 
   const loadTimelinePresets = useCallback(async () => {
     const data = await invoke<HotTimelinePresetOption[]>(IPC_CHANNELS.HOT_TIMELINE_PRESETS);
@@ -187,9 +242,15 @@ export default function HotMonitorApp() {
 
   const refreshWorkspace = useCallback(
     async (sourceId?: string) => {
-      await Promise.all([loadSources(), loadRuns(sourceId), loadReports(), loadTimelinePresets()]);
+      await Promise.all([
+        loadSources(),
+        loadRuns(sourceId),
+        loadReports(),
+        loadTimelinePresets(),
+        loadTemplates(),
+      ]);
     },
-    [loadReports, loadRuns, loadSources, loadTimelinePresets],
+    [loadReports, loadRuns, loadSources, loadTemplates, loadTimelinePresets],
   );
 
   useEffect(() => {
@@ -197,6 +258,14 @@ export default function HotMonitorApp() {
       reportError(error, '加载热点监控数据失败');
     });
   }, [refreshWorkspace]);
+
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const updateDraft = <Field extends keyof HotSourceDraft>(
     field: Field,
@@ -465,16 +534,8 @@ export default function HotMonitorApp() {
 
   const startRun = async (sourceId: string) => {
     try {
-      await invoke(IPC_CHANNELS.HOT_RUN_START, { sourceId });
-      message.success('热点采集已启动');
-      await loadRuns();
-      const completedRun = await waitForRunCompletion(sourceId);
-      await loadRuns();
-      if (sourceRunsDrawer?.sourceId === sourceId) {
-        await loadSourceRuns(sourceId);
-      }
+      const completedRun = await runHotSource(sourceId);
       if (completedRun?.status === 'success') {
-        await generateReportForRun(completedRun);
         message.success('热点采集完成，报告已生成');
       } else if (completedRun?.status === 'failed') {
         message.error('热点采集失败，请查看运行详情');
@@ -484,14 +545,44 @@ export default function HotMonitorApp() {
     }
   };
 
-  const waitForRunCompletion = async (sourceId: string): Promise<HotRunSummary | null> => {
+  const runHotSource = async (
+    sourceId: string,
+    options: { ignoreBatchId?: string } = {},
+  ): Promise<HotRunSummary | null> => {
+    await invoke(IPC_CHANNELS.HOT_RUN_START, { sourceId });
+    message.success('热点采集已启动');
+    await loadRuns();
+    const completedRun = await waitForRunCompletion(sourceId, options);
+    await loadRuns();
+    if (sourceRunsDrawer?.sourceId === sourceId) {
+      await loadSourceRuns(sourceId);
+    }
+    if (completedRun?.status === 'success') {
+      await generateReportForRun(completedRun);
+    }
+    return completedRun;
+  };
+
+  const waitForRunCompletion = async (
+    sourceId: string,
+    options: { ignoreBatchId?: string } = {},
+  ): Promise<HotRunSummary | null> => {
     const maxAttempts = 30;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const data = await invoke<HotRunSummary[]>(IPC_CHANNELS.HOT_RUN_LIST, { sourceId });
       const nextRuns = Array.isArray(data) ? data : [];
-      setRuns(nextRuns);
-      const latestRun = nextRuns[0] ?? null;
-      if (latestRun && (latestRun.status === 'success' || latestRun.status === 'failed')) {
+      // 仅当组件仍挂载，且当前选中源未被切走时才覆盖全局 runs，避免轮询期间 UI 闪烁/错乱
+      if (isMountedRef.current && (!selectedSourceId || selectedSourceId === sourceId)) {
+        setRuns(nextRuns);
+      }
+      const latestRun =
+        nextRuns.find((run) => {
+          if (options.ignoreBatchId && run.batchId === options.ignoreBatchId) {
+            return false;
+          }
+          return run.status === 'success' || run.status === 'failed';
+        }) ?? null;
+      if (latestRun) {
         return latestRun;
       }
       if (attempt < maxAttempts - 1) {
@@ -501,13 +592,44 @@ export default function HotMonitorApp() {
     return null;
   };
 
-  const generateReportForRun = async (run: HotRunSummary) => {
+  // 纯等待新批次：不更新全局 runs、不切换选中批次，专供验证重跑使用。
+  const awaitNextRun = async (
+    sourceId: string,
+    options: { ignoreBatchId?: string } = {},
+  ): Promise<HotRunSummary | null> => {
+    const maxAttempts = 30;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const data = await invoke<HotRunSummary[]>(IPC_CHANNELS.HOT_RUN_LIST, { sourceId });
+      const nextRuns = Array.isArray(data) ? data : [];
+      const latestRun =
+        nextRuns.find((run) => {
+          if (options.ignoreBatchId && run.batchId === options.ignoreBatchId) {
+            return false;
+          }
+          return run.status === 'success' || run.status === 'failed';
+        }) ?? null;
+      if (latestRun) {
+        return latestRun;
+      }
+      if (attempt < maxAttempts - 1) {
+        await delay(1000);
+      }
+    }
+    return null;
+  };
+
+  const generateReportForRun = async (
+    run: HotRunSummary,
+    options: { selectBatch?: boolean } = {},
+  ) => {
     await invoke(IPC_CHANNELS.HOT_REPORT_GENERATE, {
       sourceId: run.sourceId,
       batchId: run.batchId,
       format: 'html',
     });
-    setSelectedBatchId(run.batchId);
+    if (options.selectBatch !== false) {
+      setSelectedBatchId(run.batchId);
+    }
     await loadReports();
   };
 
@@ -564,12 +686,167 @@ export default function HotMonitorApp() {
         sourceId: run.sourceId,
         batchId: run.batchId,
       });
+      if (!detail) {
+        message.error('运行详情为空');
+        return;
+      }
       setSelectedSourceId(run.sourceId);
       setSelectedBatchId(run.batchId);
       setRunDetail(detail);
+      setReviewDraft(buildFailureReviewDraft(detail));
+      setRunReviews([]);
+      setReviewLoadError(null);
+      if (shouldShowFailureReview(detail) && detail.taskId && detail.batchId) {
+        try {
+          const reviews = await taskOperations.listReviews(detail.taskId, detail.batchId);
+          setRunReviews(Array.isArray(reviews) ? (reviews as TaskReviewRecord[]) : []);
+        } catch (reviewError) {
+          setReviewLoadError(reviewError instanceof Error ? reviewError.message : '加载复盘失败');
+        }
+      }
     } catch (error) {
       reportError(error, '加载运行详情失败');
     }
+  };
+
+  const createFailureReview = async () => {
+    if (!runDetail?.taskId || !runDetail.batchId) {
+      message.error('缺少 Task 或 Batch 上下文，无法创建复盘');
+      return;
+    }
+
+    const conclusion = reviewDraft.conclusion.trim();
+    if (!conclusion) {
+      message.error('请填写处理结论');
+      return;
+    }
+
+    try {
+      const created = await taskOperations.createReview({
+        taskId: runDetail.taskId,
+        batchId: runDetail.batchId,
+        reviewType: 'failure',
+        reasonCategory: reviewDraft.reasonCategory,
+        conclusion,
+        owner: reviewDraft.owner.trim() || '当前值班员',
+        followUpActions: reviewDraft.followUpActions,
+      });
+      setRunReviews((current) => [created as TaskReviewRecord, ...current]);
+      message.success('复盘记录已创建');
+    } catch (error) {
+      reportError(error, '创建复盘失败');
+    }
+  };
+
+  const updateRunReview = (nextReview: TaskReviewRecord) => {
+    setRunReviews((current) =>
+      current.map((review) => (review.id === nextReview.id ? nextReview : review)),
+    );
+  };
+
+  const setReviewVerification = (reviewId: string, state: ReviewVerificationState) => {
+    setReviewVerificationById((current) => ({
+      ...current,
+      [reviewId]: state,
+    }));
+  };
+
+  const verifyReviewBackflow = async (review: TaskReviewRecord) => {
+    if (!review.id || !runDetail?.sourceId || !runDetail.taskId || !runDetail.batchId) {
+      message.error('缺少验证重跑上下文');
+      return;
+    }
+
+    const reviewId = review.id;
+    const sourceId = runDetail.sourceId;
+    const taskId = runDetail.taskId;
+    const ignoreBatchId = runDetail.batchId;
+    let pendingRun: HotRunSummary | null = null;
+
+    setReviewVerification(reviewId, {
+      status: 'running',
+      message: '正在启动验证重跑并等待新批次完成',
+    });
+
+    try {
+      // 验证重跑先触发并等待新批次，后续报告生成不切换当前失败详情。
+      await invoke(IPC_CHANNELS.HOT_RUN_START, { sourceId });
+      await loadRuns();
+
+      const completedRun = await awaitNextRun(sourceId, { ignoreBatchId });
+
+      if (!completedRun) {
+        setReviewVerification(reviewId, {
+          status: 'failed',
+          message: '未等到新批次完成，请稍后查看运行列表',
+        });
+        return;
+      }
+      pendingRun = completedRun;
+
+      await loadRuns();
+      if (sourceRunsDrawer?.sourceId === sourceId) {
+        await loadSourceRuns(sourceId);
+      }
+
+      if (completedRun.status !== 'success') {
+        setReviewVerification(reviewId, {
+          status: 'failed',
+          run: completedRun,
+          message: '新批次运行失败，未执行质量扫描',
+        });
+        return;
+      }
+
+      setReviewVerification(reviewId, {
+        status: 'scanning',
+        run: completedRun,
+        message: '新批次已完成，正在生成报告并扫描质量',
+      });
+
+      await generateReportForRun(completedRun, { selectBatch: false });
+      const verifiedRun: HotRunSummary = {
+        ...completedRun,
+        reportStatus: 'generated',
+      };
+      pendingRun = verifiedRun;
+
+      const scan = (await dataCenter.scanQuality(
+        buildVerificationQualityScanInput(taskId, verifiedRun.batchId),
+      )) as DataQualityScanResult;
+
+      setReviewVerification(reviewId, {
+        status: 'succeeded',
+        run: verifiedRun,
+        quality: summarizeVerificationQuality(scan),
+        message: '验证完成，新批次报告和质量扫描已生成',
+      });
+      message.success('验证重跑完成，新批次报告和质量扫描已生成');
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : '验证重跑失败';
+      // 失败时保留已获取的新批次信息，便于用户诊断
+      setReviewVerification(reviewId, {
+        status: 'failed',
+        run: pendingRun,
+        message: messageText,
+      });
+      message.error(messageText);
+    }
+  };
+
+  const openVerifiedBatchResults = (batchId: string) => {
+    if (!runDetail?.taskId) {
+      message.error('缺少 Task 上下文，无法打开结果中心');
+      return;
+    }
+
+    navigate('/data-center', {
+      state: {
+        batchId,
+        taskId: runDetail.taskId,
+        source: 'hot-monitor',
+      },
+    });
   };
 
   const generateReport = async (run: HotRunSummary) => {
@@ -667,6 +944,38 @@ export default function HotMonitorApp() {
     }
   };
 
+  const openReportResults = (report: HotReportSummary) => {
+    const context = getReportContext(report);
+    if (!context?.taskId) {
+      message.error('当前报告缺少任务上下文，无法进入结果中心');
+      return;
+    }
+
+    navigate('/data-center', {
+      state: {
+        batchId: context.batchId,
+        taskId: context.taskId,
+        source: 'hot-monitor',
+      },
+    });
+  };
+
+  const canOpenBrowserIntervention = (detail: HotRunDetail) =>
+    detail.status === 'failed' || Boolean(detail.breakpoint) || Boolean(detail.error);
+
+  const openBrowserIntervention = (detail: HotRunDetail) => {
+    navigate('/browser', {
+      state: {
+        source: 'hot-monitor',
+        taskId: detail.taskId,
+        batchId: detail.batchId,
+        sourceId: detail.sourceId,
+        sourceName: detail.sourceName,
+        breakpoint: detail.breakpoint,
+      },
+    });
+  };
+
   const deleteReport = async (report: HotReportSummary) => {
     try {
       await invoke(IPC_CHANNELS.HOT_REPORT_DELETE, {
@@ -692,6 +1001,8 @@ export default function HotMonitorApp() {
       reportError(error, '打开报告存储位置失败');
     }
   };
+
+  const previewReportContext = getReportContext(previewReport);
 
   return (
     <PageShell
@@ -729,7 +1040,9 @@ export default function HotMonitorApp() {
                       </div>
                     </div>
                     <Space wrap>
-                      <Button onClick={() => void loadSourceDetail(latestSource.id)}>加载详情</Button>
+                      <Button onClick={() => void loadSourceDetail(latestSource.id)}>
+                        加载详情
+                      </Button>
                       <Button onClick={() => selectSource(latestSource.id)}>查看运行</Button>
                       <Button type="primary" onClick={() => void startRun(latestSource.id)}>
                         立即运行
@@ -741,6 +1054,7 @@ export default function HotMonitorApp() {
                 )}
               </section>
               <section aria-label="热点任务列表">
+                <div className="browser-workspace-section-title">多平台聚合采集</div>
                 <ProTable<HotRunSummary>
                   rowKey="batchId"
                   search={false}
@@ -756,30 +1070,29 @@ export default function HotMonitorApp() {
                     <Button key="new-task" onClick={() => openTaskModal()}>
                       新增任务
                     </Button>,
+                    <Button
+                      key="trendradar-task"
+                      onClick={() => openTaskModal(createTrendRadarBatchDraft())}
+                    >
+                      多平台热榜
+                    </Button>,
                     <Button key="config" onClick={() => setConfigDrawerOpen(true)}>
                       配置
                     </Button>,
-                    <Button
-                      key="sources"
-                      onClick={() => setOverflowDrawer('sources')}
-                    >
+                    <Button key="sources" onClick={() => setOverflowDrawer('sources')}>
                       全部采集源
                     </Button>,
-                    <Button
-                      key="reports"
-                      onClick={() => setOverflowDrawer('reports')}
-                    >
+                    <Button key="reports" onClick={() => setOverflowDrawer('reports')}>
                       历史报告
                     </Button>,
                     <Button key="runs" onClick={() => setOverflowDrawer('runs')}>
                       全部任务
                     </Button>,
-                    <Button
-                      key="aggregate"
-                      type="primary"
-                      onClick={startTrendRadarAggregateRun}
-                    >
-                      一键聚合采集
+                    <Tag key="phase-1" color="geekblue">
+                      Phase 1 黄金路径
+                    </Tag>,
+                    <Button key="aggregate" type="primary" onClick={startTrendRadarAggregateRun}>
+                      运行多平台热榜
                     </Button>,
                   ]}
                   columns={[
@@ -817,23 +1130,15 @@ export default function HotMonitorApp() {
                           <Button onClick={() => void loadSourceDetail(run.sourceId)}>
                             加载详情
                           </Button>
-                          <Button onClick={() => selectSource(run.sourceId)}>
-                            查看运行
-                          </Button>
+                          <Button onClick={() => selectSource(run.sourceId)}>查看运行</Button>
                           {run.status === 'failed' ? (
-                            <Button onClick={() => void viewRunDetail(run)}>
-                              查看详情
-                            </Button>
+                            <Button onClick={() => void viewRunDetail(run)}>查看详情</Button>
                           ) : null}
                           {run.status === 'failed' || run.status === 'success' ? (
-                            <Button onClick={() => void startRun(run.sourceId)}>
-                              重新运行
-                            </Button>
+                            <Button onClick={() => void startRun(run.sourceId)}>重新运行</Button>
                           ) : null}
                           {run.status === 'success' ? (
-                            <Button onClick={() => void generateReport(run)}>
-                              生成报告
-                            </Button>
+                            <Button onClick={() => void generateReport(run)}>生成报告</Button>
                           ) : null}
                         </Space>
                       ),
@@ -845,9 +1150,7 @@ export default function HotMonitorApp() {
                 <div className="hot-monitor-section-head">
                   <div className="browser-workspace-section-title">最近报告</div>
                   {sortedReports.length > 3 ? (
-                    <Button onClick={() => setOverflowDrawer('reports')}>
-                      查看更多
-                    </Button>
+                    <Button onClick={() => setOverflowDrawer('reports')}>查看更多</Button>
                   ) : null}
                 </div>
                 <HotReportPanel
@@ -872,15 +1175,9 @@ export default function HotMonitorApp() {
       >
         <div className="hot-monitor-app hot-monitor-drawer-content">
           <Space wrap>
-            <Button onClick={loadDefaultTrendRadarConfig}>
-              加载默认配置
-            </Button>
-            <Button onClick={saveTrendRadarConfig}>
-              保存配置
-            </Button>
-            <Button onClick={copyTrendRadarConfig}>
-              复制配置
-            </Button>
+            <Button onClick={loadDefaultTrendRadarConfig}>加载默认配置</Button>
+            <Button onClick={saveTrendRadarConfig}>保存配置</Button>
+            <Button onClick={copyTrendRadarConfig}>复制配置</Button>
             <Button type="primary" onClick={startTrendRadarAggregateRun}>
               一键聚合采集
             </Button>
@@ -943,9 +1240,7 @@ export default function HotMonitorApp() {
                     >
                       添加热榜平台
                     </Button>
-                    <Button onClick={openBrowserTab}>
-                      打开活动标签页
-                    </Button>
+                    <Button onClick={openBrowserTab}>打开活动标签页</Button>
                   </Space>
                   <section className="hot-monitor-platform-config">
                     <div className="browser-workspace-section-title">数据源 - 热榜平台</div>
@@ -999,9 +1294,7 @@ export default function HotMonitorApp() {
                         onChange={(event) => setNewPlatformId(event.target.value)}
                         placeholder="新增平台ID"
                       />
-                      <Button onClick={addConfigPlatform}>
-                        添加平台
-                      </Button>
+                      <Button onClick={addConfigPlatform}>添加平台</Button>
                     </div>
                   </section>
                   <section className="hot-monitor-platform-config">
@@ -1091,9 +1384,7 @@ export default function HotMonitorApp() {
                       </label>
                     </div>
                     <Space wrap>
-                      <Button onClick={addRssFeed}>
-                        添加 RSS 源
-                      </Button>
+                      <Button onClick={addRssFeed}>添加 RSS 源</Button>
                       <Button
                         onClick={() =>
                           setRssDraft({
@@ -1120,10 +1411,7 @@ export default function HotMonitorApp() {
                               <Button onClick={() => toggleRssFeed(feed.id)}>
                                 {feed.enabled ? '禁用' : '启用'}
                               </Button>
-                              <Button
-                                danger
-                                onClick={() => removeRssFeed(feed.id)}
-                              >
+                              <Button danger onClick={() => removeRssFeed(feed.id)}>
                                 删除
                               </Button>
                             </Space>
@@ -1205,9 +1493,7 @@ export default function HotMonitorApp() {
                     placeholder="通知Webhook URL"
                   />
                   <Space wrap>
-                    <Button onClick={sendNotification}>
-                      发送热点通知
-                    </Button>
+                    <Button onClick={sendNotification}>发送热点通知</Button>
                   </Space>
                 </>
               ) : null}
@@ -1217,9 +1503,7 @@ export default function HotMonitorApp() {
                     维护全局排除词和关键词组，采集报告会按这些词组进行热点归类。
                   </div>
                   <Space wrap>
-                    <Button onClick={addKeywordGroup}>
-                      新增关键词组
-                    </Button>
+                    <Button onClick={addKeywordGroup}>新增关键词组</Button>
                   </Space>
                   <label className="hot-monitor-config-field">
                     <span>全局排除词</span>
@@ -1259,7 +1543,9 @@ export default function HotMonitorApp() {
                             <Input
                               className="browser-workspace-input"
                               value={group.name}
-                              onChange={(event) => updateKeywordGroup(index, 'name', event.target.value)}
+                              onChange={(event) =>
+                                updateKeywordGroup(index, 'name', event.target.value)
+                              }
                               placeholder="AI 相关"
                             />
                           </label>
@@ -1268,7 +1554,9 @@ export default function HotMonitorApp() {
                             <Input
                               className="browser-workspace-input"
                               value={group.include}
-                              onChange={(event) => updateKeywordGroup(index, 'include', event.target.value)}
+                              onChange={(event) =>
+                                updateKeywordGroup(index, 'include', event.target.value)
+                              }
                               placeholder="AI,OpenAI,/芯片|半导体/"
                             />
                           </label>
@@ -1277,7 +1565,9 @@ export default function HotMonitorApp() {
                             <Input
                               className="browser-workspace-input"
                               value={group.required}
-                              onChange={(event) => updateKeywordGroup(index, 'required', event.target.value)}
+                              onChange={(event) =>
+                                updateKeywordGroup(index, 'required', event.target.value)
+                              }
                               placeholder="算力"
                             />
                           </label>
@@ -1286,7 +1576,9 @@ export default function HotMonitorApp() {
                             <Input
                               className="browser-workspace-input"
                               value={group.exclude}
-                              onChange={(event) => updateKeywordGroup(index, 'exclude', event.target.value)}
+                              onChange={(event) =>
+                                updateKeywordGroup(index, 'exclude', event.target.value)
+                              }
                               placeholder="广告"
                             />
                           </label>
@@ -1297,7 +1589,9 @@ export default function HotMonitorApp() {
                               type="number"
                               min={0}
                               value={group.maxItems}
-                              onChange={(event) => updateKeywordGroup(index, 'maxItems', event.target.value)}
+                              onChange={(event) =>
+                                updateKeywordGroup(index, 'maxItems', event.target.value)
+                              }
                               placeholder="5"
                             />
                           </label>
@@ -1316,10 +1610,7 @@ export default function HotMonitorApp() {
                     <Button>新建调度模式</Button>
                     <Button>新增时间段</Button>
                     {timelinePresets.map((preset) => (
-                      <Button
-                        key={preset.preset}
-                        onClick={() => applyTimelinePreset(preset)}
-                      >
+                      <Button key={preset.preset} onClick={() => applyTimelinePreset(preset)}>
                         {preset.label}时间线
                       </Button>
                     ))}
@@ -1452,10 +1743,43 @@ export default function HotMonitorApp() {
         {previewReport?.content ? (
           <div className="hot-report-preview">
             <div className="hot-report-preview-head">
-              <div className="browser-workspace-section-title">{previewReport.title}</div>
-              <Button onClick={() => setPreviewReport(null)}>
-                关闭预览
-              </Button>
+              <div className="hot-report-preview-title-group">
+                <div className="browser-workspace-section-title">{previewReport.title}</div>
+                {previewReportContext ? (
+                  <div className="hot-report-preview-meta">
+                    <span>Source：{previewReportContext.sourceId}</span>
+                    {previewReportContext.taskId ? (
+                      <span>Task：{previewReportContext.taskId}</span>
+                    ) : null}
+                    <span>Batch：{previewReportContext.batchId}</span>
+                    <span>Report：{previewReportContext.reportId}</span>
+                    <span>格式：{previewReportContext.format}</span>
+                  </div>
+                ) : null}
+              </div>
+              <Space wrap>
+                <Button
+                  onClick={() =>
+                    void viewRunDetail({
+                      batchId: previewReport.batchId,
+                      sourceId: previewReport.sourceId,
+                      sourceName: previewReportContext?.sourceName ?? previewReport.sourceId,
+                      status: 'success',
+                      startedAt: null,
+                      finishedAt: null,
+                      resultCount: 0,
+                      reportStatus: 'generated',
+                    })
+                  }
+                >
+                  查看运行详情
+                </Button>
+                {previewReportContext?.taskId ? (
+                  <Button onClick={() => openReportResults(previewReport)}>查看结果中心</Button>
+                ) : null}
+                <Button onClick={() => void revealReport(previewReport)}>打开存储位置</Button>
+                <Button onClick={() => setPreviewReport(null)}>关闭预览</Button>
+              </Space>
             </div>
             <iframe
               className="hot-report-preview-frame"
@@ -1473,7 +1797,124 @@ export default function HotMonitorApp() {
         footer={null}
         width={720}
       >
-        {runDetail ? <HotRunDetailView detail={runDetail} formatTime={formatBeijingTime} /> : null}
+        {runDetail ? (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <HotRunDetailView detail={runDetail} formatTime={formatBeijingTime} />
+            {shouldShowFailureReview(runDetail) ? (
+              <section className="browser-review-queue-card">
+                <div className="browser-workspace-section-title">失败复盘</div>
+                <div className="hot-monitor-review-form">
+                  <div className="browser-workspace-action-description">
+                    诊断：{summarizeFailureEvidence(runDetail).primaryError}
+                  </div>
+                  <label className="hot-monitor-config-field">
+                    <span>原因分类</span>
+                    <Input
+                      aria-label="原因分类"
+                      className="browser-workspace-input"
+                      value={reviewDraft.reasonCategory}
+                      onChange={(event) =>
+                        setReviewDraft((current) => ({
+                          ...current,
+                          reasonCategory: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="hot-monitor-config-field">
+                    <span>处理结论</span>
+                    <Input.TextArea
+                      aria-label="处理结论"
+                      value={reviewDraft.conclusion}
+                      onChange={(event) =>
+                        setReviewDraft((current) => ({
+                          ...current,
+                          conclusion: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="hot-monitor-config-field">
+                    <span>负责人</span>
+                    <Input
+                      aria-label="负责人"
+                      className="browser-workspace-input"
+                      value={reviewDraft.owner}
+                      onChange={(event) =>
+                        setReviewDraft((current) => ({
+                          ...current,
+                          owner: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <div className="browser-workspace-action-description">
+                    后续动作：{reviewDraft.followUpActions.join('、') || '无'}
+                  </div>
+                  <Button onClick={createFailureReview} disabled={!reviewDraft.conclusion.trim()}>
+                    创建复盘
+                  </Button>
+                  <Button onClick={() => void startRun(runDetail.sourceId)}>
+                    重新运行当前采集源
+                  </Button>
+                </div>
+                {reviewLoadError ? (
+                  <div className="browser-workspace-action-description">{reviewLoadError}</div>
+                ) : null}
+                {runReviews.length === 0 ? (
+                  <div className="browser-workspace-action-description">当前批次暂无复盘记录</div>
+                ) : null}
+                {runReviews.map((review) => (
+                  <div key={review.id} className="browser-workspace-action-card">
+                    <div className="browser-workspace-action-title">
+                      {review.conclusion ?? '未填写结论'}
+                    </div>
+                    <div className="browser-workspace-action-description">
+                      原因：{review.reasonCategory ?? '未分类'}
+                    </div>
+                    <div className="browser-workspace-action-description">
+                      负责人：{review.owner ?? '未指定'}
+                    </div>
+                    {templateLoadError ? (
+                      <div className="browser-workspace-action-description">
+                        {templateLoadError}
+                      </div>
+                    ) : null}
+                    <ReviewTemplateGovernancePanel
+                      review={review}
+                      templates={templates}
+                      taskOperations={taskOperations}
+                      onReviewUpdated={updateRunReview}
+                    />
+                    <ReviewVerificationPanel
+                      review={review}
+                      state={reviewVerificationById[review.id] ?? { status: 'idle' }}
+                      canVerify={Boolean(runDetail.sourceId && runDetail.taskId)}
+                      onVerify={(targetReview) => void verifyReviewBackflow(targetReview)}
+                      onOpenBatchResults={openVerifiedBatchResults}
+                    />
+                  </div>
+                ))}
+              </section>
+            ) : null}
+            {canOpenBrowserIntervention(runDetail) ? (
+              <Button onClick={() => openBrowserIntervention(runDetail)}>进入介入浏览器</Button>
+            ) : null}
+            <Button
+              onClick={() =>
+                navigate('/data-center', {
+                  state: {
+                    batchId: runDetail.batchId,
+                    taskId: runDetail.taskId,
+                    source: 'hot-monitor',
+                  },
+                })
+              }
+            >
+              查看结果中心
+            </Button>
+          </Space>
+        ) : null}
       </Modal>
     </PageShell>
   );
@@ -1506,6 +1947,10 @@ function normalizePositiveInteger(value: string, fallback: number): number {
 
 function isTrendRadarBatchSource(source: HotSource | null | undefined): source is HotSource {
   return source?.siteKey === 'trendradar' && source.parserKey === 'newsnow.batch';
+}
+
+function shouldShowFailureReview(detail: HotRunDetail): boolean {
+  return detail.status === 'failed' || Boolean(detail.error) || Boolean(detail.breakpoint);
 }
 
 function buildTrendRadarConfigYaml(input: {

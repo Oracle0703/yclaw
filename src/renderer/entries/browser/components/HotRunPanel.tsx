@@ -81,7 +81,19 @@ export function HotRunDetailView({
     <div className="hot-run-detail-modal">
       <div className="browser-review-queue-card">
         <div className="browser-workspace-action-meta">
-          状态：{detail.status} · 任务：{detail.taskId}
+          Source：{detail.sourceId}
+        </div>
+        <div className="browser-workspace-action-description">
+          Task：{detail.taskId}
+        </div>
+        <div className="browser-workspace-action-description">
+          Batch：{detail.batchId}
+        </div>
+        <div className="browser-workspace-action-description">
+          状态：{detail.status}
+        </div>
+        <div className="browser-workspace-action-description">
+          报告：{detail.reportStatus}
         </div>
         <div className="browser-workspace-action-description">
           开始：{formatTime?.(detail.startedAt) ?? detail.startedAt ?? '未知'}
@@ -95,6 +107,11 @@ export function HotRunDetailView({
         <div className="browser-workspace-action-description">
           关联结果 {detail.linkedResultIds.length} 条
         </div>
+        {detail.linkedResultIds.length === 0 ? (
+          <div className="browser-workspace-action-description">
+            未抽取到记录
+          </div>
+        ) : null}
         <div className="browser-workspace-action-description">
           失败定位：{formatBreakpoint(detail.breakpoint)}
         </div>

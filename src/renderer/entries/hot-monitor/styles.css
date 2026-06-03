@@ -146,6 +146,21 @@
   padding: 12px 14px 0;
 }
 
+.hot-report-preview-title-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hot-report-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: #64748b;
+  font-size: 12px;
+}
+
 .hot-report-preview-frame {
   width: 100%;
   min-height: 480px;

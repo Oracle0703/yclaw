@@ -4,17 +4,22 @@ import { ProCard } from '@ant-design/pro-components';
 import type { DataCenterResultDetail, DataPage, ExtractionResult } from '@shared/types';
 import { useIpc } from '@renderer/shared/hooks';
 import { ResultDetailDrawer } from './ResultDetailDrawer';
+import { buildDataCenterResultQuery, type DataCenterRouteContext } from '../routeContext';
 
-export function ResultAssetTable() {
+export function ResultAssetTable({
+  context = null,
+}: {
+  context?: DataCenterRouteContext | null;
+}) {
   const { dataCenter } = useIpc();
   const [results, setResults] = useState<ExtractionResult[]>([]);
   const [detail, setDetail] = useState<DataCenterResultDetail | null>(null);
 
   useEffect(() => {
-    void dataCenter.listResults({ page: 1, pageSize: 20 }).then((value) => {
+    void dataCenter.listResults(buildDataCenterResultQuery(context, 20)).then((value) => {
       setResults(((value as DataPage<ExtractionResult>)?.items ?? []) as ExtractionResult[]);
     });
-  }, [dataCenter]);
+  }, [context, dataCenter]);
 
   const openDetail = async (resultId: string) => {
     const next = (await dataCenter.getResultDetail(resultId)) as DataCenterResultDetail;
@@ -25,7 +30,7 @@ export function ResultAssetTable() {
     try {
       await dataCenter.createExport({
         name: `结果资产-${new Date().toISOString()}`,
-        query: { page: 1, pageSize: 500 },
+        query: buildDataCenterResultQuery(context, 500),
         targetType: 'file',
         targetConfig: {},
         format: 'jsonl',

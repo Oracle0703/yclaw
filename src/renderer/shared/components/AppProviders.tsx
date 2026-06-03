@@ -129,14 +129,10 @@ function normalizeThemePreference(value: unknown): GeneralConfig['theme'] {
   return value === 'light' || value === 'dark' || value === 'system' ? value : 'system';
 }
 
-function getSystemTheme(): ResolvedTheme {
+function getStoredThemePreference(): GeneralConfig['theme'] {
   // 当前产品要求：全应用以亮色实现，不再跟随系统/暗色，
   // 避免 dark 主题变量盖住用户在「桌面背景」里选择的颜色。
-  return 'light';
-}
-
-function getStoredThemePreference(): GeneralConfig['theme'] {
-  // 同上：始终返回 light，忽略历史持久化的 system/dark
+  // 因此始终返回 light，忽略历史持久化的 system/dark。
   return 'light';
 }
 
@@ -181,9 +177,8 @@ export function AppProviders({ children }: AppProvidersProps) {
   const backgroundChannelRef = useRef<BroadcastChannel | null>(null);
   const [themePreference, setThemePreferenceState] =
     useState<GeneralConfig['theme']>(getStoredThemePreference);
-  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(getSystemTheme);
   const [background, setBackgroundState] = useState<BackgroundConfig>(getStoredBackground);
-  // 全局锁定亮色主题：详见 getSystemTheme 注释
+  // 全局锁定亮色主题：详见 getStoredThemePreference 注释。
   const resolvedTheme: ResolvedTheme = 'light';
 
   const setThemePreference = useCallback<ThemeContextValue['setThemePreference']>(
@@ -298,20 +293,6 @@ export function AppProviders({ children }: AppProvidersProps) {
       cancelled = true;
     };
   }, [invoke]);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (event: MediaQueryListEvent) => {
-      setSystemTheme(event.matches ? 'dark' : 'light');
-    };
-
-    setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
-    mediaQuery.addEventListener('change', handleChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
-  }, []);
 
   useEffect(() => {
     const channel =

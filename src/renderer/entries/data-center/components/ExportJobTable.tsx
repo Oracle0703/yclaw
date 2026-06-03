@@ -3,8 +3,17 @@ import { Button, Input, Modal, Select, Space, Table, Tag, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import type { DataExportJob, DataPage } from '@shared/types';
 import { useIpc } from '@renderer/shared/hooks';
+import {
+  buildDataCenterResultQuery,
+  formatDataCenterResultQuerySummary,
+  type DataCenterRouteContext,
+} from '../routeContext';
 
-export function ExportJobTable() {
+export function ExportJobTable({
+  context = null,
+}: {
+  context?: DataCenterRouteContext | null;
+}) {
   const { dataCenter } = useIpc();
   const [jobs, setJobs] = useState<DataExportJob[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
@@ -36,7 +45,7 @@ export function ExportJobTable() {
     try {
       await dataCenter.createExport({
         name,
-        query: { page: 1, pageSize: 200 },
+        query: buildDataCenterResultQuery(context, 200),
         targetType,
         targetConfig:
           targetType === 'webhook'
@@ -82,6 +91,10 @@ export function ExportJobTable() {
         dataSource={jobs}
         columns={[
           { title: '任务名', dataIndex: 'name' },
+          {
+            title: '查询范围',
+            render: (_, record: DataExportJob) => formatDataCenterResultQuerySummary(record.query),
+          },
           { title: '格式', dataIndex: 'format' },
           { title: '状态', render: (_, record: DataExportJob) => <Tag>{record.status}</Tag> },
           {

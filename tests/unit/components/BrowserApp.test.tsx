@@ -41,6 +41,23 @@ vi.mock('antd', () => ({
       {children}
     </section>
   ),
+  Descriptions: Object.assign(
+    ({ children }: { children?: React.ReactNode }) => <dl>{children}</dl>,
+    {
+      Item: ({
+        children,
+        label,
+      }: {
+        children?: React.ReactNode;
+        label?: React.ReactNode;
+      }) => (
+        <div>
+          <dt>{label}</dt>
+          <dd>{children}</dd>
+        </div>
+      ),
+    },
+  ),
   Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
   Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   Typography: {
@@ -410,6 +427,37 @@ describe('Browser App', () => {
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.BROWSER_CLOSE_TAB, { id: 2 });
       expect(screen.getByText('当前操作窗口：首页')).toBeDefined();
+    });
+  });
+
+  it('shows hot monitor intervention context and resumes automation', async () => {
+    render(
+      <BrowserApp
+        interventionContext={{
+          source: 'hot-monitor',
+          taskId: 'task-failed',
+          batchId: 'batch-failed',
+          sourceId: 'source-failed',
+          sourceName: '失败任务',
+          breakpoint: {
+            stepIndex: 1,
+            error: '页面结构变化',
+          },
+        }}
+      />,
+    );
+
+    expect(await screen.findByText('当前操作窗口：首页')).toBeDefined();
+    expect(screen.getByText('介入台')).toBeDefined();
+    expect(screen.getByText('task-failed')).toBeDefined();
+    expect(screen.getByText('batch-failed')).toBeDefined();
+    expect(screen.getByText('页面结构变化')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: '恢复自动执行' }));
+
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.INTERVENTION_RESUME, {
+      taskId: 'task-failed',
+      batchId: 'batch-failed',
     });
   });
 });

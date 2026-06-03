@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { App as AntdApp, Button, Drawer, Modal, Space, Tag } from 'antd';
 import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { ProTable } from '@ant-design/pro-components';
@@ -58,12 +58,22 @@ export default function App() {
   const [signinStatus, setSigninStatus] = useState<SigninRunSummary | null>(null);
   const [signinHistory, setSigninHistory] = useState<SigninRunSummary[]>([]);
   const [sessions, setSessions] = useState<BrowserSession[]>([]);
+  const selectedTaskIdRef = useRef<string | null>(null);
+  const messageRef = useRef(message);
 
   useEffect(() => {
     void invoke<BrowserSession[]>(IPC_CHANNELS.SESSION_LIST)
       .then((data) => setSessions(Array.isArray(data) ? data : []))
       .catch(() => setSessions([]));
   }, [invoke]);
+
+  useEffect(() => {
+    selectedTaskIdRef.current = selectedTaskId;
+  }, [selectedTaskId]);
+
+  useEffect(() => {
+    messageRef.current = message;
+  }, [message]);
 
   const resetDraft = () => {
     const next = createDefaultSigninFlow();
@@ -72,7 +82,7 @@ export default function App() {
     setDraftSigninFlow(next.flow);
   };
 
-  const fetchTasks = async (keepSelectedTaskId?: string | null) => {
+  const fetchTasks = useCallback(async (keepSelectedTaskId?: string | null) => {
     setLoading(true);
     try {
       const taskList = await invoke<SigninTaskSummary[]>(IPC_CHANNELS.TASK_LIST);
@@ -96,19 +106,19 @@ export default function App() {
       }));
       setTasks(nextTasks);
 
-      const nextSelectedId = keepSelectedTaskId ?? selectedTaskId;
+      const nextSelectedId = keepSelectedTaskId ?? selectedTaskIdRef.current;
       if (nextSelectedId && !nextTasks.some((task) => task.id === nextSelectedId)) {
         setSelectedTaskId(null);
         setSigninStatus(null);
         setSigninHistory([]);
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '加载签到任务失败');
+      messageRef.current.error(err instanceof Error ? err.message : '加载签到任务失败');
       setTasks([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [invoke]);
 
   const refreshSigninRunData = async (taskId: string) => {
     const [latestStatus, history] = await Promise.all([
@@ -121,7 +131,7 @@ export default function App() {
 
   useEffect(() => {
     void fetchTasks();
-  }, [invoke]);
+  }, [fetchTasks]);
 
   const handleSelectTask = async (taskId: string) => {
     setSelectedTaskId(taskId);

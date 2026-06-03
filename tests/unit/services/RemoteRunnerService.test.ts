@@ -281,4 +281,53 @@ describe('RemoteRunnerService', () => {
       }),
     ).resolves.toEqual({ ok: true });
   });
+
+  it('rejects invalid remote task and session payloads before calling the runner client', async () => {
+    const repository = {
+      list: vi.fn(),
+      save: vi.fn(),
+      delete: vi.fn(),
+      get: vi.fn().mockReturnValue({
+        id: 'runner-local',
+        name: 'Local Runner',
+        baseUrl: 'http://127.0.0.1:7421',
+        authType: 'token',
+        tokenRef: 'secret',
+        workspaceId: 'default',
+        tlsMode: 'insecure-dev',
+        proxyUrl: null,
+        status: 'online',
+        lastSeenAt: null,
+        createdAt: '2026-04-20T00:00:00.000Z',
+        updatedAt: '2026-04-20T00:00:00.000Z',
+      }),
+    };
+    const client = {
+      getInfo: vi.fn(),
+      getHealth: vi.fn(),
+      createTask: vi.fn().mockResolvedValue({ ok: true }),
+      createSession: vi.fn().mockResolvedValue({ ok: true }),
+    };
+
+    const service = new RemoteRunnerService({
+      repository,
+      createClient: vi.fn(() => client as never),
+      actorId: 'desktop',
+    });
+
+    await expect(
+      service.saveRemoteTask({
+        runnerConnectionId: 'runner-local',
+        data: { name: 'Missing flow' },
+      }),
+    ).rejects.toThrow('flow is required');
+    await expect(
+      service.saveRemoteSession({
+        runnerConnectionId: 'runner-local',
+        data: { name: 'Missing origin' },
+      }),
+    ).rejects.toThrow('origin is required');
+    expect(client.createTask).not.toHaveBeenCalled();
+    expect(client.createSession).not.toHaveBeenCalled();
+  });
 });

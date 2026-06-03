@@ -51,4 +51,6 @@ Use the relevant spec in `docs/specs/` plus `docs/overview/current-status.md` as
 
 This directory is a Git checkout. Use short, imperative commit messages with an optional scope, such as `docs: refine architecture flow` or `specs: add ipc validation criteria`.
 
+Do not commit changes unless the user explicitly gives permission to commit. Making file edits, running tests, or being asked to operate on the repository does not imply permission to create commits.
+
 Pull requests should summarize intent, list affected docs or modules, link the relevant spec/plan section, and include screenshots or diagrams when updating architecture or UX flows.

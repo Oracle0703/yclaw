@@ -17,7 +17,6 @@ interface RecorderPanelProps {
 export function RecorderPanel({ tabId, onCreateTab, onRecorded }: RecorderPanelProps) {
   const { invoke } = useIpc();
   const [recording, setRecording] = useState(false);
-  const [recordingMode, setRecordingMode] = useState<'steps' | 'investigation'>('steps');
   const [pending, setPending] = useState(false);
   const [steps, setSteps] = useState<TaskStep[]>([]);
   const [sitePreset, setSitePreset] = useState<RecorderSitePreset>('jd');
@@ -50,7 +49,6 @@ export function RecorderPanel({ tabId, onCreateTab, onRecorded }: RecorderPanelP
       }
       await invoke(IPC_CHANNELS.RECORDER_START, { tabId: recordingTabId });
       setInvestigationResult(null);
-      setRecordingMode('steps');
       setRecording(true);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '启动录制失败');
@@ -83,7 +81,6 @@ export function RecorderPanel({ tabId, onCreateTab, onRecorded }: RecorderPanelP
         },
       });
       setInvestigationResult(null);
-      setRecordingMode('investigation');
       setRecording(true);
     } catch (error) {
       message.error(error instanceof Error ? error.message : '启动调查录制失败');

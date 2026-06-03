@@ -1,5 +1,15 @@
 import crypto from 'crypto';
-import type { RemoteExecution, RunnerConnection, RunnerHealth, RunnerInfo } from '@shared/types';
+import type {
+  CreateRemoteSessionRequest,
+  CreateRemoteTaskRequest,
+  RemoteExecution,
+  RunnerConnection,
+  RunnerHealth,
+  RunnerInfo,
+  TaskFlow,
+  UpdateRemoteSessionRequest,
+  UpdateRemoteTaskRequest,
+} from '@shared/types';
 import { REMOTE_RUNNER_PROTOCOL_VERSION, sanitizeRunnerConnection } from '@shared/constants';
 import { RemoteRunnerClient } from '@main/remote-runner';
 
@@ -81,12 +91,17 @@ export class RemoteRunnerService {
     return this.requireClientMethod(payload.runnerConnectionId, 'listTasks')();
   }
 
-  saveRemoteTask(payload: { runnerConnectionId: string; taskId?: string; data: unknown }): Promise<unknown> {
+  async saveRemoteTask(payload: { runnerConnectionId: string; taskId?: string; data: unknown }): Promise<unknown> {
     if (payload.taskId) {
-      return this.requireClientMethod(payload.runnerConnectionId, 'updateTask')(payload.taskId, payload.data as never);
+      return this.requireClientMethod(payload.runnerConnectionId, 'updateTask')(
+        payload.taskId,
+        assertUpdateRemoteTaskRequest(payload.data),
+      );
     }
 
-    return this.requireClientMethod(payload.runnerConnectionId, 'createTask')(payload.data as never);
+    return this.requireClientMethod(payload.runnerConnectionId, 'createTask')(
+      assertCreateRemoteTaskRequest(payload.data),
+    );
   }
 
   deleteRemoteTask(payload: { runnerConnectionId: string; taskId: string }): Promise<unknown> {
@@ -97,15 +112,17 @@ export class RemoteRunnerService {
     return this.requireClientMethod(payload.runnerConnectionId, 'listSessions')();
   }
 
-  saveRemoteSession(payload: { runnerConnectionId: string; sessionId?: string; data: unknown }): Promise<unknown> {
+  async saveRemoteSession(payload: { runnerConnectionId: string; sessionId?: string; data: unknown }): Promise<unknown> {
     if (payload.sessionId) {
       return this.requireClientMethod(payload.runnerConnectionId, 'updateSession')(
         payload.sessionId,
-        payload.data as never,
+        assertUpdateRemoteSessionRequest(payload.data),
       );
     }
 
-    return this.requireClientMethod(payload.runnerConnectionId, 'createSession')(payload.data as never);
+    return this.requireClientMethod(payload.runnerConnectionId, 'createSession')(
+      assertCreateRemoteSessionRequest(payload.data),
+    );
   }
 
   deleteRemoteSession(payload: { runnerConnectionId: string; sessionId: string }): Promise<unknown> {
@@ -238,4 +255,86 @@ function normalizeBaseUrl(input: string): string {
     throw new Error('Runner baseUrl must use http or https');
   }
   return trimmed.replace(/\/+$/, '');
+}
+
+function assertCreateRemoteTaskRequest(value: unknown): CreateRemoteTaskRequest {
+  const body = assertRecord(value);
+  if (body.flow === undefined) {
+    throw new Error('flow is required');
+  }
+  return {
+    name: assertNonEmptyString(body.name, 'name'),
+    description: typeof body.description === 'string' ? body.description : undefined,
+    tags: body.tags === undefined ? undefined : assertStringArray(body.tags, 'tags'),
+    flow: assertTaskFlow(body.flow),
+  };
+}
+
+function assertUpdateRemoteTaskRequest(value: unknown): UpdateRemoteTaskRequest {
+  const body = assertRecord(value);
+  return {
+    ...assertCreateRemoteTaskRequest(body),
+    enabled: body.enabled === true,
+  };
+}
+
+function assertCreateRemoteSessionRequest(value: unknown): CreateRemoteSessionRequest {
+  const body = assertRecord(value);
+  return {
+    name: assertNonEmptyString(body.name, 'name'),
+    origin: assertNonEmptyString(body.origin, 'origin'),
+    expiresAt:
+      typeof body.expiresAt === 'string' || body.expiresAt === null ? body.expiresAt : undefined,
+  };
+}
+
+function assertUpdateRemoteSessionRequest(value: unknown): UpdateRemoteSessionRequest {
+  const body = assertRecord(value);
+  const status = body.status === undefined ? undefined : assertRemoteSessionStatus(body.status);
+  return {
+    ...assertCreateRemoteSessionRequest(body),
+    ...(status ? { status } : {}),
+  };
+}
+
+function assertTaskFlow(value: unknown): TaskFlow {
+  const flow = assertRecord(value);
+  assertNonEmptyString(flow.name, 'flow.name');
+  if (!Array.isArray(flow.steps)) {
+    throw new Error('flow.steps is required');
+  }
+  return flow as unknown as TaskFlow;
+}
+
+function assertRemoteSessionStatus(value: unknown): UpdateRemoteSessionRequest['status'] {
+  if (
+    value === 'unknown'
+    || value === 'valid'
+    || value === 'expired'
+    || value === 'refresh_required'
+  ) {
+    return value;
+  }
+  throw new Error('status is invalid');
+}
+
+function assertRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('payload object is required');
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertNonEmptyString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`${field} is required`);
+  }
+  return value.trim();
+}
+
+function assertStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new Error(`${field} is invalid`);
+  }
+  return value;
 }

@@ -118,6 +118,7 @@ import { registerSigninHandlers } from './ipc/signin-handlers';
 import type {
   AIChatRequest,
   AIConfig,
+  AppConfig,
   ExecutionLease,
   McpClientServerConfig,
   McpClientServerStatus,
@@ -150,6 +151,16 @@ interface RunnerSchedulerIpcService {
   releaseLease(payload: unknown): ExecutionLease | null;
   reconcile(): void;
 }
+
+type ConfigSectionKey = keyof AppConfig;
+
+const CONFIG_SECTION_KEYS = [
+  'general',
+  'modules',
+  'plugins',
+  'ai',
+  'featurePackages',
+] as const satisfies readonly ConfigSectionKey[];
 
 /**
  * 应用生命周期管理
@@ -646,7 +657,7 @@ export class App {
     // Task-as-Code（YAML 导入/导出/watch）handler 已在 bootstrapTaskAsCode 中注册到 ipcController
     registerRemoteRunnerHandlers({
       ipcController: this.ipcController,
-      service: this.remoteRunnerService as never,
+      service: this.remoteRunnerService,
     });
     registerRunnerSchedulerHandlers({
       ipcController: this.ipcController,
@@ -654,12 +665,12 @@ export class App {
     });
     registerTaskOperationsHandlers({
       ipcController: this.ipcController,
-      workspaceService: this.workspaceService as never,
-      taskRevisionService: this.taskRevisionService as never,
-      reviewService: this.reviewService as never,
-      alertService: this.alertService as never,
-      templateService: this.templateService as never,
-      resultService: this.resultService as never,
+      workspaceService: this.workspaceService,
+      taskRevisionService: this.taskRevisionService,
+      reviewService: this.reviewService,
+      alertService: this.alertService,
+      templateService: this.templateService,
+      resultService: this.resultService,
       operationsMetricsService: {
         buildAcceptanceMetrics: (taskId?: string) =>
           this.operationsMetricsService.buildAcceptanceMetrics(
@@ -669,9 +680,9 @@ export class App {
     });
     registerHotHandlers({
       ipcController: this.ipcController,
-      hotSourceService: this.hotSourceService as never,
-      hotRunService: this.hotRunService as never,
-      hotReportService: this.hotReportService as never,
+      hotSourceService: this.hotSourceService,
+      hotRunService: this.hotRunService,
+      hotReportService: this.hotReportService,
       hotTimelineService: this.hotTimelineService,
       hotAiInsightService: this.hotAiInsightService,
       hotNotificationService: this.hotNotificationService,
@@ -680,19 +691,19 @@ export class App {
     });
     registerCommentHandlers({
       ipcController: this.ipcController,
-      commentSourceService: this.commentSourceService as never,
-      commentRunService: this.commentRunService as never,
+      commentSourceService: this.commentSourceService,
+      commentRunService: this.commentRunService,
       commentResultService: this.resultService,
-      commentReportService: this.commentReportService as never,
+      commentReportService: this.commentReportService,
       commentAiReplyService: this.commentAiReplyService,
       mediaCrawlerService: this.mediaCrawlerService,
     });
     registerSigninHandlers({
       ipcController: this.ipcController,
-      taskService: this.taskService as never,
-      signinTaskService: this.signinTaskService as never,
-      notificationService: this.notificationService as never,
-      logService: this.logService as never,
+      taskService: this.taskService,
+      signinTaskService: this.signinTaskService,
+      notificationService: this.notificationService,
+      logService: this.logService,
     });
     this.ipcController.handle(IPC_CHANNELS.SIGNIN_TASK_LOGIN_CAPTURE, (payload: unknown) => {
       const { taskId } = (payload as { taskId?: string }) ?? {};
@@ -755,18 +766,18 @@ export class App {
 
     // 配置
     this.ipcController.handle(IPC_CHANNELS.CONFIG_GET, (key: unknown) => {
-      const validKeys = ['general', 'modules', 'plugins', 'ai', 'featurePackages'] as const;
-      if (typeof key !== 'string' || !validKeys.includes(key as (typeof validKeys)[number])) {
-        throw new Error(
-          `Invalid config key: ${String(key)}. Expected one of: ${validKeys.join(', ')}`,
-        );
+      if (!isConfigSectionKey(key)) {
+        throw new Error(buildInvalidConfigKeyMessage(key));
       }
-      return this.configService.get(key as keyof ReturnType<ConfigService['getAll']>);
+      return this.configService.get(key);
     });
 
     this.ipcController.handle(IPC_CHANNELS.CONFIG_SET, (params: unknown) => {
-      const { key, value } = params as { key: string; value: unknown };
-      this.configService.set(key as 'general', value as never);
+      const { key, value } = assertRecordPayload(params);
+      if (!isConfigSectionKey(key)) {
+        throw new Error(buildInvalidConfigKeyMessage(key));
+      }
+      this.setConfigSection(key, value);
     });
 
     this.ipcController.handle(IPC_CHANNELS.CONFIG_GET_ALL, () => {
@@ -2209,6 +2220,42 @@ export class App {
 
     return getRendererUrl(module);
   }
+
+  private setConfigSection(key: ConfigSectionKey, value: unknown): void {
+    switch (key) {
+      case 'general':
+        this.configService.set('general', value as AppConfig['general']);
+        break;
+      case 'modules':
+        this.configService.set('modules', value as AppConfig['modules']);
+        break;
+      case 'plugins':
+        this.configService.set('plugins', value as AppConfig['plugins']);
+        break;
+      case 'ai':
+        this.configService.set('ai', value as AppConfig['ai']);
+        break;
+      case 'featurePackages':
+        this.configService.set('featurePackages', value as AppConfig['featurePackages']);
+        break;
+    }
+  }
+}
+
+function isConfigSectionKey(value: unknown): value is ConfigSectionKey {
+  return typeof value === 'string'
+    && CONFIG_SECTION_KEYS.includes(value as ConfigSectionKey);
+}
+
+function buildInvalidConfigKeyMessage(value: unknown): string {
+  return `Invalid config key: ${String(value)}. Expected one of: ${CONFIG_SECTION_KEYS.join(', ')}`;
+}
+
+function assertRecordPayload(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('payload object is required');
+  }
+  return value as Record<string, unknown>;
 }
 
 function normalizeCookieDomains(cookies: Array<{ domain?: string }>): string[] {

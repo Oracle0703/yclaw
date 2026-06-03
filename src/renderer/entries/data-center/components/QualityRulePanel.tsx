@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Space, Statistic, Table, Tag, Typography, message } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
 import type {
+  DataQualityScanInput,
   DataQualityResultScore,
   DataQualityIssue,
   DataQualityRuleConfig,
@@ -9,8 +10,13 @@ import type {
   DataQualityScanResult,
 } from '@shared/types';
 import { useIpc } from '@renderer/shared/hooks';
+import type { DataCenterRouteContext } from '../routeContext';
 
-export function QualityRulePanel() {
+export function QualityRulePanel({
+  context = null,
+}: {
+  context?: DataCenterRouteContext | null;
+}) {
   const { dataCenter } = useIpc();
   const [rules, setRules] = useState<DataQualityRuleConfig[]>([]);
   const [scan, setScan] = useState<DataQualityScanResult>({
@@ -46,7 +52,7 @@ export function QualityRulePanel() {
 
   const scanQuality = async () => {
     try {
-      const next = (await dataCenter.scanQuality({ limit: 200 })) as DataQualityScanResult;
+      const next = (await dataCenter.scanQuality(buildQualityScanInput(context))) as DataQualityScanResult;
       setScan(next);
       message.success('数据质量扫描完成');
     } catch (error) {
@@ -61,7 +67,7 @@ export function QualityRulePanel() {
         className="yclaw-panel-card"
         extra={
           <Button type="primary" onClick={() => void scanQuality()}>
-            立即扫描
+            {context?.batchId ? '扫描当前批次' : '立即扫描'}
           </Button>
         }
       >
@@ -191,4 +197,18 @@ function formatRate(value?: number): string {
     return '-';
   }
   return `${Math.round(value * 100)}%`;
+}
+
+function buildQualityScanInput(context: DataCenterRouteContext | null | undefined): DataQualityScanInput {
+  return {
+    ...(context?.taskId || context?.batchId
+      ? {
+          query: {
+            ...(context?.taskId ? { taskId: context.taskId } : {}),
+            ...(context?.batchId ? { batchId: context.batchId } : {}),
+          },
+        }
+      : {}),
+    limit: 200,
+  };
 }

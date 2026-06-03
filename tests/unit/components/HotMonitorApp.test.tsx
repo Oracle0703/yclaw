@@ -1,15 +1,71 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { IPC_CHANNELS } from '@shared/constants/channels';
 
-const { invokeMock, messageErrorMock, messageSuccessMock } = vi.hoisted(() => ({
-  invokeMock: vi.fn(),
-  messageErrorMock: vi.fn(),
-  messageSuccessMock: vi.fn(),
-}));
+const {
+  invokeMock,
+  ipcMock,
+  listTemplatesMock,
+  listReviewsMock,
+  createReviewMock,
+  linkReviewTemplateMock,
+  suggestTemplateBackflowMock,
+  createTemplateBackflowDraftMock,
+  applyTemplateBackflowDraftMock,
+  scanQualityMock,
+  messageErrorMock,
+  messageSuccessMock,
+  navigateMock,
+} = vi.hoisted(() => {
+  const invokeMock = vi.fn();
+  const listTemplatesMock = vi.fn();
+  const listReviewsMock = vi.fn();
+  const createReviewMock = vi.fn();
+  const linkReviewTemplateMock = vi.fn();
+  const suggestTemplateBackflowMock = vi.fn();
+  const createTemplateBackflowDraftMock = vi.fn();
+  const applyTemplateBackflowDraftMock = vi.fn();
+  const scanQualityMock = vi.fn();
+  const messageErrorMock = vi.fn();
+  const messageSuccessMock = vi.fn();
+  const navigateMock = vi.fn();
+
+  return {
+    invokeMock,
+    ipcMock: {
+      invoke: invokeMock,
+      automation: {
+        listTemplates: listTemplatesMock,
+      },
+      taskOperations: {
+        listReviews: listReviewsMock,
+        createReview: createReviewMock,
+        linkReviewTemplate: linkReviewTemplateMock,
+        suggestTemplateBackflow: suggestTemplateBackflowMock,
+        createTemplateBackflowDraft: createTemplateBackflowDraftMock,
+        applyTemplateBackflowDraft: applyTemplateBackflowDraftMock,
+      },
+      dataCenter: {
+        scanQuality: scanQualityMock,
+      },
+    },
+    listTemplatesMock,
+    listReviewsMock,
+    createReviewMock,
+    linkReviewTemplateMock,
+    suggestTemplateBackflowMock,
+    createTemplateBackflowDraftMock,
+    applyTemplateBackflowDraftMock,
+    scanQualityMock,
+    messageErrorMock,
+    messageSuccessMock,
+    navigateMock,
+  };
+});
 
 vi.mock('antd', () => ({
+  Alert: ({ message }: { message?: React.ReactNode }) => <div role="alert">{message}</div>,
   Button: ({
     children,
     danger,
@@ -184,7 +240,40 @@ vi.mock('antd', () => ({
       ),
     },
   ),
+  Select: ({
+    'aria-label': ariaLabel,
+    disabled,
+    onChange,
+    options,
+    value,
+  }: {
+    'aria-label'?: string;
+    disabled?: boolean;
+    onChange?: (value: string) => void;
+    options?: Array<{ label: React.ReactNode; value: string }>;
+    value?: string;
+  }) => (
+    <select
+      aria-label={ariaLabel}
+      disabled={disabled}
+      value={value ?? ''}
+      onChange={(event) => onChange?.(event.target.value)}
+    >
+      <option value="">选择回流模板</option>
+      {options?.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
   Space: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Statistic: ({ title, value }: { title?: React.ReactNode; value?: React.ReactNode }) => (
+    <div>
+      <span>{title}</span>
+      <strong>{value}</strong>
+    </div>
+  ),
   Tag: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>,
   Typography: {
     Paragraph: ({ children }: { children?: React.ReactNode }) => <p>{children}</p>,
@@ -279,6 +368,10 @@ vi.mock('@ant-design/pro-components', () => ({
   },
 }));
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => navigateMock,
+}));
+
 vi.mock('@renderer/shared/components/PageShell', () => ({
   PageShell: ({
     children,
@@ -298,16 +391,122 @@ vi.mock('@renderer/shared/components/PageShell', () => ({
 }));
 
 vi.mock('@renderer/shared/hooks', () => ({
-  useIpc: () => ({
-    invoke: invokeMock,
-  }),
+  useIpc: () => ipcMock,
 }));
 
 import HotMonitorApp from '@renderer/entries/hot-monitor/App';
 
+async function waitForInitialWorkspaceLoad() {
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_SOURCE_LIST);
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_RUN_LIST, {});
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_REPORT_LIST, {});
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_TIMELINE_PRESETS);
+    expect(listTemplatesMock).toHaveBeenCalled();
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+}
+
 describe('HotMonitorApp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    listTemplatesMock.mockResolvedValue([
+      {
+        id: 'template-1',
+        name: '价格采集模板',
+        fields: [{ name: 'price', selector: '.price-old', attribute: 'textContent' }],
+        version: 'v1',
+        description: '电商价格采集',
+        deprecated: false,
+        pluginDependencies: [],
+        createdAt: '2026-05-18T00:00:00.000Z',
+        updatedAt: '2026-05-19T00:00:00.000Z',
+      },
+    ]);
+    listReviewsMock.mockResolvedValue([]);
+    createReviewMock.mockResolvedValue({
+      id: 'review-created',
+      taskId: 'task-failed',
+      batchId: 'batch-failed',
+      reviewType: 'failure',
+      reasonCategory: 'selector_changed',
+      conclusion: '已更新选择器并重新运行',
+      owner: '当前值班员',
+      followUpActions: ['update-selector', 'retry-source'],
+      createdAt: '2026-05-19T02:00:00.000Z',
+    });
+    linkReviewTemplateMock.mockResolvedValue({ reviewId: 'review-1', templateId: 'template-1' });
+    suggestTemplateBackflowMock.mockResolvedValue({
+      reviewId: 'review-1',
+      templateId: 'template-1',
+      recommended: true,
+      reason: '复盘后续动作包含 template-governance，建议将结论回流到模板。',
+      followUpActions: ['update-selector', 'template-governance'],
+    });
+    createTemplateBackflowDraftMock.mockResolvedValue({
+      reviewId: 'review-1',
+      templateId: 'template-1',
+      title: '回流复盘结论到模板',
+      status: 'draft',
+      riskLevel: 'medium',
+      proposedChanges: [
+        { type: 'selector-update', description: '价格字段选择器需要改为 .price-current' },
+      ],
+      executionSteps: ['更新模板字段或选择器'],
+      acceptanceCriteria: ['模板更新后通过一次任务试运行'],
+      sourceConclusion: '价格字段选择器需要改为 .price-current',
+      owner: '当前值班员',
+    });
+    applyTemplateBackflowDraftMock.mockResolvedValue({
+      reviewId: 'review-1',
+      templateId: 'template-1',
+      appliedBy: '当前值班员',
+      appliedAt: '2026-05-19T03:00:00.000Z',
+      appliedChanges: ['价格字段选择器需要改为 .price-current'],
+    });
+    scanQualityMock.mockResolvedValue({
+      scannedAt: '2026-05-19T04:00:00.000Z',
+      totalResults: 12,
+      issueCount: 1,
+      affectedResults: 1,
+      rules: [
+        {
+          ruleId: 'empty-data',
+          name: '空数据',
+          severity: 'warning',
+          hitCount: 1,
+          sampleResultIds: ['result-new-1'],
+        },
+      ],
+      issues: [],
+      batchScore: {
+        batchId: 'batch-verify',
+        score: 92,
+        grade: 'excellent',
+      },
+      batchInsight: {
+        id: 'insight-verify',
+        batchId: 'batch-verify',
+        taskId: 'task-failed',
+        score: 92,
+        grade: 'excellent',
+        totalResults: 12,
+        issueCount: 1,
+        affectedResults: 1,
+        failedRate: 0,
+        suspiciousRate: 0.08,
+        duplicateRate: 0,
+        topRules: [{ ruleId: 'empty-data', count: 1 }],
+        topFields: [],
+        severityBreakdown: { warning: 1, error: 0 },
+        statusBreakdown: { succeeded: 12 },
+        scoreTrendHint: 'up',
+        summary: '验证批次质量优秀。',
+        createdAt: '2026-05-19T04:00:00.000Z',
+      },
+    });
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) {
         return [
@@ -406,6 +605,22 @@ describe('HotMonitorApp', () => {
 
       if (channel === IPC_CHANNELS.HOT_REPORT_REVEAL) {
         return { revealed: true };
+      }
+
+      if (channel === IPC_CHANNELS.HOT_RUN_DETAIL) {
+        return {
+          batchId: 'batch-1',
+          sourceId: 'source-1',
+          sourceName: 'AI 热榜',
+          taskId: 'task-1',
+          status: 'success',
+          startedAt: '2026-05-06T00:00:00.000Z',
+          finishedAt: '2026-05-06T00:02:00.000Z',
+          resultCount: 3,
+          reportStatus: 'generated',
+          stepResults: [],
+          linkedResultIds: ['result-1', 'result-2', 'result-3'],
+        };
       }
 
       if (channel === IPC_CHANNELS.HOT_SOURCE_DETAIL) {
@@ -650,6 +865,19 @@ describe('HotMonitorApp', () => {
   });
 
   it('only shows task actions for matching statuses and opens failed details in a modal', async () => {
+    listReviewsMock.mockResolvedValue([
+      {
+        id: 'review-1',
+        taskId: 'task-failed',
+        batchId: 'batch-failed',
+        reviewType: 'failure',
+        reasonCategory: 'selector_changed',
+        conclusion: '已确认页面结构变化',
+        owner: '当前值班员',
+        followUpActions: ['update-selector'],
+        createdAt: '2026-05-19T01:30:00.000Z',
+      },
+    ]);
     invokeMock.mockImplementation(async (channel: string) => {
       if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) return [];
       if (channel === IPC_CHANNELS.HOT_REPORT_LIST) return [];
@@ -680,27 +908,34 @@ describe('HotMonitorApp', () => {
       }
       if (channel === IPC_CHANNELS.HOT_RUN_DETAIL) {
         return {
-          taskId: 'task-failed',
-          sourceId: 'source-failed',
           batchId: 'batch-failed',
+          sourceId: 'source-failed',
+          sourceName: '失败任务',
+          taskId: 'task-failed',
           status: 'failed',
-          startedAt: '2026-05-06T00:01:00.000Z',
-          finishedAt: '2026-05-06T00:02:00.000Z',
+          startedAt: '2026-05-18T01:00:00.000Z',
+          finishedAt: '2026-05-18T01:01:00.000Z',
+          resultCount: 0,
+          reportStatus: 'pending',
+          error: '页面结构变化',
+          breakpoint: {
+            stepIndex: 1,
+            reason: 'selector-timeout',
+            error: '未找到热点列表',
+          },
           stepResults: [
             {
               stepId: 'fetch',
               success: false,
               duration: 120,
-              error: 'API request failed: 403 Forbidden',
-              startedAt: '2026-05-06T00:01:00.000Z',
-              finishedAt: '2026-05-06T00:02:00.000Z',
+              error: '页面结构变化',
+              startedAt: '2026-05-18T01:00:00.000Z',
+              finishedAt: '2026-05-18T01:01:00.000Z',
               screenshot: null,
               domSnapshot: null,
             },
           ],
           linkedResultIds: [],
-          breakpoint: { stepIndex: 0, error: 'API request failed: 403 Forbidden' },
-          error: 'API request failed: 403 Forbidden',
         };
       }
       return null;
@@ -732,15 +967,467 @@ describe('HotMonitorApp', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看详情' }));
 
     expect(await screen.findByRole('dialog', { name: '运行详情' })).toBeDefined();
-    expect(screen.getAllByText(/API request failed: 403 Forbidden/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Source：source-failed')).toBeDefined();
+    expect(screen.getByText('Task：task-failed')).toBeDefined();
+    expect(screen.getByText('Batch：batch-failed')).toBeDefined();
+    expect(screen.getByText('报告：pending')).toBeDefined();
+    expect(screen.getByText('未抽取到记录')).toBeDefined();
+    expect(screen.getAllByText(/页面结构变化/).length).toBeGreaterThan(0);
+    expect(await screen.findByText('失败复盘')).toBeDefined();
+    expect(await screen.findByText('已确认页面结构变化')).toBeDefined();
+    expect(listReviewsMock).toHaveBeenCalledWith('task-failed', 'batch-failed');
+    expect(screen.getByRole('button', { name: '进入介入浏览器' })).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: '进入介入浏览器' }));
+    expect(navigateMock).toHaveBeenCalledWith('/browser', {
+      state: {
+        source: 'hot-monitor',
+        taskId: 'task-failed',
+        batchId: 'batch-failed',
+        sourceId: 'source-failed',
+        sourceName: '失败任务',
+        breakpoint: {
+          stepIndex: 1,
+          reason: 'selector-timeout',
+          error: '未找到热点列表',
+        },
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '查看结果中心' }));
+    expect(navigateMock).toHaveBeenCalledWith('/data-center', {
+      state: {
+        batchId: 'batch-failed',
+        taskId: 'task-failed',
+        source: 'hot-monitor',
+      },
+    });
     expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_RUN_DETAIL, {
       sourceId: 'source-failed',
       batchId: 'batch-failed',
     });
   });
 
+  it('does not show browser intervention action for successful hot runs', async () => {
+    render(<HotMonitorApp />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '预览报告' }));
+    const previewDrawer = await screen.findByRole('dialog', { name: '报告预览' });
+    fireEvent.click(within(previewDrawer).getByRole('button', { name: '查看运行详情' }));
+
+    expect(await screen.findByRole('dialog', { name: '运行详情' })).toBeDefined();
+    expect(screen.getByText('状态：success')).toBeDefined();
+    expect(screen.queryByRole('button', { name: '进入介入浏览器' })).toBeNull();
+  });
+
+  it('does not show failure review section for successful hot runs', async () => {
+    render(<HotMonitorApp />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '预览报告' }));
+    const previewDrawer = await screen.findByRole('dialog', { name: '报告预览' });
+    fireEvent.click(within(previewDrawer).getByRole('button', { name: '查看运行详情' }));
+
+    expect(await screen.findByRole('dialog', { name: '运行详情' })).toBeDefined();
+    expect(screen.getByText('状态：success')).toBeDefined();
+    expect(screen.queryByText('失败复盘')).toBeNull();
+    expect(listReviewsMock).not.toHaveBeenCalledWith('task-1', 'batch-1');
+  });
+
+  it('shows template governance actions for failed run reviews', async () => {
+    listReviewsMock.mockResolvedValue([
+      {
+        id: 'review-1',
+        taskId: 'task-failed',
+        batchId: 'batch-failed',
+        reviewType: 'failure',
+        reasonCategory: 'selector_changed',
+        conclusion: '价格字段选择器需要改为 .price-current',
+        owner: '当前值班员',
+        followUpActions: ['update-selector', 'template-governance'],
+        linkedTemplateIds: [],
+        createdAt: '2026-05-19T02:00:00.000Z',
+      },
+    ]);
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_REPORT_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_TIMELINE_PRESETS) return [];
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST) {
+        return [
+          {
+            batchId: 'batch-failed',
+            sourceId: 'source-failed',
+            sourceName: '失败任务',
+            status: 'failed',
+            startedAt: '2026-05-06T00:01:00.000Z',
+            finishedAt: '2026-05-06T00:02:00.000Z',
+            resultCount: 0,
+            reportStatus: 'none',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_DETAIL) {
+        return {
+          batchId: 'batch-failed',
+          sourceId: 'source-failed',
+          sourceName: '失败任务',
+          taskId: 'task-failed',
+          status: 'failed',
+          startedAt: '2026-05-18T01:00:00.000Z',
+          finishedAt: '2026-05-18T01:01:00.000Z',
+          resultCount: 0,
+          reportStatus: 'pending',
+          error: '未找到热点列表 selector timeout',
+          breakpoint: {
+            stepIndex: 1,
+            error: '未找到热点列表',
+          },
+          stepResults: [],
+          linkedResultIds: [],
+        };
+      }
+      return null;
+    });
+
+    render(<HotMonitorApp />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '查看详情' }));
+
+    expect(await screen.findByText('模板治理')).toBeDefined();
+    expect(await screen.findByText('价格采集模板')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: '生成回流建议' }));
+
+    expect(await screen.findByText('建议将结论回流到模板。', { exact: false })).toBeDefined();
+    expect(suggestTemplateBackflowMock).toHaveBeenCalledWith({
+      reviewId: 'review-1',
+      templateId: 'template-1',
+    });
+  });
+
+  it('creates a failure review for the selected failed hot run', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_REPORT_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_TIMELINE_PRESETS) return [];
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST) {
+        return [
+          {
+            batchId: 'batch-failed',
+            sourceId: 'source-failed',
+            sourceName: '失败任务',
+            status: 'failed',
+            startedAt: '2026-05-06T00:01:00.000Z',
+            finishedAt: '2026-05-06T00:02:00.000Z',
+            resultCount: 0,
+            reportStatus: 'none',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_DETAIL) {
+        return {
+          batchId: 'batch-failed',
+          sourceId: 'source-failed',
+          sourceName: '失败任务',
+          taskId: 'task-failed',
+          status: 'failed',
+          startedAt: '2026-05-18T01:00:00.000Z',
+          finishedAt: '2026-05-18T01:01:00.000Z',
+          resultCount: 0,
+          reportStatus: 'pending',
+          error: '未找到热点列表 selector timeout',
+          breakpoint: {
+            stepIndex: 1,
+            error: '未找到热点列表',
+          },
+          stepResults: [
+            {
+              stepId: 'fetch',
+              success: false,
+              duration: 120,
+              error: 'selector timeout',
+            },
+          ],
+          linkedResultIds: [],
+        };
+      }
+      return null;
+    });
+
+    render(<HotMonitorApp />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '查看详情' }));
+
+    expect(await screen.findByText('失败复盘')).toBeDefined();
+    fireEvent.change(screen.getByLabelText('处理结论'), {
+      target: { value: '已更新选择器并准备重新运行' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '创建复盘' }));
+
+    await waitFor(() => {
+      expect(createReviewMock).toHaveBeenCalledWith({
+        taskId: 'task-failed',
+        batchId: 'batch-failed',
+        reviewType: 'failure',
+        reasonCategory: 'selector_changed',
+        conclusion: '已更新选择器并准备重新运行',
+        owner: '当前值班员',
+        followUpActions: ['update-selector', 'retry-source', 'template-governance'],
+      });
+    });
+    expect(await screen.findByText('已更新选择器并重新运行')).toBeDefined();
+    expect(messageSuccessMock).toHaveBeenCalledWith('复盘记录已创建');
+  });
+
+  it('reruns the current source from the failure review section', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_REPORT_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_TIMELINE_PRESETS) return [];
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST) {
+        return [
+          {
+            batchId: 'batch-failed',
+            sourceId: 'source-failed',
+            sourceName: '失败任务',
+            status: 'failed',
+            startedAt: '2026-05-06T00:01:00.000Z',
+            finishedAt: '2026-05-06T00:02:00.000Z',
+            resultCount: 0,
+            reportStatus: 'none',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_DETAIL) {
+        return {
+          batchId: 'batch-failed',
+          sourceId: 'source-failed',
+          sourceName: '失败任务',
+          taskId: 'task-failed',
+          status: 'failed',
+          startedAt: '2026-05-18T01:00:00.000Z',
+          finishedAt: '2026-05-18T01:01:00.000Z',
+          resultCount: 0,
+          reportStatus: 'pending',
+          error: '未找到热点列表',
+          breakpoint: {
+            stepIndex: 1,
+            error: '未找到热点列表',
+          },
+          stepResults: [],
+          linkedResultIds: [],
+        };
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_START) {
+        return { sourceId: 'source-failed', taskId: 'task-failed', started: true };
+      }
+      return null;
+    });
+
+    render(<HotMonitorApp />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '查看详情' }));
+    expect(await screen.findByText('失败复盘')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: '重新运行当前采集源' }));
+
+    await waitFor(() => {
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_RUN_START, {
+        sourceId: 'source-failed',
+      });
+    });
+  });
+
+  it('reruns verification from a review and scans the new batch quality', async () => {
+    listReviewsMock.mockResolvedValue([
+      {
+        id: 'review-1',
+        taskId: 'task-failed',
+        batchId: 'batch-failed',
+        reviewType: 'failure',
+        reasonCategory: 'selector_changed',
+        conclusion: '已回流模板，需要验证',
+        owner: '当前值班员',
+        followUpActions: ['update-selector', 'template-governance'],
+        linkedTemplateIds: ['template-1'],
+        createdAt: '2026-05-19T02:00:00.000Z',
+      },
+    ]);
+    invokeMock.mockImplementation(async (channel: string, payload?: { sourceId?: string }) => {
+      if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_REPORT_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_TIMELINE_PRESETS) return [];
+      if (channel === IPC_CHANNELS.HOT_RUN_DETAIL) {
+        return {
+          batchId: 'batch-failed',
+          sourceId: 'source-failed',
+          sourceName: '失败任务',
+          taskId: 'task-failed',
+          status: 'failed',
+          startedAt: '2026-05-18T01:00:00.000Z',
+          finishedAt: '2026-05-18T01:01:00.000Z',
+          resultCount: 0,
+          reportStatus: 'pending',
+          error: '未找到热点列表',
+          breakpoint: { stepIndex: 1, error: '未找到热点列表' },
+          stepResults: [],
+          linkedResultIds: [],
+        };
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST && payload?.sourceId === 'source-failed') {
+        return [
+          {
+            batchId: 'batch-failed',
+            sourceId: 'source-failed',
+            sourceName: '失败任务',
+            status: 'failed',
+            resultCount: 0,
+            reportStatus: 'pending',
+          },
+          {
+            batchId: 'batch-verify',
+            sourceId: 'source-failed',
+            sourceName: '失败任务',
+            status: 'success',
+            resultCount: 12,
+            reportStatus: 'pending',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST) {
+        return [
+          {
+            batchId: 'batch-failed',
+            sourceId: 'source-failed',
+            sourceName: '失败任务',
+            status: 'failed',
+            resultCount: 0,
+            reportStatus: 'pending',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_START) {
+        return { sourceId: 'source-failed', taskId: 'task-failed', started: true };
+      }
+      if (channel === IPC_CHANNELS.HOT_REPORT_GENERATE) {
+        return {
+          id: 'report-verify',
+          sourceId: 'source-failed',
+          batchId: 'batch-verify',
+          format: 'html',
+          filePath: 'E:/allsite/yclaw/output/html/verify.html',
+        };
+      }
+      return null;
+    });
+
+    render(<HotMonitorApp />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '查看详情' }));
+    fireEvent.click(await screen.findByRole('button', { name: '验证重跑并扫描新批次' }));
+
+    await waitFor(() => {
+      expect(scanQualityMock).toHaveBeenCalledWith({
+        query: {
+          taskId: 'task-failed',
+          batchId: 'batch-verify',
+        },
+        limit: 200,
+      });
+      expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_REPORT_GENERATE, {
+        sourceId: 'source-failed',
+        batchId: 'batch-verify',
+        format: 'html',
+      });
+    });
+    expect(await screen.findByText('新批次：batch-verify')).toBeDefined();
+    expect(await screen.findByText('验证批次质量优秀。')).toBeDefined();
+
+    fireEvent.click(await screen.findByRole('button', { name: '查看新批次结果中心' }));
+
+    expect(navigateMock).toHaveBeenCalledWith('/data-center', {
+      state: {
+        batchId: 'batch-verify',
+        taskId: 'task-failed',
+        source: 'hot-monitor',
+      },
+    });
+  });
+
+  it('does not scan quality when the verification rerun fails', async () => {
+    listReviewsMock.mockResolvedValue([
+      {
+        id: 'review-1',
+        taskId: 'task-failed',
+        batchId: 'batch-failed',
+        reviewType: 'failure',
+        reasonCategory: 'selector_changed',
+        conclusion: '已回流模板，需要验证',
+        owner: '当前值班员',
+        followUpActions: ['update-selector', 'template-governance'],
+        linkedTemplateIds: ['template-1'],
+        createdAt: '2026-05-19T02:00:00.000Z',
+      },
+    ]);
+    invokeMock.mockImplementation(async (channel: string, payload?: { sourceId?: string }) => {
+      if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_REPORT_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_TIMELINE_PRESETS) return [];
+      if (channel === IPC_CHANNELS.HOT_RUN_DETAIL) {
+        return {
+          batchId: 'batch-failed',
+          sourceId: 'source-failed',
+          sourceName: '失败任务',
+          taskId: 'task-failed',
+          status: 'failed',
+          startedAt: '2026-05-18T01:00:00.000Z',
+          finishedAt: '2026-05-18T01:01:00.000Z',
+          resultCount: 0,
+          reportStatus: 'pending',
+          error: '未找到热点列表',
+          breakpoint: { stepIndex: 1, error: '未找到热点列表' },
+          stepResults: [],
+          linkedResultIds: [],
+        };
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST && payload?.sourceId === 'source-failed') {
+        return [
+          {
+            batchId: 'batch-verify-failed',
+            sourceId: 'source-failed',
+            sourceName: '失败任务',
+            status: 'failed',
+            resultCount: 0,
+            reportStatus: 'pending',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST) {
+        return [
+          {
+            batchId: 'batch-failed',
+            sourceId: 'source-failed',
+            sourceName: '失败任务',
+            status: 'failed',
+            resultCount: 0,
+            reportStatus: 'pending',
+          },
+        ];
+      }
+      if (channel === IPC_CHANNELS.HOT_RUN_START) {
+        return { sourceId: 'source-failed', taskId: 'task-failed', started: true };
+      }
+      return null;
+    });
+
+    render(<HotMonitorApp />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '查看详情' }));
+    fireEvent.click(await screen.findByRole('button', { name: '验证重跑并扫描新批次' }));
+
+    expect((await screen.findAllByText('新批次运行失败，未执行质量扫描')).length).toBeGreaterThan(0);
+    expect(scanQualityMock).not.toHaveBeenCalled();
+  });
+
   it('renders hot config file tabs and module actions', async () => {
     render(<HotMonitorApp />);
+    await waitForInitialWorkspaceLoad();
 
     fireEvent.click(await screen.findByRole('button', { name: '配置' }));
 
@@ -1050,6 +1737,7 @@ describe('HotMonitorApp', () => {
 
   it('fills the draft from a NewsNow preset source', async () => {
     render(<HotMonitorApp />);
+    await waitForInitialWorkspaceLoad();
 
     fireEvent.click(await screen.findByRole('button', { name: '配置' }));
     fireEvent.click(await screen.findByRole('button', { name: '知乎热榜' }));
@@ -1067,7 +1755,8 @@ describe('HotMonitorApp', () => {
     render(<HotMonitorApp />);
 
     fireEvent.click(await screen.findByRole('button', { name: '配置' }));
-    fireEvent.click(await screen.findByRole('button', { name: '多平台热榜' }));
+    const configDrawer = await screen.findByRole('dialog', { name: '热点配置' });
+    fireEvent.click(within(configDrawer).getByRole('button', { name: '多平台热榜' }));
     fireEvent.click(await screen.findByRole('button', { name: '创建任务' }));
 
     await waitFor(() => {
@@ -1097,6 +1786,21 @@ describe('HotMonitorApp', () => {
     });
   });
 
+  it('presents multi-platform aggregation as the phase 1 golden path', async () => {
+    render(<HotMonitorApp />);
+
+    expect(await screen.findByText('多平台聚合采集')).toBeDefined();
+    expect(screen.getByText('Phase 1 黄金路径')).toBeDefined();
+    expect(screen.getByRole('button', { name: '运行多平台热榜' })).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: '多平台热榜' }));
+
+    expect(await screen.findByRole('dialog', { name: '新增采集任务' })).toBeDefined();
+    expect(screen.getByDisplayValue('多平台热榜')).toBeDefined();
+    expect(screen.getByDisplayValue('https://newsnow.busiyi.world/api/s')).toBeDefined();
+    expect(screen.getByDisplayValue('newsnow.batch')).toBeDefined();
+  });
+
   it('starts an aggregate crawl without requiring a selected source', async () => {
     let aggregateStarted = false;
     invokeMock.mockImplementation(async (channel: string) => {
@@ -1105,7 +1809,7 @@ describe('HotMonitorApp', () => {
         return aggregateStarted
           ? [
             {
-              batchId: 'batch-trendradar',
+              batchId: 'batch-trendradar-1',
               sourceId: 'source-trendradar',
               sourceName: '多平台热榜',
               status: 'success',
@@ -1153,7 +1857,7 @@ describe('HotMonitorApp', () => {
         return {
           id: 'report-trendradar',
           sourceId: 'source-trendradar',
-          batchId: 'batch-trendradar',
+          batchId: 'batch-trendradar-1',
           format: 'html',
           filePath: 'E:/allsite/yclaw/output/html/2026-05-06/16-15.html',
         };
@@ -1163,7 +1867,7 @@ describe('HotMonitorApp', () => {
 
     render(<HotMonitorApp />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '一键聚合采集' }));
+    fireEvent.click(await screen.findByRole('button', { name: '运行多平台热榜' }));
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith(
@@ -1191,7 +1895,7 @@ describe('HotMonitorApp', () => {
       });
       expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_REPORT_GENERATE, {
         sourceId: 'source-trendradar',
-        batchId: 'batch-trendradar',
+        batchId: 'batch-trendradar-1',
         format: 'html',
       });
       expect(messageSuccessMock).toHaveBeenCalledWith('多平台聚合采集已启动');
@@ -1301,7 +2005,7 @@ describe('HotMonitorApp', () => {
     fireEvent.click(loadDetailButton as HTMLButtonElement);
 
     await screen.findByRole('dialog', { name: '编辑采集任务' });
-    fireEvent.click(screen.getAllByRole('button', { name: '一键聚合采集' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: '运行多平台热榜' })[0]);
 
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_RUN_START, {
@@ -1528,15 +2232,43 @@ describe('HotMonitorApp', () => {
       target: { value: 'AI' },
     });
     expect(screen.queryByText('E:/allsite/yclaw/output/html/2026-05-06/16-15.html')).toBeNull();
+    expect(screen.getAllByText('Source：source-1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Batch：batch-1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Report：report-1').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: '预览报告' }));
 
     const previewDrawer = await screen.findByRole('dialog', { name: '报告预览' });
     expect(within(previewDrawer).getByTitle('AI 热榜 报告')).toBeDefined();
     expect(within(previewDrawer).getByRole('button', { name: '关闭预览' })).toBeDefined();
+    expect(within(previewDrawer).getByText('Source：source-1')).toBeDefined();
+    expect(within(previewDrawer).getByText('Task：task-1')).toBeDefined();
+    expect(within(previewDrawer).getByText('Batch：batch-1')).toBeDefined();
+    expect(within(previewDrawer).getByText('Report：report-1')).toBeDefined();
+    expect(within(previewDrawer).getByText('格式：html')).toBeDefined();
+    expect(within(previewDrawer).getByRole('button', { name: '查看结果中心' })).toBeDefined();
     expect(screen.queryByRole('button', { name: '打开报告' })).toBeNull();
     expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_REPORT_DETAIL, {
       reportId: 'report-1',
+    });
+
+    fireEvent.click(within(previewDrawer).getByRole('button', { name: '查看结果中心' }));
+    expect(navigateMock).toHaveBeenCalledWith('/data-center', {
+      state: {
+        batchId: 'batch-1',
+        taskId: 'task-1',
+        source: 'hot-monitor',
+      },
+    });
+
+    fireEvent.click(within(previewDrawer).getByRole('button', { name: '查看运行详情' }));
+    const runDetailDialog = await screen.findByRole('dialog', { name: '运行详情' });
+    expect(runDetailDialog).toBeDefined();
+    expect(within(runDetailDialog).getByText('Task：task-1')).toBeDefined();
+    expect(within(runDetailDialog).getByText('Batch：batch-1')).toBeDefined();
+    expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.HOT_RUN_DETAIL, {
+      sourceId: 'source-1',
+      batchId: 'batch-1',
     });
 
     fireEvent.click(within(previewDrawer).getByRole('button', { name: '关闭预览' }));
@@ -1550,6 +2282,20 @@ describe('HotMonitorApp', () => {
       });
       expect(messageSuccessMock).toHaveBeenCalledWith('已打开报告存储位置');
     });
+  });
+
+  it('shows an actionable empty state when no hot reports exist', async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      if (channel === IPC_CHANNELS.HOT_SOURCE_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_RUN_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_REPORT_LIST) return [];
+      if (channel === IPC_CHANNELS.HOT_TIMELINE_PRESETS) return [];
+      return null;
+    });
+
+    render(<HotMonitorApp />);
+
+    expect(await screen.findByText('暂无报告，成功运行后可生成 HTML 报告。')).toBeDefined();
   });
 
   it('generates and deletes html reports', async () => {

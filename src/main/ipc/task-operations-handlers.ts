@@ -1,4 +1,10 @@
 import { IPC_CHANNELS } from '@shared/constants';
+import type {
+  TemplateBackflowChangeType,
+  TemplateBackflowDraft,
+  TemplateBackflowDraftStatus,
+  TemplateBackflowRiskLevel,
+} from '@shared/types';
 
 interface IpcControllerLike {
   handle(channel: string, handler: (payload: unknown) => unknown): void;
@@ -40,7 +46,7 @@ interface AlertServiceLike {
 
 interface TemplateServiceLike {
   linkReview(reviewId: string, templateId: string): unknown;
-  applyTemplateBackflowDraft(draft: Record<string, unknown>, appliedBy?: string): unknown;
+  applyTemplateBackflowDraft(draft: TemplateBackflowDraft, appliedBy?: string): unknown;
 }
 
 interface ResultServiceLike {
@@ -212,7 +218,7 @@ export function registerTaskOperationsHandlers(options: {
     });
     ipcController.handle(IPC_CHANNELS.TEMPLATE_BACKFLOW_APPLY, (payload) => {
       const body = assertObject(payload);
-      const draft = assertObject(body.draft);
+      const draft = assertTemplateBackflowDraft(body.draft);
       const appliedBy = typeof body.appliedBy === 'string' && body.appliedBy.length > 0
         ? body.appliedBy
         : undefined;
@@ -250,6 +256,72 @@ function assertObject(payload: unknown): Record<string, unknown> {
 
 function assertString(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`${field} is required`);
+  }
+  return value;
+}
+
+function assertTemplateBackflowDraft(value: unknown): TemplateBackflowDraft {
+  const body = assertObject(value);
+  return {
+    reviewId: assertString(body.reviewId, 'reviewId'),
+    templateId: assertString(body.templateId, 'templateId'),
+    title: assertString(body.title, 'title'),
+    status: assertTemplateBackflowDraftStatus(body.status),
+    riskLevel: assertTemplateBackflowRiskLevel(body.riskLevel),
+    proposedChanges: assertTemplateBackflowProposedChanges(body.proposedChanges),
+    executionSteps: assertStringArray(body.executionSteps, 'executionSteps'),
+    acceptanceCriteria: assertStringArray(body.acceptanceCriteria, 'acceptanceCriteria'),
+    sourceConclusion:
+      typeof body.sourceConclusion === 'string' || body.sourceConclusion === null
+        ? body.sourceConclusion
+        : undefined,
+    owner: typeof body.owner === 'string' ? body.owner : undefined,
+  };
+}
+
+function assertTemplateBackflowDraftStatus(value: unknown): TemplateBackflowDraftStatus {
+  if (value === 'draft' || value === 'ready') {
+    return value;
+  }
+  throw new Error('status is required');
+}
+
+function assertTemplateBackflowRiskLevel(value: unknown): TemplateBackflowRiskLevel {
+  if (value === 'low' || value === 'medium' || value === 'high') {
+    return value;
+  }
+  throw new Error('riskLevel is required');
+}
+
+function assertTemplateBackflowChangeType(value: unknown): TemplateBackflowChangeType {
+  if (
+    value === 'selector-update'
+    || value === 'field-update'
+    || value === 'quality-rule'
+    || value === 'checklist-update'
+  ) {
+    return value;
+  }
+  throw new Error('proposedChanges.type is required');
+}
+
+function assertTemplateBackflowProposedChanges(value: unknown): TemplateBackflowDraft['proposedChanges'] {
+  if (!Array.isArray(value)) {
+    throw new Error('proposedChanges is required');
+  }
+
+  return value.map((item) => {
+    const change = assertObject(item);
+    return {
+      type: assertTemplateBackflowChangeType(change.type),
+      description: assertString(change.description, 'proposedChanges.description'),
+    };
+  });
+}
+
+function assertStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
     throw new Error(`${field} is required`);
   }
   return value;
